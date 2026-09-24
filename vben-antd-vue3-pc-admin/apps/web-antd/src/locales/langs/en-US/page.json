@@ -1,0 +1,184 @@
+{
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "codeLogin": "Code Login",
+    "qrcodeLogin": "Qr Code Login",
+    "forgetPassword": "Forget Password",
+    "profile": "Profile"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview",
+    "workspace": "Workspace",
+    "overviewPage": {
+      "cards": {
+        "businessMix": "Business Mix",
+        "visitCount": "Visit Overview",
+        "visitSource": "Visit Sources"
+      },
+      "charts": {
+        "affiliateAds": "Affiliate Ads",
+        "businessMix": "Business Mix",
+        "client": "Desktop App",
+        "customization": "Customization",
+        "direct": "Direct",
+        "emailMarketing": "Email Marketing",
+        "mobile": "Mobile",
+        "month": "Month {month}",
+        "other": "Other",
+        "outsourcing": "Outsourcing",
+        "remote": "Remote",
+        "searchEngine": "Search Engines",
+        "tablet": "Tablet",
+        "technicalSupport": "Technical Support",
+        "thirdParty": "Third Party",
+        "trend": "Trend",
+        "visit": "Visits",
+        "visitSource": "Visit Sources",
+        "web": "Web"
+      },
+      "metrics": {
+        "downloads": "Downloads",
+        "totalDownloads": "Total Downloads",
+        "totalUsage": "Total Usage",
+        "totalUsers": "Total Users",
+        "totalVisits": "Total Visits",
+        "usage": "Usage",
+        "users": "Users",
+        "visits": "Visits"
+      },
+      "tabs": {
+        "monthlyVisits": "Monthly Visits",
+        "trafficTrends": "Traffic Trends"
+      }
+    },
+    "workspacePage": {
+      "groups": {
+        "algorithm": "Algorithm Team",
+        "architecture": "Architecture Team",
+        "openSource": "Open Source Team",
+        "technology": "Technology Team",
+        "web": "Web Team"
+      },
+      "header": {
+        "greeting": "Good morning, {name}. Ready to start your day!",
+        "weather": "Sunny today, 20°C–32°C."
+      },
+      "navigation": {
+        "accessManagement": "Access Management",
+        "charts": "Charts",
+        "components": "Components",
+        "dashboard": "Dashboard",
+        "home": "Home",
+        "systemManagement": "System Management"
+      },
+      "people": {
+        "chris": "Chris",
+        "evan": "Evan",
+        "jack": "Jack",
+        "peter": "Peter",
+        "william": "William"
+      },
+      "projects": {
+        "angularQuote": "Passion and determination can overcome any obstacle.",
+        "githubQuote": "Do not wait for opportunity. Create it.",
+        "htmlQuote": "No talent matters more than hard work.",
+        "javascriptQuote": "The path is made by walking, not by imagining.",
+        "reactQuote": "A healthy body is the foundation for achieving your goals.",
+        "vueQuote": "Who you are today shapes who you become tomorrow."
+      },
+      "sections": {
+        "latestActivity": "Latest Activity",
+        "projects": "Projects",
+        "quickNavigation": "Quick Navigation",
+        "todos": "To-dos"
+      },
+      "stats": {
+        "projects": "Projects",
+        "teams": "Teams",
+        "todos": "To-dos"
+      },
+      "todos": {
+        "codeReview": {
+          "content": "Review recent frontend commits in the Git repository for quality and consistency.",
+          "title": "Review Frontend Commits"
+        },
+        "dependencies": {
+          "content": "Update all npm dependencies in the project to their latest compatible versions.",
+          "title": "Update Dependencies"
+        },
+        "performance": {
+          "content": "Inspect and optimize system performance to reduce CPU usage.",
+          "title": "Optimize System Performance"
+        },
+        "security": {
+          "content": "Run a security review to identify vulnerabilities and unauthorized access.",
+          "title": "Security Review"
+        },
+        "uiIssue": {
+          "content": "Fix reported UI display issues and ensure consistent rendering across browsers.",
+          "title": "Fix UI Display Issues"
+        }
+      },
+      "trends": {
+        "dates": {
+          "justNow": "Just now",
+          "oneDayAgo": "1 day ago",
+          "oneHourAgo": "1 hour ago",
+          "oneWeekAgo": "1 week ago",
+          "threeDaysAgo": "3 days ago",
+          "twoDaysAgo": "2 days ago"
+        },
+        "items": {
+          "closedRunIssue": "Closed the issue \"How to run the project\"",
+          "createdProject": "Created the Vue project in the Open Source Team",
+          "followedWilliam": "Followed William",
+          "postedUpdate": "Posted a personal update",
+          "publishedAdminVben": "Published \"How to use go cinch\"",
+          "publishedVite": "Published \"How to write a Vite plugin\"",
+          "pushedGithub": "Pushed code to GitHub",
+          "repliedOptimization": "Replied to Jack's question \"How can I optimize a project?\""
+        }
+      }
+    }
+  },
+  "notifications": {
+    "description": "This is the notification description.",
+    "dates": {
+      "fixedDate": "2024-01-01",
+      "justNow": "Just now",
+      "oneDayAgo": "1 day ago",
+      "threeHoursAgo": "3 hours ago"
+    },
+    "titles": {
+      "commented": "Qu Lili commented on your post",
+      "externalLink": "Open external link example",
+      "replied": "Zhu Pianyou replied to you",
+      "todoReminder": "To-do reminder",
+      "weeklyReports": "Received 14 new weekly reports",
+      "workspaceLink": "Open workspace example"
+    }
+  },
+  "profile": {
+    "fields": {
+      "role": "Role",
+      "username": "Username"
+    },
+    "password": {
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Please enter the new password again",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "Please enter the new password",
+      "oldPassword": "Current Password",
+      "oldPasswordPlaceholder": "Please enter your current password",
+      "passwordMismatch": "The passwords do not match",
+      "success": "Password updated. Please sign in again on all devices."
+    },
+    "tabs": {
+      "basicInformation": "Basic Information",
+      "changePassword": "Change Password"
+    },
+    "title": "Profile"
+  }
+}

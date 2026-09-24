@@ -1,0 +1,169 @@
+{
+  "fields": {
+    "id": "ID",
+    "name": "Name",
+    "group": "Group",
+    "word": "Word",
+    "code": "Code",
+    "resourceRules": "Resource Rules",
+    "menuPaths": "Menu Paths",
+    "menuPath": "Menu Path",
+    "buttonPermission": "Button Permission",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "resource": "Resource",
+    "permissions": "Permissions",
+    "actionCode": "Action Code",
+    "username": "Username",
+    "userCode": "User Code",
+    "newPassword": "New Password",
+    "password": "Password",
+    "role": "Role",
+    "status": "Status",
+    "members": "Members",
+    "metadata": "Metadata",
+    "category": "Category",
+    "dictionaryKey": "Dictionary Key",
+    "dictionaryValue": "Value (JSON)",
+    "description": "Description",
+    "enabled": "Enabled"
+  },
+  "action": {
+    "entity": "Action",
+    "title": "Action Management"
+  },
+  "role": {
+    "title": "Role Management"
+  },
+  "user": {
+    "entity": "User",
+    "title": "User Management",
+    "keepPassword": "Leave blank to keep the current password",
+    "approve": "Approve",
+    "reject": "Reject",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "unlockPassword": "Unlock Password Change",
+    "lockLabel": "Lock:",
+    "permanent": "Permanent",
+    "lockUntil": "Until a specific time",
+    "lockType": "Lock Type",
+    "lockedUntil": "Locked Until",
+    "review": "Review Registration",
+    "decision": "Decision",
+    "reason": "Reason",
+    "rejectionPlaceholder": "Enter the registration rejection reason",
+    "lockTitle": "Lock User “{name}”"
+  },
+  "userGroup": {
+    "entity": "User Group",
+    "title": "User Group Management"
+  },
+  "whitelist": {
+    "entity": "Whitelist Entry",
+    "title": "Whitelist Management"
+  },
+  "dictionary": {
+    "entity": "Data Dictionary",
+    "title": "Data Dictionary Management"
+  },
+  "common": {
+    "actions": "Actions",
+    "reset": "Reset",
+    "search": "Search",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteSelected": "Delete Selected",
+    "refresh": "Refresh",
+    "selectAll": "Select All",
+    "selection": "Selection",
+    "less": "Less",
+    "more": "More",
+    "unknown": "Unknown",
+    "select": "Select {field}",
+    "enter": "Enter {field}",
+    "editTitle": "Edit {entity}",
+    "createTitle": "Create {entity}"
+  },
+  "table": {
+    "compact": "Compact",
+    "default": "Default",
+    "loose": "Loose",
+    "density": "Density",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit Fullscreen",
+    "visibleColumns": "Visible Columns",
+    "columns": "Columns",
+    "style": "Table Style",
+    "bordered": "Bordered",
+    "striped": "Striped Rows",
+    "sticky": "Sticky Header",
+    "stickyHint": "Keep column headers visible while scrolling",
+    "total": "{count} records"
+  },
+  "status": {
+    "pending": "Pending",
+    "active": "Active",
+    "locked": "Locked"
+  },
+  "category": {
+    "permission": "Permission",
+    "jwt": "JWT"
+  },
+  "enabled": {
+    "yes": "Enabled",
+    "no": "Disabled"
+  },
+  "suggestions": {
+    "backend": "Backend results",
+    "history": "History",
+    "searching": "Searching…",
+    "actionGroup": "Search or create an action group",
+    "action": "Search by permission name or key",
+    "role": "Search by role name or key",
+    "user": "Search by username or code",
+    "removeHistory": "Remove {value} from history"
+  },
+  "hints": {
+    "actionGroup": "Select an existing action group or enter a new group name.",
+    "action": "Search by permission name or key (for example, User Read or user.read), or open the list to browse.",
+    "role": "Search by role name or key, or open the list to browse.",
+    "user": "Search by username or user code, or open the list to browse.",
+    "createGroup": "Create “{name}”"
+  },
+  "messages": {
+    "noChanges": "No changes to save",
+    "updated": "Updated successfully",
+    "created": "Created successfully",
+    "deleted": "Deleted successfully",
+    "rejectionRequired": "Please enter a rejection reason",
+    "approved": "Registration approved",
+    "rejected": "Registration rejected",
+    "futureLock": "Please select a future lock expiration time",
+    "locked": "User locked successfully",
+    "unlocked": "User unlocked successfully",
+    "passwordUnlocked": "Self-service password change unlocked"
+  },
+  "confirm": {
+    "deleteSelected": "Delete selected records?",
+    "deleteDescription": "The selected {count} records will be deleted.",
+    "unlock": "Unlock “{name}”?",
+    "unlockPassword": "Unlock self-service password changes for “{name}”?",
+    "delete": "Delete “{name}”?"
+  },
+  "validation": {
+    "required": "{field} is required",
+    "dictionaryKey": "Use uppercase letters, digits, and underscore-separated segments",
+    "json": "Enter valid JSON"
+  },
+  "menu": {
+    "system": "System",
+    "users": "Users",
+    "roles": "Roles",
+    "groups": "User Groups",
+    "actions": "Actions",
+    "whitelist": "Whitelist",
+    "dictionary": "Data Dictionary"
+  }
+}

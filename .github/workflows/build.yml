@@ -1,0 +1,338 @@
+name: Build and Push Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Image to build
+        type: choice
+        default: all
+        options:
+          - all
+          - auth
+          - vben-antd-vue3-pc-admin
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  GITOPS_REPO: go-cinch/argocd-demo-app
+  GITOPS_BRANCH: main
+
+jobs:
+  changes:
+    name: Select changed projects
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      has_changes: ${{ steps.select.outputs.has_changes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select build contexts
+        id: select
+        env:
+          BUILD_TARGET: ${{ inputs.target || 'all' }}
+        shell: python
+        run: |
+          import json
+          import os
+          import subprocess
+
+          projects = [
+              {"name": "auth", "dockerfile": "auth/Dockerfile"},
+              {
+                  "name": "vben-antd-vue3-pc-admin",
+                  "dockerfile": "vben-antd-vue3-pc-admin/scripts/deploy/Dockerfile",
+              },
+          ]
+          with open(os.environ["GITHUB_EVENT_PATH"]) as source:
+              event = json.load(source)
+
+          if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
+              target = os.environ["BUILD_TARGET"]
+              if target not in {"all", *(p["name"] for p in projects)}:
+                  raise ValueError(f"Unknown build target: {target}")
+              selected = [p for p in projects if target in ("all", p["name"])]
+          elif os.environ["GITHUB_REF"].startswith("refs/tags/"):
+              selected = projects
+          else:
+              before = event.get("before", "")
+              exists = before and set(before) != {"0"} and subprocess.run(
+                  ["git", "cat-file", "-e", f"{before}^{{commit}}"],
+                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+              ).returncode == 0
+              if not exists:
+                  # First push, or a force-push whose old commit is unavailable.
+                  selected = projects
+              else:
+                  changed = subprocess.check_output([
+                      "git", "diff", "--no-renames", "--name-only", "-z",
+                      before, "HEAD", "--",
+                  ]).decode().split("\0")
+                  selected = [
+                      p for p in projects
+                      if any(path.startswith(p["name"] + "/") for path in changed)
+                  ]
+
+          matrix = json.dumps({"include": selected}, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"matrix={matrix}", file=output)
+              print(f"has_changes={str(bool(selected)).lower()}", file=output)
+          print(matrix)
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    concurrency:
+      group: build-image-${{ matrix.name }}-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Resolve binary version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            printf 'value=%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            printf 'value=%s\n' "$(git rev-parse --short=5 HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ matrix.name }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=${{ matrix.name }}-sha-
+            type=ref,event=tag,prefix=${{ matrix.name }}-
+
+      - name: Check release tag is unused
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_TYPE: ${{ github.event.repository.owner.type }}
+          IMAGE_TAG: ${{ matrix.name }}-${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_name="${GITHUB_REPOSITORY#*/}"
+          package_name="${package_name,,}"
+          owner_path=users
+          if [[ "$OWNER_TYPE" == Organization ]]; then owner_path=orgs; fi
+          api="${owner_path}/${GITHUB_REPOSITORY_OWNER}/packages/container/${package_name}/versions?per_page=100"
+          if gh api --paginate "$api" --jq '.[].metadata.container.tags[]?' > "$RUNNER_TEMP/image-tags.txt" 2> "$RUNNER_TEMP/image-tags-error.txt"; then
+            if grep -Fxq "$IMAGE_TAG" "$RUNNER_TEMP/image-tags.txt"; then
+              echo "::error::Image tag already exists: $IMAGE_TAG. Use a new release tag."
+              exit 1
+            fi
+          elif ! grep -Fq '(HTTP 404)' "$RUNNER_TEMP/image-tags-error.txt"; then
+            cat "$RUNNER_TEMP/image-tags-error.txt" >&2
+            exit 1
+          fi
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.name }}
+          file: ./${{ matrix.dockerfile }}
+          push: true
+          pull: true
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ steps.version.outputs.value }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Print published tags
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf '%s\n' "$IMAGE_TAGS"
+          printf 'Digest: %s\n' "$IMAGE_DIGEST"
+          {
+            printf '### Published image\n\n'
+            printf '%s\n' "$IMAGE_TAGS"
+            printf '\nDigest: `%s`\n' "$IMAGE_DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record image digest
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/image-digests"
+          printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/image-digests/${IMAGE_NAME}.digest"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digest-${{ matrix.name }}
+          path: ${{ runner.temp }}/image-digests/${{ matrix.name }}.digest
+          retention-days: 1
+
+  deploy:
+    name: Update Argo CD manifests
+    needs:
+      - changes
+      - build
+    if: needs.changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    concurrency:
+      group: update-argocd-demo-app-main
+      cancel-in-progress: false
+
+    steps:
+      - name: Check GitOps repository token
+        env:
+          GITOPS_REPO_TOKEN: ${{ secrets.ARGOCD_DEMO_APP_REPO_TOKEN }}
+        run: |
+          if [ -z "${GITOPS_REPO_TOKEN:-}" ]; then
+            echo "Missing secret ARGOCD_DEMO_APP_REPO_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: Download image digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: image-digest-*
+          path: ${{ runner.temp }}/image-digests
+          merge-multiple: true
+
+      - name: Check out GitOps repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.ARGOCD_DEMO_APP_REPO_TOKEN }}
+          path: argocd-demo-app
+
+      - name: Update image digests
+        working-directory: argocd-demo-app
+        env:
+          DIGEST_DIR: ${{ runner.temp }}/image-digests
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          import re
+
+          manifests = {
+              "auth": Path("go-app/auth/overlays/single/kustomization.yaml"),
+              "vben-antd-vue3-pc-admin": Path(
+                  "go-app/vben-antd-vue3-pc-admin/overlays/single/kustomization.yaml"
+              ),
+          }
+          digest_files = sorted(Path(os.environ["DIGEST_DIR"]).glob("*.digest"))
+          if not digest_files:
+              raise RuntimeError("No image digest artifacts were downloaded")
+
+          for digest_file in digest_files:
+              image_name = digest_file.stem
+              if image_name not in manifests:
+                  raise ValueError(f"Unknown image name: {image_name}")
+
+              digest = digest_file.read_text().strip()
+              if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                  raise ValueError(f"Invalid digest for {image_name}: {digest}")
+
+              manifest = manifests[image_name]
+              content = manifest.read_text()
+              updated, replacements = re.subn(
+                  r"(?m)^  digest: sha256:[0-9a-f]{64}$",
+                  f"  digest: {digest}",
+                  content,
+                  count=1,
+              )
+              if replacements != 1:
+                  raise RuntimeError(f"Expected one digest in {manifest}, found {replacements}")
+              manifest.write_text(updated)
+              print(f"{image_name}: {digest}")
+
+      - name: Commit and push Argo CD manifests
+        working-directory: argocd-demo-app
+        env:
+          GITOPS_BRANCH: ${{ env.GITOPS_BRANCH }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go-app/*/overlays/single/kustomization.yaml
+
+          if git diff --cached --quiet; then
+            echo "Argo CD manifests are already up to date"
+            exit 0
+          fi
+
+          git commit -m "[chore] go-app deploy demos ${SOURCE_SHA:0:7}"
+
+          max_attempts=5
+          for attempt in $(seq 1 "$max_attempts"); do
+            git fetch origin "$GITOPS_BRANCH"
+            git merge --no-edit "origin/$GITOPS_BRANCH"
+
+            if git push origin "HEAD:${GITOPS_BRANCH}"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              echo "Failed to push Argo CD manifests after $max_attempts attempts" >&2
+              exit 1
+            fi
+
+            echo "argocd-demo-app/$GITOPS_BRANCH changed during push; retrying ($attempt/$max_attempts)"
+            sleep $((attempt * 2))
+          done

@@ -1,0 +1,34 @@
+{
+  "validation": {
+    "username": "Username must be 5–50 characters, start with a letter, and contain only letters, numbers, hyphens, or underscores",
+    "password": "Password must be 6–72 bytes",
+    "currentPassword": "Current password is required",
+    "passwordMax": "Password must be at most 72 bytes",
+    "credentialsRequired": "Username and password are required",
+    "passwordRequired": "Password is required",
+    "passwordChangeRequired": "Current and new passwords are required",
+    "verification": "Please complete the verification first"
+  },
+  "register": {
+    "usernameExists": "Username already exists",
+    "success": "Account created successfully. You can sign in after administrator approval."
+  },
+  "captcha": {
+    "additional": "Additional verification",
+    "checking": "Verifying…",
+    "failed": "Incorrect order. Try again",
+    "passed": "Verification passed",
+    "progress": "Verification in progress…",
+    "start": "Click to start verification"
+  },
+  "errors": {
+    "failed": "Request failed. Please try again later."
+  },
+  "resetPassword": {
+    "title": "Reset password",
+    "description": "Before continuing after your first login or an administrator reset, choose a new password different from your current one.",
+    "submit": "Reset and continue",
+    "logout": "Sign out",
+    "success": "Password reset successfully"
+  }
+}

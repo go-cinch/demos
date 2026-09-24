@@ -1,0 +1,7 @@
+/bin/
+/.tools/
+/coverage.out
+/conf/login-private.pem
+/.idea/
+/.vscode/
+.DS_Store

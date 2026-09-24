@@ -1,0 +1,184 @@
+{
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "codeLogin": "验证码登录",
+    "qrcodeLogin": "二维码登录",
+    "forgetPassword": "忘记密码",
+    "profile": "个人中心"
+  },
+  "dashboard": {
+    "title": "概览",
+    "overview": "概览",
+    "workspace": "工作台",
+    "overviewPage": {
+      "cards": {
+        "businessMix": "商业占比",
+        "visitCount": "访问数量",
+        "visitSource": "访问来源"
+      },
+      "charts": {
+        "affiliateAds": "联盟广告",
+        "businessMix": "商业占比",
+        "client": "客户端",
+        "customization": "定制",
+        "direct": "直接访问",
+        "emailMarketing": "邮件营销",
+        "mobile": "移动端",
+        "month": "{month}月",
+        "other": "其它",
+        "outsourcing": "外包",
+        "remote": "远程",
+        "searchEngine": "搜索引擎",
+        "tablet": "平板端",
+        "technicalSupport": "技术支持",
+        "thirdParty": "第三方",
+        "trend": "趋势",
+        "visit": "访问",
+        "visitSource": "访问来源",
+        "web": "网页"
+      },
+      "metrics": {
+        "downloads": "下载量",
+        "totalDownloads": "总下载量",
+        "totalUsage": "总使用量",
+        "totalUsers": "总用户量",
+        "totalVisits": "总访问量",
+        "usage": "使用量",
+        "users": "用户量",
+        "visits": "访问量"
+      },
+      "tabs": {
+        "monthlyVisits": "月访问量",
+        "trafficTrends": "流量趋势"
+      }
+    },
+    "workspacePage": {
+      "groups": {
+        "algorithm": "算法组",
+        "architecture": "架构组",
+        "openSource": "开源组",
+        "technology": "技术组",
+        "web": "Web 组"
+      },
+      "header": {
+        "greeting": "早上好，{name}，开始您一天的工作吧！",
+        "weather": "今日晴，20℃–32℃。"
+      },
+      "navigation": {
+        "accessManagement": "权限管理",
+        "charts": "图表",
+        "components": "组件",
+        "dashboard": "仪表盘",
+        "home": "首页",
+        "systemManagement": "系统管理"
+      },
+      "people": {
+        "chris": "克里斯",
+        "evan": "艾文",
+        "jack": "杰克",
+        "peter": "皮特",
+        "william": "威廉"
+      },
+      "projects": {
+        "angularQuote": "热情和欲望可以突破一切难关。",
+        "githubQuote": "不要等待机会，而要创造机会。",
+        "htmlQuote": "没有什么才能比努力更重要。",
+        "javascriptQuote": "路是走出来的，而不是空想出来的。",
+        "reactQuote": "健康的身体是实现目标的基石。",
+        "vueQuote": "现在的你决定将来的你。"
+      },
+      "sections": {
+        "latestActivity": "最新动态",
+        "projects": "项目",
+        "quickNavigation": "快捷导航",
+        "todos": "待办事项"
+      },
+      "stats": {
+        "projects": "项目",
+        "teams": "团队",
+        "todos": "待办"
+      },
+      "todos": {
+        "codeReview": {
+          "content": "审查最近提交到 Git 仓库的前端代码，确保代码质量和规范。",
+          "title": "审查前端代码提交"
+        },
+        "dependencies": {
+          "content": "更新项目中的所有 npm 依赖包，确保使用最新的兼容版本。",
+          "title": "更新项目依赖"
+        },
+        "performance": {
+          "content": "检查并优化系统性能，降低 CPU 使用率。",
+          "title": "系统性能优化"
+        },
+        "security": {
+          "content": "进行系统安全检查，确保没有安全漏洞或未授权的访问。",
+          "title": "安全检查"
+        },
+        "uiIssue": {
+          "content": "修复用户报告的页面 UI 显示问题，确保在不同浏览器中显示一致。",
+          "title": "修复 UI 显示问题"
+        }
+      },
+      "trends": {
+        "dates": {
+          "justNow": "刚刚",
+          "oneDayAgo": "1 天前",
+          "oneHourAgo": "1 小时前",
+          "oneWeekAgo": "1 周前",
+          "threeDaysAgo": "3 天前",
+          "twoDaysAgo": "2 天前"
+        },
+        "items": {
+          "closedRunIssue": "关闭了问题《如何运行项目》",
+          "createdProject": "在开源组创建了 Vue 项目",
+          "followedWilliam": "关注了威廉",
+          "postedUpdate": "发布了个人动态",
+          "publishedAdminVben": "发表了《如何使用 go cinch》",
+          "publishedVite": "发表了《如何编写 Vite 插件》",
+          "pushedGithub": "推送了代码到 GitHub",
+          "repliedOptimization": "回复了杰克的问题《如何进行项目优化？》"
+        }
+      }
+    }
+  },
+  "notifications": {
+    "description": "这是通知的描述信息。",
+    "dates": {
+      "fixedDate": "2024-01-01",
+      "justNow": "刚刚",
+      "oneDayAgo": "1天前",
+      "threeHoursAgo": "3小时前"
+    },
+    "titles": {
+      "commented": "曲丽丽评论了你",
+      "externalLink": "跳转外部链接示例",
+      "replied": "朱偏右回复了你",
+      "todoReminder": "待办提醒",
+      "weeklyReports": "收到了 14 份新周报",
+      "workspaceLink": "跳转工作台示例"
+    }
+  },
+  "profile": {
+    "fields": {
+      "role": "角色",
+      "username": "用户名"
+    },
+    "password": {
+      "confirmPassword": "确认密码",
+      "confirmPasswordPlaceholder": "请再次输入新密码",
+      "newPassword": "新密码",
+      "newPasswordPlaceholder": "请输入新密码",
+      "oldPassword": "当前密码",
+      "oldPasswordPlaceholder": "请输入当前密码",
+      "passwordMismatch": "两次输入的密码不一致",
+      "success": "密码修改成功，所有设备均需重新登录"
+    },
+    "tabs": {
+      "basicInformation": "基本信息",
+      "changePassword": "修改密码"
+    },
+    "title": "个人中心"
+  }
+}
