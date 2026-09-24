@@ -35,7 +35,7 @@ import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 import { formatDateTime } from '@vben/utils';
 
-import { useDebounceFn, useFullscreen } from '@vueuse/core';
+import { useDebounceFn, useFullscreen, useTimeoutFn } from '@vueuse/core';
 import {
   AutoComplete,
   Button,
@@ -942,6 +942,7 @@ const userOptionsLoading = ref(false);
 const userOptionsQuery = ref('');
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 });
 const searchExpanded = ref(false);
+const filtersDirty = ref(false);
 const tableContainerRef = ref<HTMLElement>();
 const tableSize = ref<TableSize>('middle');
 const densityOptions = computed<{ label: string; value: TableSize }[]>(() => [
@@ -965,6 +966,15 @@ const visibleColumnKeys = ref<string[]>([
 ]);
 const { isFullscreen, toggle: toggleFullscreen } =
   useFullscreen(tableContainerRef);
+const { start: scheduleFilterSearch, stop: cancelFilterSearch } = useTimeoutFn(
+  async () => {
+    if (!filtersDirty.value || !canRead.value) return;
+    filtersDirty.value = false;
+    await runSearch();
+  },
+  500,
+  { immediate: false },
+);
 
 const visibleFilters = computed(() =>
   searchExpanded.value
@@ -1347,10 +1357,13 @@ function normalizeTextFilterValue(fieldKey: string, value: string) {
 }
 
 function updateTextFilterValue(fieldKey: string, value: unknown) {
-  filters[fieldKey] =
+  const normalizedValue =
     typeof value === 'string'
       ? normalizeTextFilterValue(fieldKey, value)
       : value;
+  if (filters[fieldKey] === normalizedValue) return;
+  filters[fieldKey] = normalizedValue;
+  filtersDirty.value = true;
 }
 
 function normalizeMultiFilterValue(fieldKey: string, values: unknown) {
@@ -1367,8 +1380,31 @@ function normalizeMultiFilterValue(fieldKey: string, values: unknown) {
 }
 
 function updateMultiFilterValue(fieldKey: string, value: unknown) {
-  filters[fieldKey] = normalizeMultiFilterValue(fieldKey, value);
+  const normalizedValue = normalizeMultiFilterValue(fieldKey, value);
+  const currentValue = Array.isArray(filters[fieldKey])
+    ? filters[fieldKey]
+    : [];
+  if (
+    currentValue.length !== normalizedValue.length ||
+    currentValue.some((item, index) => item !== normalizedValue[index])
+  ) {
+    filters[fieldKey] = normalizedValue;
+    filtersDirty.value = true;
+  }
   clearBackendFilterSuggestion(fieldKey);
+}
+
+function markFiltersChanged() {
+  filtersDirty.value = true;
+}
+
+function handleFilterFocus() {
+  cancelFilterSearch();
+}
+
+function handleFilterBlur(fieldKey?: string) {
+  if (fieldKey) clearBackendFilterSuggestion(fieldKey);
+  scheduleFilterSearch();
 }
 
 function filterSuggestionOptions(fieldKey: string): FilterSuggestionGroup[] {
@@ -1564,16 +1600,24 @@ function clearBackendFilterSuggestions() {
   }
 }
 
-async function search() {
+async function runSearch() {
   saveFilterHistory();
   pagination.current = 1;
   await loadData();
 }
 
+async function search() {
+  cancelFilterSearch();
+  filtersDirty.value = false;
+  await runSearch();
+}
+
 async function resetSearch() {
+  cancelFilterSearch();
+  filtersDirty.value = false;
   resetObject(filters);
   clearBackendFilterSuggestions();
-  await search();
+  await runSearch();
 }
 
 function applyRouteFilters() {
@@ -2202,6 +2246,9 @@ onMounted(loadInitialData);
                   { label: $t('system.status.active'), value: 1 },
                   { label: $t('system.status.locked'), value: 2 },
                 ]"
+                @blur="handleFilterBlur()"
+                @change="markFiltersChanged"
+                @focus="handleFilterFocus"
               />
               <Select
                 v-else-if="field.type === 'enabled'"
@@ -2215,6 +2262,9 @@ onMounted(loadInitialData);
                   { label: $t('system.enabled.yes'), value: 'true' },
                   { label: $t('system.enabled.no'), value: 'false' },
                 ]"
+                @blur="handleFilterBlur()"
+                @change="markFiltersChanged"
+                @focus="handleFilterFocus"
               />
               <Select
                 v-else-if="field.type === 'category'"
@@ -2228,6 +2278,9 @@ onMounted(loadInitialData);
                   { label: $t('system.category.permission'), value: 0 },
                   { label: $t('system.category.jwt'), value: 1 },
                 ]"
+                @blur="handleFilterBlur()"
+                @change="markFiltersChanged"
+                @focus="handleFilterFocus"
               />
               <Select
                 v-else-if="field.type === 'input-multi-select'"
@@ -2242,7 +2295,8 @@ onMounted(loadInitialData);
                 :placeholder="$t('system.common.enter', { field: field.label })"
                 :show-action="['focus']"
                 :token-separators="[',']"
-                @blur="clearBackendFilterSuggestion(field.key)"
+                @blur="handleFilterBlur(field.key)"
+                @focus="handleFilterFocus"
                 @search="searchBackendFilterSuggestions(field.key, $event)"
                 @update:value="updateMultiFilterValue(field.key, $event)"
               >
@@ -2348,6 +2402,8 @@ onMounted(loadInitialData);
                 :placeholder="$t('system.common.enter', { field: field.label })"
                 :show-action="['focus']"
                 style="width: 208px"
+                @blur="handleFilterBlur()"
+                @focus="handleFilterFocus"
                 @search="searchBackendFilterSuggestions(field.key, $event)"
                 @update:value="updateTextFilterValue(field.key, $event)"
               >
