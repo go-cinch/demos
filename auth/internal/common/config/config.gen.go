@@ -25,6 +25,7 @@ type AuthConfig struct {
 	PasswordChange      AuthPasswordChangeConfig      `koanf:"passwordChange"`
 	PointCaptcha        AuthPointCaptchaConfig        `koanf:"pointCaptcha"`
 	Refresh             AuthRefreshConfig             `koanf:"refresh"`
+	SliderCaptcha       AuthSliderCaptchaConfig       `koanf:"sliderCaptcha"`
 	Switches            AuthSwitchesConfig            `koanf:"switches"`
 }
 
@@ -61,6 +62,15 @@ type AuthPointCaptchaConfig struct {
 type AuthRefreshConfig struct {
 	RememberLifetime time.Duration `koanf:"rememberLifetime"`
 	SessionLifetime  time.Duration `koanf:"sessionLifetime"`
+}
+
+type AuthSliderCaptchaConfig struct {
+	CanaryHeaderValue      string        `koanf:"canaryHeaderValue"`
+	E2EAnswer              string        `koanf:"e2eAnswer"`
+	MinimumDuration        time.Duration `koanf:"minimumDuration"`
+	RuntimeEnvironment     string        `koanf:"runtimeEnvironment"`
+	RuntimeEnvironmentFile string        `koanf:"runtimeEnvironmentFile"`
+	TTL                    time.Duration `koanf:"ttl"`
 }
 
 type AuthSwitchesConfig struct {

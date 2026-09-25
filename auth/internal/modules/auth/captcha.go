@@ -132,7 +132,7 @@ func (c *PointCaptcha) RefreshPasswordChangeChallenge(ctx context.Context, captc
 
 func (c *PointCaptcha) refreshChallenge(ctx context.Context, captchaID, purpose string) (*PointCaptchaChallenge, error) {
 	captchaID = strings.TrimSpace(captchaID)
-	if !strings.HasPrefix(captchaID, purpose+".") {
+	if !validPointCaptchaID(captchaID, purpose) {
 		return nil, ErrPointCaptchaNotFound
 	}
 	value, err := c.store.Take(ctx, captchaID)
@@ -164,7 +164,7 @@ func (c *PointCaptcha) CheckPasswordChange(ctx context.Context, subject, captcha
 
 func (c *PointCaptcha) verify(ctx context.Context, purpose, subjectDigest, captchaID string, points []CaptchaPoint) (bool, error) {
 	captchaID = strings.TrimSpace(captchaID)
-	if captchaID == "" || len(captchaID) > 128 || !strings.HasPrefix(captchaID, purpose+".") || !validPointCaptchaTargetCount(len(points)) {
+	if captchaID == "" || len(captchaID) > 128 || !validPointCaptchaID(captchaID, purpose) || !validPointCaptchaTargetCount(len(points)) {
 		return false, nil
 	}
 	value, err := c.store.Take(ctx, captchaID)
@@ -183,7 +183,7 @@ func (c *PointCaptcha) verify(ctx context.Context, purpose, subjectDigest, captc
 
 func (c *PointCaptcha) check(ctx context.Context, purpose, subjectDigest, captchaID string, points []CaptchaPoint) (bool, error) {
 	captchaID = strings.TrimSpace(captchaID)
-	if captchaID == "" || len(captchaID) > 128 || !strings.HasPrefix(captchaID, purpose+".") || !validPointCaptchaTargetCount(len(points)) {
+	if captchaID == "" || len(captchaID) > 128 || !validPointCaptchaID(captchaID, purpose) || !validPointCaptchaTargetCount(len(points)) {
 		return false, nil
 	}
 	value, err := c.store.Take(ctx, captchaID)
@@ -223,7 +223,7 @@ func (c *PointCaptcha) challenge(ctx context.Context, purpose, subjectDigest str
 	if _, err := io.ReadFull(c.random, idBytes); err != nil {
 		return nil, fmt.Errorf("generate point captcha id: %w", err)
 	}
-	id := purpose + "." + base64.RawURLEncoding.EncodeToString(idBytes)
+	id := pointCaptchaIDPrefix(purpose) + base64.RawURLEncoding.EncodeToString(idBytes)
 	imageData, hint, points, err := c.render(ctx)
 	if err != nil {
 		return nil, err
@@ -240,6 +240,18 @@ func (c *PointCaptcha) challenge(ctx context.Context, purpose, subjectDigest str
 		HintText: hint, TargetCount: len(points), Width: c.width, Height: c.height,
 		ExpiredAt: time.Now().Add(c.ttl).UnixMilli(),
 	}, nil
+}
+
+func pointCaptchaIDPrefix(purpose string) string {
+	if purpose == pointCaptchaPurposePasswordChange {
+		return "password-change:"
+	}
+	return purpose + ":"
+}
+
+func validPointCaptchaID(value, purpose string) bool {
+	// Dot-separated IDs remain readable for the short rolling-deployment window.
+	return strings.HasPrefix(value, pointCaptchaIDPrefix(purpose)) || strings.HasPrefix(value, purpose+".")
 }
 
 func decodePointCaptchaAnswer(value string) (pointCaptchaAnswer, error) {

@@ -695,7 +695,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoginResult"
         "400":
-          description: "Bad Request; invalid login credential; invalid login"
+          description: "Bad Request; invalid login credential; slider verification is required; invalid login"
           content:
             application/json:
               schema:
@@ -819,7 +819,7 @@ paths:
         "200":
           description: "OK"
         "400":
-          description: "Bad Request; invalid registration credential; invalid registration"
+          description: "Bad Request; invalid registration credential; slider verification is required; invalid registration"
           content:
             application/json:
               schema:
@@ -850,6 +850,66 @@ paths:
                 $ref: "#/components/schemas/UsernameAvailability"
         "400":
           description: "Bad Request; invalid registration"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pub/slider/challenge:
+    post:
+      summary: "POST /auth/pub/slider/challenge"
+      operationId: postAuthPubSliderChallenge
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SliderChallengeInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SliderCaptchaChallenge"
+        "400":
+          description: "Bad Request; slider verification is required"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/pub/slider/verify:
+    post:
+      summary: "POST /auth/pub/slider/verify"
+      operationId: postAuthPubSliderVerify
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SliderCaptchaVerification"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SliderCaptchaVerificationResult"
+        "400":
+          description: "Bad Request; slider verification is required"
           content:
             application/json:
               schema:
@@ -2739,6 +2799,62 @@ components:
           type: integer
           format: int64
         word:
+          type: string
+    SliderCaptchaChallenge:
+      type: object
+      required: [captcha_id, expired_at]
+      properties:
+        captcha_id:
+          type: string
+        expired_at:
+          type: integer
+          format: int64
+    SliderCaptchaTrack:
+      type: object
+      required: [t, x]
+      properties:
+        t:
+          type: integer
+          format: int32
+        x:
+          type: integer
+          format: int32
+    SliderCaptchaVerification:
+      type: object
+      required: [captcha_id, distance, duration_ms, purpose, tracks, username, width]
+      properties:
+        captcha_id:
+          type: string
+        distance:
+          type: integer
+          format: int32
+        duration_ms:
+          type: integer
+          format: int32
+        purpose:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SliderCaptchaTrack"
+        username:
+          type: string
+        width:
+          type: integer
+          format: int32
+    SliderCaptchaVerificationResult:
+      type: object
+      required: [proof]
+      properties:
+        proof:
+          type: string
+    SliderChallengeInput:
+      type: object
+      required: [purpose, username]
+      properties:
+        purpose:
+          type: string
+        username:
           type: string
     UpdateActionInput:
       type: object
