@@ -152,6 +152,7 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 		cfg.Auth.PointCaptcha.Width,
 		cfg.Auth.PointCaptcha.Height,
 		cfg.Auth.PointCaptcha.Tolerance,
+		e2eTestEnabledFromConfig(cfg),
 	)
 	if err != nil {
 		cleanup()
@@ -217,12 +218,9 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 
 func sliderCaptchaFromConfig(cfg *config.Config, store authmodule.PointCaptchaStore) (*authmodule.SliderCaptcha, error) {
 	return authmodule.NewSliderCaptcha(store, authmodule.SliderCaptchaConfig{
-		TTL:                    cfg.Auth.SliderCaptcha.TTL,
-		MinimumDuration:        cfg.Auth.SliderCaptcha.MinimumDuration,
-		RuntimeEnvironment:     cfg.Auth.SliderCaptcha.RuntimeEnvironment,
-		RuntimeEnvironmentFile: cfg.Auth.SliderCaptcha.RuntimeEnvironmentFile,
-		CanaryHeaderValue:      cfg.Auth.SliderCaptcha.CanaryHeaderValue,
-		E2EAnswer:              cfg.Auth.SliderCaptcha.E2EAnswer,
+		TTL:             cfg.Auth.SliderCaptcha.TTL,
+		MinimumDuration: cfg.Auth.SliderCaptcha.MinimumDuration,
+		EnableE2ETest:   e2eTestEnabledFromConfig(cfg),
 	})
 }
 
@@ -240,6 +238,7 @@ func authSwitchesFromConfig(cfg *config.Config) authmodule.Switches {
 		PasswordResetRequired:      cfg.Auth.Switches.PasswordResetRequired,
 		ProtectSuper:               cfg.Auth.Switches.ProtectSuper,
 		ProtectCaptchaDictionaries: cfg.Auth.Switches.ProtectCaptchaDictionaries,
+		EnableE2ETest:              cfg.Auth.Switches.EnableE2ETest,
 	}
 }
 

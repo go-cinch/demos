@@ -65,18 +65,16 @@ type AuthRefreshConfig struct {
 }
 
 type AuthSliderCaptchaConfig struct {
-	CanaryHeaderValue      string        `koanf:"canaryHeaderValue"`
-	E2EAnswer              string        `koanf:"e2eAnswer"`
-	MinimumDuration        time.Duration `koanf:"minimumDuration"`
-	RuntimeEnvironment     string        `koanf:"runtimeEnvironment"`
-	RuntimeEnvironmentFile string        `koanf:"runtimeEnvironmentFile"`
-	TTL                    time.Duration `koanf:"ttl"`
+	MinimumDuration time.Duration `koanf:"minimumDuration"`
+	TTL             time.Duration `koanf:"ttl"`
 }
 
 type AuthSwitchesConfig struct {
-	PasswordResetRequired      bool `koanf:"passwordResetRequired"`
-	ProtectCaptchaDictionaries bool `koanf:"protectCaptchaDictionaries"`
-	ProtectSuper               bool `koanf:"protectSuper"`
+	EnableE2ETest              bool   `koanf:"enableE2ETest"`
+	EnableE2ETestFile          string `koanf:"enableE2ETestFile"`
+	PasswordResetRequired      bool   `koanf:"passwordResetRequired"`
+	ProtectCaptchaDictionaries bool   `koanf:"protectCaptchaDictionaries"`
+	ProtectSuper               bool   `koanf:"protectSuper"`
 }
 
 type DatabaseConfig struct {
