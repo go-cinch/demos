@@ -1,10 +1,14 @@
 APP := auth
 MODULE := $(shell go list -m)
-VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse --short=5 HEAD 2>/dev/null)
-ifeq ($(strip $(VERSION)),)
-VERSION := dev
+VERSION ?=
+BUILD_VERSION := $(strip $(VERSION))
+ifeq ($(BUILD_VERSION),)
+BUILD_VERSION := $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse --short=5 HEAD 2>/dev/null)
 endif
-LDFLAGS := -s -w -X $(MODULE)/internal/common/config.Version=$(VERSION)
+ifeq ($(strip $(BUILD_VERSION)),)
+BUILD_VERSION := dev
+endif
+LDFLAGS := -s -w -X $(MODULE)/internal/common/config.Version=$(BUILD_VERSION)
 
 GRPCUI_VERSION ?= v1.5.4
 GRPCUI_BIN := $(CURDIR)/.tools/grpcui-$(GRPCUI_VERSION)/grpcui
