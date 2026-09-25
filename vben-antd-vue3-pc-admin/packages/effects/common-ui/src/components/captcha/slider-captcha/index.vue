@@ -11,7 +11,7 @@ import { $t } from '@vben/locales';
 
 import { cn } from '@vben-core/shared/utils';
 
-import { useTimeoutFn } from '@vueuse/core';
+import { useResizeObserver, useTimeoutFn } from '@vueuse/core';
 
 import SliderCaptchaAction from './slider-captcha-action.vue';
 import SliderCaptchaBar from './slider-captcha-bar.vue';
@@ -38,6 +38,7 @@ const modelValue = defineModel<boolean>({ default: false });
 
 const state = reactive({
   endTime: 0,
+  isAtEnd: false,
   isMoving: false,
   isPassing: false,
   moveDistance: 0,
@@ -58,6 +59,10 @@ const contentRef =
 const actionRef =
   useTemplateRef<InstanceType<typeof SliderCaptchaAction>>('actionRef');
 let resetTimer: ReturnType<typeof useTimeoutFn> | undefined;
+
+useResizeObserver(wrapperRef, () => {
+  if (state.isAtEnd) placeAtEnd();
+});
 
 watch(
   () => state.isPassing,
@@ -97,6 +102,7 @@ function handleDragStart(e: MouseEvent | TouchEvent) {
     getEventPageX(e) -
     Number.parseInt(actionStyle.left.replace('px', '') || '0', 10);
   state.startTime = Date.now();
+  state.isAtEnd = false;
   state.isMoving = true;
 }
 
@@ -179,6 +185,7 @@ function checkPass() {
     return;
   }
   state.endTime = Date.now();
+  state.isAtEnd = true;
   state.isPassing = true;
   state.isMoving = false;
 }
@@ -186,6 +193,7 @@ function checkPass() {
 function resume() {
   resetTimer?.stop();
   state.isMoving = false;
+  state.isAtEnd = false;
   state.isPassing = false;
   state.moveDistance = 0;
   state.toLeft = false;
@@ -211,6 +219,7 @@ function resume() {
 function showPassedAtEnd() {
   resetTimer?.stop();
   state.isMoving = false;
+  state.isAtEnd = true;
   state.isPassing = true;
   state.toLeft = false;
   placeAtEnd();
@@ -219,6 +228,7 @@ function showPassedAtEnd() {
 function showPendingAtEnd() {
   resetTimer?.stop();
   state.isMoving = false;
+  state.isAtEnd = true;
   state.isPassing = false;
   state.toLeft = false;
   placeAtEnd();

@@ -50,26 +50,6 @@ const formSchema = computed((): VbenFormSchema[] => {
       rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
     },
   ];
-  schema.push({
-    component: markRaw(ServerSliderCaptcha),
-    componentProps: {
-      purpose: 'login',
-      username: '',
-    },
-    dependencies: {
-      componentProps(values) {
-        return {
-          purpose: 'login',
-          username: String(values.username ?? '').trim(),
-        };
-      },
-      triggerFields: ['username'],
-    },
-    fieldName: 'sliderProof',
-    rules: z
-      .string()
-      .min(1, { message: $t('authentication.verifyRequiredTip') }),
-  });
   if (authStore.loginCaptcha) {
     schema.push({
       component: markRaw(LoginPointCaptcha),
@@ -91,11 +71,33 @@ const formSchema = computed((): VbenFormSchema[] => {
           { message: $t('app.validation.verification') },
         ),
     });
+  } else {
+    schema.push({
+      component: markRaw(ServerSliderCaptcha),
+      componentProps: {
+        purpose: 'login',
+        username: '',
+      },
+      dependencies: {
+        componentProps(values) {
+          return {
+            purpose: 'login',
+            username: String(values.username ?? '').trim(),
+          };
+        },
+        triggerFields: ['username'],
+      },
+      fieldName: 'sliderProof',
+      rules: z
+        .string()
+        .min(1, { message: $t('authentication.verifyRequiredTip') }),
+    });
   }
   return schema;
 });
 
 async function resetSliderCaptcha() {
+  if (authStore.loginCaptcha) return;
   const formApi = loginFormRef.value?.getFormApi();
   if (!formApi) return;
   await formApi.setFieldValue('sliderProof', '');
