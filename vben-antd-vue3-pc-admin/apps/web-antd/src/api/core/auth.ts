@@ -19,6 +19,7 @@ export namespace AuthApi {
     password?: string;
     remember_me?: boolean;
     username?: string;
+    slider_proof?: string;
   }
 
   export interface CaptchaPoint {
@@ -67,7 +68,23 @@ export namespace AuthApi {
 
   export interface RegisterParams {
     password: string;
+    slider_proof: string;
     username: string;
+  }
+
+  export interface SliderCaptchaChallenge {
+    captcha_id: string;
+    expired_at: number;
+  }
+
+  export interface SliderCaptchaVerification {
+    captcha_id: string;
+    distance: number;
+    duration_ms: number;
+    purpose: 'login' | 'register';
+    tracks: Array<{ t: number; x: number }>;
+    username: string;
+    width: number;
   }
 
   export interface ChangePasswordParams {
@@ -154,6 +171,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
     password: data.password,
     remember_me: data.remember_me === true,
     username: data.username,
+    slider_proof: data.slider_proof,
   });
   return authPublicRequestClient.post<AuthApi.LoginResult>(
     '/auth/pub/login',
@@ -219,6 +237,7 @@ export async function createRegistrationCredentialApi(
   return encryptCredential('register', {
     password: data.password,
     username: data.username,
+    slider_proof: data.slider_proof,
   });
 }
 
@@ -240,6 +259,25 @@ export async function createRegistrationPasswordCredentialApi(
 export async function registerApi(data: AuthApi.RegisterParams) {
   const encrypted = await createRegistrationCredentialApi(data);
   return authPublicRequestClient.post('/auth/pub/register', encrypted);
+}
+
+export async function createSliderCaptchaChallengeApi(
+  purpose: 'login' | 'register',
+  username: string,
+) {
+  return authSilentPublicRequestClient.post<AuthApi.SliderCaptchaChallenge>(
+    '/auth/pub/slider/challenge',
+    { purpose, username },
+  );
+}
+
+export async function verifySliderCaptchaApi(
+  data: AuthApi.SliderCaptchaVerification,
+) {
+  return authSilentPublicRequestClient.post<{ proof: string }>(
+    '/auth/pub/slider/verify',
+    data,
+  );
 }
 
 /**

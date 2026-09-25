@@ -4,7 +4,7 @@ import type { Recordable } from '@vben/types';
 
 import { computed, markRaw, ref } from 'vue';
 
-import { AuthenticationLogin, SliderCaptcha, z } from '@vben/common-ui';
+import { AuthenticationLogin, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
 import { useDebounceFn } from '@vueuse/core';
@@ -12,6 +12,7 @@ import { useDebounceFn } from '@vueuse/core';
 import { useAuthStore } from '#/store';
 
 import LoginPointCaptcha from './login-point-captcha.vue';
+import ServerSliderCaptcha from './server-slider-captcha.vue';
 
 defineOptions({ name: 'Login' });
 
@@ -49,6 +50,26 @@ const formSchema = computed((): VbenFormSchema[] => {
       rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
     },
   ];
+  schema.push({
+    component: markRaw(ServerSliderCaptcha),
+    componentProps: {
+      purpose: 'login',
+      username: '',
+    },
+    dependencies: {
+      componentProps(values) {
+        return {
+          purpose: 'login',
+          username: String(values.username ?? '').trim(),
+        };
+      },
+      triggerFields: ['username'],
+    },
+    fieldName: 'sliderProof',
+    rules: z
+      .string()
+      .min(1, { message: $t('authentication.verifyRequiredTip') }),
+  });
   if (authStore.loginCaptcha) {
     schema.push({
       component: markRaw(LoginPointCaptcha),
@@ -70,25 +91,16 @@ const formSchema = computed((): VbenFormSchema[] => {
           { message: $t('app.validation.verification') },
         ),
     });
-  } else {
-    schema.push({
-      component: markRaw(SliderCaptcha),
-      fieldName: 'captcha',
-      rules: z.boolean().refine((value) => value, {
-        message: $t('authentication.verifyRequiredTip'),
-      }),
-    });
   }
   return schema;
 });
 
 async function resetSliderCaptcha() {
-  if (authStore.loginCaptcha) return;
   const formApi = loginFormRef.value?.getFormApi();
   if (!formApi) return;
-  await formApi.setFieldValue('captcha', false);
-  formApi.getFieldComponentRef<SliderCaptchaExpose>('captcha')?.resume();
-  await formApi.clearValidation('captcha');
+  await formApi.setFieldValue('sliderProof', '');
+  formApi.getFieldComponentRef<SliderCaptchaExpose>('sliderProof')?.resume();
+  await formApi.clearValidation('sliderProof');
 }
 
 const checkLoginVerification = useDebounceFn(

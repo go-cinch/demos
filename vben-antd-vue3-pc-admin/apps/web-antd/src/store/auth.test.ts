@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   access: {
@@ -83,7 +83,14 @@ describe('first-login password reset', () => {
   it('enters reset before fetching profile or menus', async () => {
     mocks.login.mockResolvedValue(pending);
     const auth = useAuthStore();
-    await auth.authLogin({ username: 'tester', password: 'initial' });
+    await auth.authLogin({
+      password: 'initial',
+      sliderProof: 'one-time-proof',
+      username: 'tester',
+    });
+    expect(mocks.login).toHaveBeenCalledWith(
+      expect.objectContaining({ slider_proof: 'one-time-proof' }),
+    );
     expect(auth.passwordResetRequired).toBe(true);
     expect(mocks.router.replace).toHaveBeenCalledWith('/auth/reset-password');
     expect(mocks.info).not.toHaveBeenCalled();

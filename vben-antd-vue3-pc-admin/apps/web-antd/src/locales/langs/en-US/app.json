@@ -19,6 +19,8 @@
     "failed": "Incorrect order. Try again",
     "passed": "Verification passed",
     "progress": "Verification in progress…",
+    "sliderFailed": "Verification failed. Drag a little slower to the far right and try again",
+    "sliderIncomplete": "Drag the slider all the way to the right",
     "start": "Click to start verification"
   },
   "errors": {

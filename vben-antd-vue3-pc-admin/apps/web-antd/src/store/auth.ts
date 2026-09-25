@@ -101,6 +101,7 @@ export const useAuthStore = defineStore('auth', () => {
         captcha_id: captcha?.captcha_id,
         captcha_points: captcha ? params.captchaPoints : undefined,
         remember_me: params.rememberMe === true,
+        slider_proof: params.sliderProof,
       });
 
       // 如果成功获取到 accessToken

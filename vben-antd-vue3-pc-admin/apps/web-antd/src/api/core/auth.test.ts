@@ -13,12 +13,16 @@ import appEnglish from '../../locales/langs/en-US/app.json';
 import appChinese from '../../locales/langs/zh-CN/app.json';
 import {
   changePasswordApi,
-  resetPasswordApi,
+  createSliderCaptchaChallengeApi,
+  loginApi,
   logoutApi,
   refreshPasswordChangeCaptchaApi,
   refreshTokenApi,
+  registerApi,
+  resetPasswordApi,
   verifyLoginCaptchaApi,
   verifyPasswordChangeCaptchaApi,
+  verifySliderCaptchaApi,
 } from './auth';
 
 const encryption = vi.hoisted(() => ({
@@ -74,6 +78,65 @@ describe('changePasswordApi', () => {
     encryption.plaintext = undefined;
   });
 
+  it('encrypts the one-time slider proof into login credentials', async () => {
+    vi.mocked(authPublicRequestClient.post).mockResolvedValue({
+      challenge_id: 'challenge-id',
+      key_id: 'login-key',
+      public_key: { kty: 'RSA' },
+    });
+
+    await loginApi({
+      password: 'password',
+      slider_proof: 'slider-proof',
+      username: 'readonly',
+    });
+
+    expect(JSON.parse(new TextDecoder().decode(encryption.plaintext!))).toEqual(
+      expect.objectContaining({
+        challenge_id: 'challenge-id',
+        slider_proof: 'slider-proof',
+        username: 'readonly',
+      }),
+    );
+    expect(authPublicRequestClient.post).toHaveBeenLastCalledWith(
+      '/auth/pub/login',
+      {
+        challenge_id: 'challenge-id',
+        credential: 'encrypted-password-change',
+      },
+    );
+  });
+
+  it('encrypts the one-time slider proof into registration credentials', async () => {
+    vi.mocked(authPublicRequestClient.post).mockResolvedValue({
+      challenge_id: 'register-id',
+      key_id: 'register-key',
+      public_key: { kty: 'RSA' },
+    });
+
+    await registerApi({
+      password: 'password',
+      slider_proof: 'slider-proof',
+      username: 'new-user',
+    });
+
+    expect(JSON.parse(new TextDecoder().decode(encryption.plaintext!))).toEqual(
+      {
+        challenge_id: 'register-id',
+        password: 'password',
+        slider_proof: 'slider-proof',
+        username: 'new-user',
+      },
+    );
+    expect(authPublicRequestClient.post).toHaveBeenLastCalledWith(
+      '/auth/pub/register',
+      {
+        challenge_id: 'register-id',
+        credential: 'encrypted-password-change',
+      },
+    );
+  });
+
   it('encrypts both passwords with an authenticated one-time challenge', async () => {
     vi.mocked(authRequestClient.post).mockResolvedValue({
       challenge_id: 'challenge-id',
@@ -116,16 +179,13 @@ describe('changePasswordApi', () => {
         old_password: 'current-password',
       },
     );
-    expect(authRequestClient.request).toHaveBeenCalledWith(
-      '/auth/change/pwd',
-      {
-        data: {
-          challenge_id: 'challenge-id',
-          credential: 'encrypted-password-change',
-        },
-        method: 'PATCH',
+    expect(authRequestClient.request).toHaveBeenCalledWith('/auth/change/pwd', {
+      data: {
+        challenge_id: 'challenge-id',
+        credential: 'encrypted-password-change',
       },
-    );
+      method: 'PATCH',
+    });
   });
 
   it('localizes missing-password errors before requesting a challenge', async () => {
@@ -191,6 +251,37 @@ describe('changePasswordApi', () => {
         ],
         username: 'readonly',
       },
+    );
+  });
+
+  it('creates and verifies a server-backed slider challenge', async () => {
+    vi.mocked(authSilentPublicRequestClient.post).mockResolvedValue({
+      proof: 'one-time-proof',
+    });
+
+    await createSliderCaptchaChallengeApi('login', 'readonly');
+    expect(authSilentPublicRequestClient.post).toHaveBeenCalledWith(
+      '/auth/pub/slider/challenge',
+      { purpose: 'login', username: 'readonly' },
+    );
+
+    const verification = {
+      captcha_id: 'slider-challenge',
+      distance: 200,
+      duration_ms: 600,
+      purpose: 'login' as const,
+      tracks: [
+        { t: 0, x: 0 },
+        { t: 300, x: 100 },
+        { t: 600, x: 200 },
+      ],
+      username: 'readonly',
+      width: 200,
+    };
+    await verifySliderCaptchaApi(verification);
+    expect(authSilentPublicRequestClient.post).toHaveBeenLastCalledWith(
+      '/auth/pub/slider/verify',
+      verification,
     );
   });
 });

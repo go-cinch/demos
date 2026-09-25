@@ -5,7 +5,7 @@ import type { Recordable } from '@vben/types';
 import { computed, markRaw, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { AuthenticationRegister, SliderCaptcha, z } from '@vben/common-ui';
+import { AuthenticationRegister, z } from '@vben/common-ui';
 import { LOGIN_PATH } from '@vben/constants';
 import { $t } from '@vben/locales';
 
@@ -18,6 +18,8 @@ import {
   isValidUserPassword,
   USER_USERNAME_MESSAGE_KEY,
 } from '#/user-validation';
+
+import ServerSliderCaptcha from './server-slider-captcha.vue';
 
 defineOptions({ name: 'Register' });
 
@@ -103,9 +105,19 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('authentication.confirmPassword'),
     },
     {
-      component: markRaw(SliderCaptcha),
-      fieldName: 'captcha',
-      rules: z.boolean().refine((value) => value, {
+      component: markRaw(ServerSliderCaptcha),
+      componentProps: { purpose: 'register', username: '' },
+      dependencies: {
+        componentProps(values) {
+          return {
+            purpose: 'register',
+            username: String(values.username ?? '').trim(),
+          };
+        },
+        triggerFields: ['username'],
+      },
+      fieldName: 'sliderProof',
+      rules: z.string().min(1, {
         message: $t('authentication.verifyRequiredTip'),
       }),
     },
@@ -115,9 +127,9 @@ const formSchema = computed((): VbenFormSchema[] => {
 async function resetSliderCaptcha() {
   const formApi = registerFormRef.value?.getFormApi();
   if (!formApi) return;
-  await formApi.setFieldValue('captcha', false);
-  formApi.getFieldComponentRef<SliderCaptchaExpose>('captcha')?.resume();
-  await formApi.clearValidation('captcha');
+  await formApi.setFieldValue('sliderProof', '');
+  formApi.getFieldComponentRef<SliderCaptchaExpose>('sliderProof')?.resume();
+  await formApi.clearValidation('sliderProof');
 }
 
 async function handleFormFocusout(event: FocusEvent) {
@@ -145,6 +157,15 @@ async function handleFormFocusout(event: FocusEvent) {
   }
 }
 
+async function handleValuesChange(
+  _values: Recordable<any>,
+  changedFields: string[],
+) {
+  if (changedFields.includes('username')) {
+    await resetSliderCaptcha();
+  }
+}
+
 async function handleSubmit(value: Recordable<any>) {
   let registered = false;
   try {
@@ -160,6 +181,7 @@ async function handleSubmit(value: Recordable<any>) {
     }
     await registerApi({
       password,
+      slider_proof: value.sliderProof,
       username,
     });
     stageRegistrationLogin({ password, username });
@@ -182,5 +204,6 @@ async function handleSubmit(value: Recordable<any>) {
     :loading="loading"
     @focusout="handleFormFocusout"
     @submit="handleSubmit"
+    @values-change="handleValuesChange"
   />
 </template>

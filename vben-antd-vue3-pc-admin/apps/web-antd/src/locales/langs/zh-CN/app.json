@@ -19,6 +19,8 @@
     "failed": "顺序错误，请重试",
     "passed": "验证通过",
     "progress": "验证中…",
+    "sliderFailed": "验证失败，请稍慢地拖到最右侧后重试",
+    "sliderIncomplete": "请将滑块拖到最右侧",
     "start": "点击开始验证"
   },
   "errors": {

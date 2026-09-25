@@ -47,6 +47,8 @@ const state = reactive({
 
 defineExpose({
   resume,
+  showPassedAtEnd,
+  showPendingAtEnd,
 });
 
 const wrapperRef = useTemplateRef<HTMLDivElement>('wrapperRef');
@@ -55,6 +57,7 @@ const contentRef =
   useTemplateRef<InstanceType<typeof SliderCaptchaContent>>('contentRef');
 const actionRef =
   useTemplateRef<InstanceType<typeof SliderCaptchaAction>>('actionRef');
+let resetTimer: ReturnType<typeof useTimeoutFn> | undefined;
 
 watch(
   () => state.isPassing,
@@ -181,6 +184,7 @@ function checkPass() {
 }
 
 function resume() {
+  resetTimer?.stop();
   state.isMoving = false;
   state.isPassing = false;
   state.moveDistance = 0;
@@ -197,11 +201,40 @@ function resume() {
 
   contentNode.style.width = '100%';
   state.toLeft = true;
-  useTimeoutFn(() => {
+  resetTimer = useTimeoutFn(() => {
     state.toLeft = false;
     actionEl.setLeft('0');
     barEl.setWidth('0');
   }, 300);
+}
+
+function showPassedAtEnd() {
+  resetTimer?.stop();
+  state.isMoving = false;
+  state.isPassing = true;
+  state.toLeft = false;
+  placeAtEnd();
+}
+
+function showPendingAtEnd() {
+  resetTimer?.stop();
+  state.isMoving = false;
+  state.isPassing = false;
+  state.toLeft = false;
+  placeAtEnd();
+}
+
+function placeAtEnd() {
+  const actionEl = unref(actionRef);
+  const barEl = unref(barRef);
+  const contentEl = unref(contentRef);
+  const actionNode = actionEl?.getEl();
+  if (!actionEl || !barEl || !actionNode) return;
+  const { actionWidth, wrapperWidth } = getOffset(actionNode);
+  actionEl.setLeft(`${wrapperWidth - actionWidth}px`);
+  barEl.setWidth(`${wrapperWidth - actionWidth / 2}px`);
+  const contentNode = contentEl?.getEl();
+  if (contentNode) contentNode.style.width = '100%';
 }
 </script>
 
