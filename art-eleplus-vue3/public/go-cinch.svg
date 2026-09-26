@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title">
+  <title id="title">Go Cinch</title>
+  <defs>
+    <linearGradient id="ribbon" x1="30" y1="18" x2="93" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#32D5E8"/>
+      <stop offset=".46" stop-color="#398BFA"/>
+      <stop offset="1" stop-color="#7060E8"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="69" y1="59" x2="107" y2="95" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#54E2EB"/>
+      <stop offset="1" stop-color="#278FEF"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="88" y1="80" x2="107" y2="97" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#245CD0"/>
+      <stop offset="1" stop-color="#5263DB"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ribbon)" d="m108 33-32-19q-12-7-24 0L22 32q-8 5-8 15v34q0 10 8 15l30 18q12 7 24 0l30-18q8-5 8-15V59H67L55 80h35v1L64 97 38 81V47l26-16 32 19Z"/>
+  <path fill="url(#edge)" d="M90 80h24v1q0 10-8 15L76 114q-12 7-24 0L22 96q-8-5-8-15v-9l24 9 26 16 26-16Z"/>
+  <path fill="url(#fold)" d="M67 59h47v21H55Z"/>
+</svg>

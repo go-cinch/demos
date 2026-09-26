@@ -1,0 +1,345 @@
+{
+  "app": {
+    "name": "Go Cinch Admin by TailAdmin",
+    "tagline": "Secure identity and access administration"
+  },
+  "authControls": {
+    "color": "Change accent color",
+    "language": "Change language",
+    "position": "Move login panel",
+    "theme": "Toggle color mode"
+  },
+  "common": {
+    "actions": "Actions",
+    "batchDelete": "Delete selected",
+    "cancel": "Cancel",
+    "create": "Create",
+    "createEntity": "Create {entity}",
+    "delete": "Delete",
+    "edit": "Edit",
+    "editEntity": "Edit {entity}",
+    "filter": "Filter",
+    "home": "Home",
+    "less": "Collapse",
+    "loading": "Loading…",
+    "more": "Expand",
+    "next": "Next",
+    "no": "No",
+    "none": "None",
+    "previous": "Previous",
+    "refresh": "Refresh",
+    "reset": "Reset",
+    "save": "Save",
+    "search": "Search",
+    "seeAll": "See all",
+    "verifying": "Verifying…",
+    "viewMore": "View more",
+    "yes": "Yes"
+  },
+  "auth": {
+    "confirmPassword": "Confirm password",
+    "hasAccount": "Already have an account?",
+    "logout": "Sign out",
+    "newPassword": "New password",
+    "noAccount": "Don't have an account?",
+    "password": "Password",
+    "pointCaptcha": "Point-selection captcha",
+    "pointFailed": "That sequence was incorrect. Try the new challenge.",
+    "pointHint": "Select the requested targets in order",
+    "pointPassed": "Verification passed",
+    "pointProgress": "Select {count} targets in the requested order",
+    "pointRequired": "Complete the point-selection verification",
+    "rememberMe": "Remember me",
+    "resetDescription": "You must set a new password before accessing the administration console.",
+    "resetPassword": "Set a new password",
+    "signIn": "Sign in",
+    "signInDescription": "Use your administrator account to continue.",
+    "signUp": "Create account",
+    "signUpDescription": "Register an account using the secure one-time credential flow.",
+    "slider": "Slider verification",
+    "sliderFailed": "Verification failed. Drag the slider again.",
+    "sliderHint": "Drag the slider all the way to the end",
+    "sliderPassed": "Verification passed",
+    "sliderRequired": "Complete the slider verification",
+    "username": "Username",
+    "usernameExists": "This username is already in use"
+  },
+  "category": { "jwt": "JWT", "permission": "Permission" },
+  "confirm": {
+    "delete": "Delete the selected record(s)? This cannot be undone."
+  },
+  "dashboard": {
+    "description": "Monitor customers, orders, sales, revenue and regional performance at a glance.",
+    "overview": "Overview",
+    "title": "Dashboard",
+    "workspace": "Workspace"
+  },
+  "ecommerce": {
+    "countries": {
+      "india": "India",
+      "sweden": "Sweden",
+      "unitedKingdom": "United Kingdom",
+      "unitedStates": "United States"
+    },
+    "demographic": {
+      "customers": "{count} customers",
+      "france": "France",
+      "subtitle": "Customer distribution by country",
+      "title": "Customer demographics",
+      "usa": "United States"
+    },
+    "metrics": { "customers": "Customers", "orders": "Orders" },
+    "monthlySales": { "series": "Sales", "title": "Monthly sales" },
+    "monthlyTarget": {
+      "earned": "You earned {amount} more this month. Keep up the good work!",
+      "revenue": "Revenue",
+      "subtitle": "Target progress for this month",
+      "target": "Target",
+      "title": "Monthly target",
+      "today": "Today"
+    },
+    "months": {
+      "apr": "Apr",
+      "aug": "Aug",
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "jul": "Jul",
+      "jun": "Jun",
+      "mar": "Mar",
+      "may": "May",
+      "nov": "Nov",
+      "oct": "Oct",
+      "sep": "Sep"
+    },
+    "recentOrders": {
+      "categories": {
+        "accessories": "Accessories",
+        "electronics": "Electronics",
+        "laptop": "Laptop",
+        "smartphone": "Smartphone",
+        "watch": "Watch"
+      },
+      "category": "Category",
+      "price": "Price",
+      "products": "Products",
+      "status": "Status",
+      "statuses": {
+        "canceled": "Canceled",
+        "delivered": "Delivered",
+        "pending": "Pending"
+      },
+      "title": "Recent orders",
+      "variants": "{count} variants"
+    },
+    "statistics": {
+      "annually": "Annually",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "revenue": "Revenue",
+      "sales": "Sales",
+      "selectDateRange": "Select date range",
+      "subtitle": "Sales and revenue performance over time",
+      "title": "Statistics"
+    }
+  },
+  "errors": {
+    "network": "Unable to reach the server",
+    "noPermission": "You do not have permission to view this resource."
+  },
+  "fields": {
+    "actionCode": "Permission code",
+    "buttonPermission": "Button Permission",
+    "buttonPermissions": "Button permissions",
+    "category": "Category",
+    "code": "Code",
+    "createdAt": "Created at",
+    "description": "Description",
+    "dictionaryKey": "Dictionary key",
+    "dictionaryValue": "Value (JSON)",
+    "enabled": "Enabled",
+    "group": "Group",
+    "id": "ID",
+    "members": "Members",
+    "menuPaths": "Menu paths",
+    "metadata": "Metadata",
+    "name": "Name",
+    "password": "Password",
+    "permissions": "Permissions",
+    "resource": "Resource",
+    "resourceRules": "Resource rules",
+    "role": "Role",
+    "status": "Status",
+    "updatedAt": "Updated at",
+    "userCode": "User code",
+    "username": "Username",
+    "word": "Identifier"
+  },
+  "header": {
+    "account": "Account menu",
+    "advanced": "Advanced configuration",
+    "fullscreen": "Fullscreen",
+    "language": "Language",
+    "lock": "Lock screen",
+    "lockPassword": "Enter lock-screen password",
+    "lockPasswordError": "Incorrect lock-screen password.",
+    "lockPasswordRequired": "Enter a lock-screen password.",
+    "locked": "Screen locked",
+    "lockedHint": "Enter the lock-screen password to return to the admin console.",
+    "messages": "Messages",
+    "noMessages": "No messages",
+    "search": "Search",
+    "searchPlaceholder": "Search pages…",
+    "timezone": "Timezone: {timezone}",
+    "toggleSidebar": "Toggle sidebar",
+    "unlock": "Unlock"
+  },
+  "settings": {
+    "title": "Advanced settings",
+    "layout": "Layout",
+    "accent": "Change accent color",
+    "copyright": "Copyright",
+    "enabled": "Show copyright",
+    "date": "Date or year",
+    "company": "Company name",
+    "companyLink": "Company link",
+    "icp": "ICP text",
+    "icpLink": "ICP link"
+  },
+  "messages": {
+    "approved": "Registration approved",
+    "created": "Created successfully",
+    "deleted": "Deleted successfully",
+    "locked": "User locked successfully",
+    "noChanges": "There are no changes to save.",
+    "passwordUnlocked": "Self-service password change unlocked",
+    "rejected": "Registration rejected",
+    "unlocked": "User unlocked successfully",
+    "updated": "Updated successfully"
+  },
+  "search": {
+    "backend": "Backend results",
+    "history": "Recent searches",
+    "removeHistory": "Remove {value} from search history"
+  },
+  "select": {
+    "clear": "Clear selection",
+    "create": "Use new value: {value}",
+    "empty": "No matching options",
+    "remove": "Remove {value}",
+    "searchMultiple": "Search and select multiple options",
+    "searchSingle": "Search and select an option"
+  },
+  "nav": { "main": "MAIN", "management": "System", "profile": "Profile" },
+  "notFound": {
+    "back": "Back to dashboard",
+    "description": "The page you requested could not be found.",
+    "title": "Page not found"
+  },
+  "profile": {
+    "basic": "Basic information",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "description": "Review your identity and update your password.",
+    "title": "Profile"
+  },
+  "status": { "active": "Active", "locked": "Locked", "pending": "Pending" },
+  "system": {
+    "action": "permission",
+    "actionTitle": "Action Management",
+    "actions": "Actions",
+    "description": "Search, create, edit and delete system resources.",
+    "dictionaries": "Data Dictionary",
+    "dictionary": "dictionary",
+    "dictionaryTitle": "Data Dictionary Management",
+    "role": "role",
+    "roleTitle": "Role Management",
+    "roles": "Roles",
+    "user": "user",
+    "userTitle": "User Management",
+    "userGroup": "user group",
+    "userGroupTitle": "User Group Management",
+    "userGroups": "User groups",
+    "users": "Users",
+    "whitelist": "whitelist rule",
+    "whitelistTitle": "Whitelist Management",
+    "whitelists": "Whitelist"
+  },
+  "table": {
+    "bordered": "Borders",
+    "columns": "Columns",
+    "compact": "Compact",
+    "default": "Default",
+    "density": "Density",
+    "empty": "No records found",
+    "exitFullscreen": "Exit fullscreen",
+    "fullscreen": "Fullscreen",
+    "loose": "Comfortable",
+    "page": "page",
+    "pageSize": "Rows per page",
+    "sticky": "Sticky header",
+    "striped": "Striped rows",
+    "style": "Table style",
+    "total": "{count} records",
+    "visibleColumns": "Visible columns"
+  },
+  "tabs": {
+    "close": "Close tab",
+    "openPages": "Open pages",
+    "pin": "Pin tab",
+    "unpin": "Unpin tab"
+  },
+  "users": {
+    "approve": "Approve",
+    "futureLock": "Choose a future lock expiration.",
+    "lock": "Lock",
+    "lockedUntil": "Locked until",
+    "lockTitle": "Lock {name}",
+    "lockType": "Lock type",
+    "permanent": "Permanent",
+    "reject": "Reject",
+    "rejectionReason": "Enter the registration rejection reason",
+    "unlock": "Unlock",
+    "unlockPassword": "Unlock password change",
+    "until": "Until a date"
+  },
+  "validation": {
+    "dictionaryKey": "Use uppercase letters, digits, and underscore-separated segments.",
+    "json": "Enter valid JSON.",
+    "password": "Password is required.",
+    "passwordMismatch": "The passwords do not match.",
+    "required": "{field} is required.",
+    "username": "Username is required."
+  },
+  "workspace": {
+    "activity": "Latest activity",
+    "activityItems": {
+      "created": "Created a new access-control project",
+      "dictionary": "Updated the verification dictionary",
+      "login": "Reviewed recent login activity",
+      "permission": "Adjusted a role permission set"
+    },
+    "activityTimes": {
+      "0": "Just now",
+      "1": "One hour ago",
+      "2": "One day ago",
+      "3": "Two days ago"
+    },
+    "backend": "Backend engineering",
+    "design": "Admin design system",
+    "frontend": "Frontend engineering",
+    "greeting": "Good day, {name}",
+    "openSource": "Open source",
+    "projects": "Projects",
+    "quickNav": "Quick navigation",
+    "todoItems": {
+      "dependencies": "Review dependency updates",
+      "performance": "Check performance metrics",
+      "review": "Complete code review",
+      "security": "Review security policy",
+      "ui": "Resolve the UI issue"
+    },
+    "todos": "To-dos",
+    "weather": "Focus on the work that matters today."
+  }
+}

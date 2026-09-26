@@ -16,6 +16,9 @@ on:
           - all
           - auth
           - vben-antd-vue3
+          - art-eleplus-vue3
+          - shadcn-react
+          - tail-react
 
 permissions:
   contents: read
@@ -55,6 +58,18 @@ jobs:
               {
                   "name": "vben-antd-vue3",
                   "dockerfile": "vben-antd-vue3/scripts/deploy/Dockerfile",
+              },
+              {
+                  "name": "art-eleplus-vue3",
+                  "dockerfile": "art-eleplus-vue3/Dockerfile",
+              },
+              {
+                  "name": "shadcn-react",
+                  "dockerfile": "shadcn-react/Dockerfile",
+              },
+              {
+                  "name": "tail-react",
+                  "dockerfile": "tail-react/Dockerfile",
               },
           ]
           with open(os.environ["GITHUB_EVENT_PATH"]) as source:
@@ -273,6 +288,15 @@ jobs:
               "vben-antd-vue3": Path(
                   "go-app/vben-antd-vue3/overlays/single/kustomization.yaml"
               ),
+              "art-eleplus-vue3": Path(
+                  "go-app/art-eleplus-vue3/overlays/single/kustomization.yaml"
+              ),
+              "shadcn-react": Path(
+                  "go-app/shadcn-react/overlays/single/kustomization.yaml"
+              ),
+              "tail-react": Path(
+                  "go-app/tail-react/overlays/single/kustomization.yaml"
+              ),
           }
           digest_files = sorted(Path(os.environ["DIGEST_DIR"]).glob("*.digest"))
           if not digest_files:
@@ -290,7 +314,7 @@ jobs:
               manifest = manifests[image_name]
               content = manifest.read_text()
               updated, replacements = re.subn(
-                  r"(?m)^  digest: sha256:[0-9a-f]{64}$",
+                  r"(?m)^  (?:digest: sha256:[0-9a-f]{64}|newTag: \S+)$",
                   f"  digest: {digest}",
                   content,
                   count=1,

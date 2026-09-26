@@ -1,0 +1,679 @@
+{
+  "httpMsg": {
+    "unauthorized": "Unauthorized access, please login again",
+    "forbidden": "Access to this resource is forbidden",
+    "notFound": "The requested resource does not exist",
+    "methodNotAllowed": "Request method not allowed",
+    "requestTimeout": "Request timeout, please try again later",
+    "internalServerError": "Internal server error, please try again later",
+    "badGateway": "Bad gateway error, please try again later",
+    "serviceUnavailable": "Service temporarily unavailable, please try again later",
+    "gatewayTimeout": "Gateway timeout, please try again later",
+    "requestCancelled": "Request cancelled",
+    "networkError": "Network connection error, please check your connection",
+    "requestFailed": "Request failed",
+    "requestConfigError": "Request configuration error"
+  },
+  "topBar": {
+    "timezone": "Timezone",
+    "localTimezone": "Local",
+    "search": {
+      "title": "Search"
+    },
+    "user": {
+      "lockScreen": "Lock screen",
+      "logout": "Log out"
+    },
+    "guide": {
+      "title": "Click here to view",
+      "theme": "Theme style",
+      "menu": "Open top menu",
+      "description": "More configurations"
+    }
+  },
+  "common": {
+    "tips": "Prompt",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "logOutTips": "Do you want to log out?"
+  },
+  "search": {
+    "placeholder": "Search page",
+    "historyTitle": "Search history",
+    "switchKeydown": "Navigate",
+    "selectKeydown": "Select",
+    "exitKeydown": "Close"
+  },
+  "setting": {
+    "menuType": {
+      "title": "Menu Layout",
+      "list": ["Vertical", "Horizontal", "Mixed", "Dual"]
+    },
+    "theme": {
+      "title": "Theme Style",
+      "list": ["Light", "Dark", "System"]
+    },
+    "menu": {
+      "title": "Menu Style"
+    },
+    "color": {
+      "title": "Theme Color"
+    },
+    "box": {
+      "title": "Box Style",
+      "list": ["Border", "Shadow"]
+    },
+    "container": {
+      "title": "Container Width",
+      "list": ["Full", "Boxed"]
+    },
+    "basics": {
+      "title": "Basic Config",
+      "list": {
+        "multiTab": "Show work tab",
+        "accordion": "Sidebar opens accordion",
+        "collapseSidebar": "Show sidebar button",
+        "reloadPage": "Show reload page button",
+        "fastEnter": "Show fast enter",
+        "breadcrumb": "Show crumb navigation",
+        "language": "Show multilingual selection",
+        "progressBar": "Show top progress bar",
+        "weakMode": "Color Weakness Mode",
+        "watermark": "Global watermark",
+        "menuWidth": "Menu width",
+        "tabStyle": "Tab style",
+        "pageTransition": "Page animation",
+        "borderRadius": "Custom radius"
+      }
+    },
+    "tabStyle": {
+      "default": "Default",
+      "card": "Card",
+      "google": "Chrome"
+    },
+    "transition": {
+      "list": {
+        "none": "None",
+        "fade": "Fade",
+        "slideLeft": "Slide Left",
+        "slideBottom": "Slide Bottom",
+        "slideTop": "Slide Top"
+      }
+    },
+    "copyright": {
+      "title": "Copyright",
+      "enabled": "Show copyright",
+      "date": "Date or year",
+      "company": "Company name",
+      "companyLink": "Company link",
+      "icp": "ICP text",
+      "icpLink": "ICP link"
+    },
+    "actions": {
+      "resetConfig": "Reset Config",
+      "copyConfig": "Copy Config",
+      "copySuccess": "Configuration copied to clipboard, paste it into src/config/setting.ts file",
+      "copyFailed": "Copy failed, please try again",
+      "resetFailed": "Reset failed, please refresh the page and try again"
+    }
+  },
+  "notice": {
+    "title": "Notice",
+    "btnRead": "Mark as read",
+    "bar": ["Notice", "Message", "Todo"],
+    "text": ["No"],
+    "viewAll": "View all"
+  },
+  "worktab": {
+    "btn": {
+      "refresh": "Refresh",
+      "fixed": "Fixed",
+      "unfixed": "Unfixed",
+      "closeLeft": "Close left",
+      "closeRight": "Close right",
+      "closeOther": "Close other",
+      "closeAll": "Close all"
+    }
+  },
+  "login": {
+    "leftView": {
+      "title": "A backend system of beauty and efficiency",
+      "subTitle": "A sleek and practical interface for a great user experience"
+    },
+    "title": "Welcome back",
+    "subTitle": "Please enter your account and password to login",
+    "roles": {
+      "super": "Super Admin",
+      "admin": "Admin",
+      "user": "User"
+    },
+    "placeholder": {
+      "username": "Please enter your account",
+      "password": "Please enter your password",
+      "slider": "Please slide to verify"
+    },
+    "sliderText": "Please slide to verify",
+    "sliderSuccessText": "Verification successful",
+    "rememberPwd": "Remember account",
+    "btnText": "Login",
+    "noAccount": "No account yet?",
+    "register": "Register",
+    "success": {
+      "title": "Login successful",
+      "message": "Welcome back"
+    }
+  },
+  "register": {
+    "title": "Create account",
+    "subTitle": "Welcome to join us, please fill in the following information to complete the registration",
+    "placeholder": {
+      "username": "Please enter your account",
+      "password": "Please enter your password",
+      "confirmPassword": "Please enter your password again"
+    },
+    "rule": {
+      "confirmPasswordRequired": "Please enter your password again",
+      "passwordMismatch": "The two passwords are inconsistent!",
+      "usernameLength": "The length is 3 to 20 characters",
+      "passwordLength": "The password length cannot be less than 6 digits",
+      "agreementRequired": "Please agree to the privacy policy"
+    },
+    "agreeText": "I agree",
+    "privacyPolicy": "Privacy policy",
+    "submitBtnText": "Register",
+    "hasAccount": "Already have an account?",
+    "toLogin": "To login"
+  },
+  "lockScreen": {
+    "pwdError": "Password error",
+    "lock": {
+      "inputPlaceholder": "Please input lock screen password",
+      "btnText": "Lock"
+    },
+    "unlock": {
+      "inputPlaceholder": "Please input unlock password",
+      "btnText": "Unlock",
+      "backBtnText": "Back to login"
+    }
+  },
+  "greeting": {
+    "dawn": "Good morning!",
+    "morning": "Good morning!",
+    "afternoon": "Good afternoon!",
+    "evening": "Good evening!"
+  },
+  "exceptionPage": {
+    "gohome": "Go Home",
+    "403": "Sorry, you do not have permission to access this page",
+    "404": "Sorry, the page you are trying to access does not exist",
+    "500": "Sorry, there was an error on the server"
+  },
+  "menus": {
+    "login": {
+      "title": "Login"
+    },
+    "register": {
+      "title": "Register"
+    },
+    "outside": {
+      "title": "Outside"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "overview": "Overview",
+      "workspace": "Workspace",
+      "console": "Console",
+      "analysis": "Analysis",
+      "ecommerce": "Ecommerce"
+    },
+    "widgets": {
+      "title": "Components",
+      "icon": "Icon",
+      "imageCrop": "Image Crop",
+      "excel": "Excel Import Export",
+      "video": "Video Player",
+      "countTo": "Count To",
+      "wangEditor": "Wang Editor",
+      "watermark": "Watermark",
+      "contextMenu": "Context Menu",
+      "qrcode": "QR Code",
+      "drag": "Drag",
+      "textScroll": "Text Scroll",
+      "fireworks": "Fireworks",
+      "elementUI": "Component Overview"
+    },
+    "template": {
+      "title": "Template Center",
+      "chat": "Chat",
+      "cards": "Cards",
+      "banners": "Banners",
+      "charts": "Charts",
+      "map": "Map",
+      "calendar": "Calendar",
+      "pricing": "Pricing"
+    },
+    "article": {
+      "title": "Article",
+      "articleList": "Article List",
+      "articleDetail": "Article Detail",
+      "comment": "Comment",
+      "articlePublish": "Article Publish"
+    },
+    "result": {
+      "title": "Result Page",
+      "success": "Success",
+      "fail": "Fail"
+    },
+    "exception": {
+      "title": "Exception",
+      "forbidden": "403",
+      "notFound": "404",
+      "serverError": "500"
+    },
+    "examples": {
+      "title": "Feature Examples",
+      "tabs": "Tabs",
+      "tablesBasic": "Basic Tables",
+      "tables": "Advanced Tables",
+      "tablesTree": "Tree Table Layout",
+      "forms": "Forms",
+      "searchBar": "Search Form",
+      "socketChat": "Socket Connection",
+      "permission": {
+        "title": "Frontend Permission",
+        "switchRole": "Toggle Auth",
+        "buttonAuth": "Button Authority",
+        "pageVisibility": "Super Admin Visibility"
+      }
+    },
+    "system": {
+      "title": "System",
+      "user": "Users",
+      "role": "Roles",
+      "userGroup": "User Groups",
+      "action": "Actions",
+      "dictionary": "Data Dictionary",
+      "whitelist": "Whitelist",
+      "userCenter": "Profile",
+      "menu": "Menu Manage",
+      "nested": "Nested Menu",
+      "menu1": "Menu 1",
+      "menu2": "Menu 2",
+      "menu21": "Menu 2-1",
+      "menu3": "Menu 3",
+      "menu31": "Menu 3-1",
+      "menu32": "Menu 3-2",
+      "menu321": "Menu 3-2-1"
+    },
+    "safeguard": {
+      "title": "Safeguard",
+      "server": "Server"
+    },
+    "plan": {
+      "title": "Version Plan",
+      "log": "Change Log"
+    },
+    "help": {
+      "title": "Help Center",
+      "document": "Document",
+      "liteVersion": "Lite Version",
+      "oldVersion": "v2.6.1 Version"
+    }
+  },
+  "table": {
+    "form": {
+      "reset": "Reset",
+      "submit": "Submit"
+    },
+    "searchBar": {
+      "reset": "Reset",
+      "search": "Search",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "searchInputPlaceholder": "Please enter",
+      "searchSelectPlaceholder": "Please select"
+    },
+    "selection": "Select",
+    "sizeOptions": {
+      "small": "Compact",
+      "default": "Default",
+      "large": "Loose"
+    },
+    "column": {
+      "selection": "Select",
+      "expand": "Expand",
+      "index": "Index"
+    },
+    "zebra": "Zebra",
+    "border": "Border",
+    "headerBackground": "Header BG"
+  },
+  "auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to continue",
+    "username": "Username",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "newPassword": "New password",
+    "usernameRequired": "Enter your username",
+    "passwordRequired": "Enter your password",
+    "usernameLength": "Username is required",
+    "passwordLength": "Password is required",
+    "passwordMismatch": "Passwords do not match",
+    "remember": "Remember account",
+    "panelPosition": "Switch login panel position",
+    "login": "Sign in",
+    "loginSuccess": "Signed in",
+    "loginFailed": "Sign-in failed",
+    "noAccount": "No account?",
+    "register": "Register",
+    "registerTitle": "Create account",
+    "registerSubtitle": "Enter account details and complete verification",
+    "registerSuccess": "Registration complete. Please sign in.",
+    "registerFailed": "Registration failed",
+    "usernameUnavailable": "This username is unavailable",
+    "backToLogin": "Back to sign in",
+    "sliderTip": "Drag the slider all the way right",
+    "usernameFirst": "Enter your username first",
+    "verificationFailed": "Verification failed",
+    "sliderPassed": "Verified",
+    "sliderRequired": "Complete slider verification",
+    "captchaRequired": "Complete point verification",
+    "captchaWrong": "Incorrect selection order. Try again.",
+    "captchaPassed": "Verified",
+    "refresh": "Refresh",
+    "resetTitle": "Set a new password",
+    "resetSubtitle": "A new password is required after first sign-in or an administrator reset",
+    "resetPassword": "Update password",
+    "resetSuccess": "Password updated",
+    "resetFailed": "Password update failed"
+  },
+  "profile": {
+    "title": "Profile",
+    "noRole": "No role",
+    "fields": { "username": "Username", "role": "Role" },
+    "tabs": {
+      "basicInformation": "Basic Information",
+      "changePassword": "Change Password"
+    },
+    "password": {
+      "oldPassword": "Current Password",
+      "oldPasswordPlaceholder": "Please enter your current password",
+      "oldPasswordRequired": "Please enter your current password",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "Please enter the new password",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Please enter the new password again",
+      "passwordMismatch": "The passwords do not match",
+      "changeTip": "Changing your password signs you out and invalidates old sessions on every device.",
+      "update": "Update Password",
+      "success": "Password updated. Please sign in again on all devices."
+    }
+  },
+  "fastEnter": {
+    "quickLinks": "Quick links",
+    "workspace": "Workspace",
+    "workspaceDescription": "System overview and statistics",
+    "analysis": "Analytics",
+    "analysisDescription": "Data analysis and visualization",
+    "fireworks": "Fireworks",
+    "fireworksDescription": "Animation effects showcase",
+    "chat": "Chat",
+    "chatDescription": "Instant messaging",
+    "docs": "Documentation",
+    "docsDescription": "Guides and developer documentation",
+    "support": "Technical support",
+    "supportDescription": "Support and issue reporting",
+    "changelog": "Changelog",
+    "changelogDescription": "Version updates and changes",
+    "bilibili": "Bilibili",
+    "bilibiliDescription": "Technical videos and community",
+    "login": "Sign in",
+    "register": "Register",
+    "pricing": "Pricing",
+    "profile": "Profile",
+    "comments": "Comment management"
+  },
+  "notificationContent": {
+    "i18nAdded": "Internationalization support added",
+    "messageReceived": "Jordan sent you a message",
+    "followedYou": "Taylor followed you",
+    "docsAdded": "New documentation published",
+    "emailReceived": "Taylor sent you an email",
+    "menuMockUpdated": "Local menu mock data updated",
+    "alexFollowed": "Alex followed you",
+    "emmaFollowed": "Emma followed you",
+    "samFollowed": "Sam followed you",
+    "chrisFollowed": "Chris followed you",
+    "taylorFollowed": "Taylor followed you",
+    "jordanFollowed": "Jordan followed you"
+  },
+  "dashboardContent": {
+    "common": {
+      "export": "Export",
+      "vsYesterday": "vs yesterday",
+      "vsLastWeek": "vs last week",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "monthNumber": "Month {number}",
+      "male": "Male",
+      "female": "Female",
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      }
+    },
+    "analysis": {
+      "todaySales": "Today's sales",
+      "salesSummary": "Sales summary",
+      "totalSales": "Total sales",
+      "totalOrders": "Total orders",
+      "productsSold": "Products sold",
+      "newCustomers": "New customers",
+      "totalRevenue": "Total revenue",
+      "onlineSales": "Online sales",
+      "offlineSales": "Offline sales",
+      "visitorInsights": "Visitor insights",
+      "returningCustomers": "Returning customers",
+      "customerSatisfaction": "Customer satisfaction",
+      "targetVsReality": "Target vs reality",
+      "actualSales": "Actual sales",
+      "targetSales": "Target sales",
+      "global": "Global",
+      "commercial": "Commercial",
+      "salesDistribution": "Sales distribution",
+      "beijing": "Beijing",
+      "shanghai": "Shanghai",
+      "guangzhou": "Guangzhou",
+      "volumeService": "Volume and service level",
+      "productNamed": "Product {name}",
+      "businessVolume": "Business volume",
+      "serviceVolume": "Service volume",
+      "topProducts": "Top products",
+      "productName": "Product",
+      "popularity": "Popularity",
+      "sales": "Sales"
+    },
+    "console": {
+      "aboutProject": "About the project",
+      "aboutDescription": "{name} combines polished design with efficient administration",
+      "technologyDescription": "Built with Vue 3, TypeScript, Vite, and Element Plus",
+      "projectWebsite": "Project website",
+      "documentation": "Documentation",
+      "bilibili": "Bilibili",
+      "totalVisits": "Total visits",
+      "onlineVisitors": "Online visitors",
+      "pageViews": "Page views",
+      "newUsers": "New users",
+      "userOverview": "User overview",
+      "userOverviewDescription": "Combine the available options to build a precise dashboard for your workflow",
+      "totalUsers": "Total users",
+      "dailyVisits": "Daily visits",
+      "weeklyChange": "Weekly change",
+      "visits": "Visits",
+      "growthThisYear": "Growth this year ",
+      "growthThisMonth": "Growth this month ",
+      "todo": "To-do items",
+      "pending": "Pending ",
+      "activity": "Activity",
+      "newItems": "New ",
+      "avatar": "User",
+      "region": "Region",
+      "gender": "Gender",
+      "progress": "Progress"
+    },
+    "products": {
+      "smartphone": "Smartphone",
+      "laptop": "Laptop",
+      "tablet": "Tablet",
+      "smartwatch": "Smartwatch",
+      "earbuds": "Wireless earbuds",
+      "smartSpeaker": "Smart speaker"
+    },
+    "todos": {
+      "reviewWork": "Review today's work",
+      "replyEmail": "Reply to email",
+      "prepareReport": "Prepare work report",
+      "productMeeting": "Product requirements meeting",
+      "organizeNotes": "Organize meeting notes",
+      "planTomorrow": "Plan tomorrow's work"
+    },
+    "times": {
+      "am0930": "09:30 AM",
+      "am1030": "10:30 AM",
+      "am1100": "11:00 AM",
+      "pm0200": "02:00 PM",
+      "pm0330": "03:30 PM",
+      "pm0630": "06:30 PM"
+    },
+    "names": {
+      "alex": "Alex",
+      "emma": "Emma",
+      "sam": "Sam",
+      "chris": "Chris",
+      "taylor": "Taylor",
+      "jordan": "Jordan"
+    },
+    "regions": {
+      "beijing": "Beijing",
+      "shenzhen": "Shenzhen",
+      "shanghai": "Shanghai",
+      "changsha": "Changsha",
+      "zhejiang": "Zhejiang",
+      "hubei": "Hubei"
+    },
+    "actions": {
+      "followed": "followed",
+      "published": "published",
+      "asked": "asked",
+      "redeemed": "redeemed",
+      "closed": "closed"
+    },
+    "targets": {
+      "vueNotes": "Vue 3 + TypeScript + Vite project notes",
+      "themeQuestion": "Can the theme be customized?",
+      "bookLife": "How to Live on 24 Hours a Day",
+      "bookHabits": "The 7 Habits of Highly Effective People"
+    }
+  },
+  "system": {
+    "action": { "title": "Permission Management" },
+    "role": { "title": "Role Management" },
+    "user": {
+      "title": "User Management",
+      "keepPassword": "Leave blank to keep the current password",
+      "approve": "Approve",
+      "reject": "Reject",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "unlockPassword": "Unlock password change",
+      "lockTip": "Enter lock duration in hours; 0 means permanent"
+    },
+    "userGroup": { "title": "User Group Management" },
+    "dictionary": { "title": "Dictionary Management" },
+    "whitelist": { "title": "Whitelist Management" },
+    "fields": {
+      "id": "ID",
+      "name": "Name",
+      "group": "Group",
+      "word": "Identifier",
+      "code": "Code",
+      "resource": "Resource",
+      "resourceRules": "Resource rules",
+      "menuPaths": "Menu paths",
+      "menuPath": "Menu path",
+      "buttonPermission": "Button permission",
+      "createdAt": "Created at",
+      "updatedAt": "Updated at",
+      "permissions": "Permissions",
+      "actionCode": "Permission code",
+      "username": "Username",
+      "userCode": "User code",
+      "role": "Role",
+      "status": "Status",
+      "metadata": "Metadata",
+      "password": "Password",
+      "members": "Members",
+      "dictionaryKey": "Dictionary key",
+      "dictionaryValue": "Dictionary value",
+      "description": "Description",
+      "enabled": "Enabled",
+      "category": "Category"
+    },
+    "common": {
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteSelected": "Delete selected",
+      "save": "Save",
+      "cancel": "Cancel",
+      "search": "Search",
+      "reset": "Reset",
+      "operations": "Actions",
+      "confirm": "Confirm",
+      "yes": "Yes",
+      "no": "No",
+      "refresh": "Refresh",
+      "more": "More",
+      "less": "Less"
+    },
+    "status": { "pending": "Pending", "active": "Active", "locked": "Locked" },
+    "category": { "permission": "Permission", "jwt": "JWT" },
+    "enabled": { "yes": "Enabled", "no": "Disabled" },
+    "table": {
+      "compact": "Compact",
+      "default": "Default",
+      "loose": "Loose",
+      "fullscreen": "Fullscreen",
+      "style": "Table style",
+      "bordered": "Bordered",
+      "striped": "Striped rows"
+    },
+    "suggestions": {
+      "backend": "Backend suggestions",
+      "history": "History",
+      "removeHistory": "Remove this history item"
+    },
+    "messages": {
+      "created": "Created",
+      "updated": "Updated",
+      "deleted": "Deleted",
+      "required": "This field is required",
+      "invalidJson": "Enter valid JSON",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "rejectionRequired": "Enter a rejection reason",
+      "locked": "Locked",
+      "unlocked": "Unlocked",
+      "passwordUnlocked": "Password change unlocked",
+      "futureLock": "Enter a valid number of hours"
+    },
+    "confirm": { "deleteDescription": "Delete the selected {count} record(s)?" }
+  }
+}

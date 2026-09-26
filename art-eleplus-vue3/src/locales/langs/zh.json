@@ -1,0 +1,679 @@
+{
+  "httpMsg": {
+    "unauthorized": "未授权访问，请重新登录",
+    "forbidden": "禁止访问该资源",
+    "notFound": "请求的资源不存在",
+    "methodNotAllowed": "请求方法不允许",
+    "requestTimeout": "请求超时，请稍后重试",
+    "internalServerError": "服务器内部错误，请稍后重试",
+    "badGateway": "网关错误，请稍后重试",
+    "serviceUnavailable": "服务暂时不可用，请稍后重试",
+    "gatewayTimeout": "网关超时，请稍后重试",
+    "requestCancelled": "请求已取消",
+    "networkError": "网络连接异常，请检查网络连接",
+    "requestFailed": "请求失败",
+    "requestConfigError": "请求配置错误"
+  },
+  "topBar": {
+    "timezone": "时区",
+    "localTimezone": "本地",
+    "search": {
+      "title": "搜索"
+    },
+    "user": {
+      "lockScreen": "锁定屏幕",
+      "logout": "退出登录"
+    },
+    "guide": {
+      "title": "点击这里查看",
+      "theme": "主题风格",
+      "menu": "开启顶栏菜单",
+      "description": "等更多配置"
+    }
+  },
+  "common": {
+    "tips": "提示",
+    "cancel": "取消",
+    "confirm": "确定",
+    "logOutTips": "您是否要退出登录?"
+  },
+  "search": {
+    "placeholder": "搜索页面",
+    "historyTitle": "搜索历史",
+    "switchKeydown": "切换",
+    "selectKeydown": "选择",
+    "exitKeydown": "关闭"
+  },
+  "setting": {
+    "menuType": {
+      "title": "菜单布局",
+      "list": ["垂直", "水平", "混合", "双列"]
+    },
+    "theme": {
+      "title": "主题风格",
+      "list": ["浅色", "深色", "系统"]
+    },
+    "menu": {
+      "title": "菜单风格"
+    },
+    "color": {
+      "title": "系统主题色"
+    },
+    "box": {
+      "title": "盒子样式",
+      "list": ["边框", "阴影"]
+    },
+    "container": {
+      "title": "容器宽度",
+      "list": ["铺满", "定宽"]
+    },
+    "basics": {
+      "title": "基础配置",
+      "list": {
+        "multiTab": "开启多标签栏",
+        "accordion": "侧边栏开启手风琴模式",
+        "collapseSidebar": "显示折叠侧边栏按钮",
+        "fastEnter": "显示快速入口",
+        "reloadPage": "显示重载页面按钮",
+        "breadcrumb": "显示全局面包屑导航",
+        "language": "显示多语言选择",
+        "progressBar": "显示顶部进度条",
+        "weakMode": "色弱模式",
+        "watermark": "全局水印",
+        "menuWidth": "菜单宽度",
+        "tabStyle": "标签页风格",
+        "pageTransition": "页面切换动画",
+        "borderRadius": "自定义圆角"
+      }
+    },
+    "tabStyle": {
+      "default": "默认",
+      "card": "卡片",
+      "google": "谷歌"
+    },
+    "transition": {
+      "list": {
+        "none": "无动画",
+        "fade": "淡入淡出",
+        "slideLeft": "左侧滑入",
+        "slideBottom": "下方滑入",
+        "slideTop": "上方滑入"
+      }
+    },
+    "copyright": {
+      "title": "版权设置",
+      "enabled": "显示版权",
+      "date": "日期或年份",
+      "company": "公司名称",
+      "companyLink": "公司链接",
+      "icp": "ICP备案文本",
+      "icpLink": "ICP备案链接"
+    },
+    "actions": {
+      "resetConfig": "重置配置",
+      "copyConfig": "复制配置",
+      "copySuccess": "配置已复制到剪贴板，可粘贴到 src/config/setting.ts 文件中",
+      "copyFailed": "复制失败，请重试",
+      "resetFailed": "重置失败，请刷新页面后重试"
+    }
+  },
+  "notice": {
+    "title": "通知",
+    "btnRead": "标为已读",
+    "bar": ["通知", "消息", "代办"],
+    "text": ["暂无"],
+    "viewAll": "查看全部"
+  },
+  "worktab": {
+    "btn": {
+      "refresh": "刷新",
+      "fixed": "固定",
+      "unfixed": "取消固定",
+      "closeLeft": "关闭左侧",
+      "closeRight": "关闭右侧",
+      "closeOther": "关闭其他",
+      "closeAll": "关闭全部"
+    }
+  },
+  "login": {
+    "leftView": {
+      "title": "一款兼具设计美学与高效开发的后台系统",
+      "subTitle": "美观实用的界面，经过视觉优化，确保卓越的用户体验"
+    },
+    "title": "欢迎回来",
+    "subTitle": "输入您的账号和密码登录",
+    "roles": {
+      "super": "超级管理员",
+      "admin": "管理员",
+      "user": "普通用户"
+    },
+    "placeholder": {
+      "username": "请输入账号",
+      "password": "请输入密码",
+      "slider": "请拖动滑块完成验证"
+    },
+    "sliderText": "按住滑块拖动",
+    "sliderSuccessText": "验证成功",
+    "rememberPwd": "记住账号",
+    "btnText": "登录",
+    "noAccount": "还没有账号？",
+    "register": "注册",
+    "success": {
+      "title": "登录成功",
+      "message": "欢迎回来"
+    }
+  },
+  "register": {
+    "title": "创建账号",
+    "subTitle": "欢迎加入我们，请填写以下信息完成注册",
+    "placeholder": {
+      "username": "请输入账号",
+      "password": "请输入密码",
+      "confirmPassword": "请再次输入密码"
+    },
+    "rule": {
+      "confirmPasswordRequired": "请再次输入密码",
+      "passwordMismatch": "两次输入密码不一致!",
+      "usernameLength": "长度在 3 到 20 个字符",
+      "passwordLength": "密码长度不能小于6位",
+      "agreementRequired": "请同意隐私协议"
+    },
+    "agreeText": "我同意",
+    "privacyPolicy": "《隐私政策》",
+    "submitBtnText": "注册",
+    "hasAccount": "已有账号？",
+    "toLogin": "去登录"
+  },
+  "lockScreen": {
+    "pwdError": "密码错误",
+    "lock": {
+      "inputPlaceholder": "请输入锁屏密码",
+      "btnText": "锁定"
+    },
+    "unlock": {
+      "inputPlaceholder": "请输入解锁密码",
+      "btnText": "解锁",
+      "backBtnText": "返回登录"
+    }
+  },
+  "greeting": {
+    "dawn": "凌晨了！",
+    "morning": "上午好！",
+    "afternoon": "下午好！",
+    "evening": "晚上好！"
+  },
+  "exceptionPage": {
+    "gohome": "返回首页",
+    "403": "抱歉，您无权访问该页面",
+    "404": "抱歉，您访问的页面不存在",
+    "500": "抱歉，服务器出错了"
+  },
+  "menus": {
+    "login": {
+      "title": "登录"
+    },
+    "register": {
+      "title": "注册"
+    },
+    "outside": {
+      "title": "内嵌页面"
+    },
+    "dashboard": {
+      "title": "概览",
+      "overview": "概览",
+      "workspace": "工作台",
+      "console": "工作台",
+      "analysis": "分析页",
+      "ecommerce": "电子商务"
+    },
+    "widgets": {
+      "title": "组件中心",
+      "icon": "图标",
+      "imageCrop": "图像裁剪",
+      "excel": "Excel 导入导出",
+      "video": "视频播放器",
+      "countTo": "数字滚动",
+      "wangEditor": "富文本编辑器",
+      "watermark": "水印",
+      "contextMenu": "右键菜单",
+      "qrcode": "二维码",
+      "drag": "拖拽",
+      "textScroll": "文字滚动",
+      "fireworks": "礼花",
+      "elementUI": "组件总览"
+    },
+    "template": {
+      "title": "模板中心",
+      "chat": "聊天",
+      "cards": "卡片",
+      "banners": "横幅",
+      "charts": "图表",
+      "map": "地图",
+      "calendar": "日历",
+      "pricing": "定价"
+    },
+    "article": {
+      "title": "文章管理",
+      "articleList": "文章列表",
+      "articleDetail": "文章详情",
+      "comment": "留言管理",
+      "articlePublish": "文章发布"
+    },
+    "result": {
+      "title": "结果页面",
+      "success": "成功页",
+      "fail": "失败页"
+    },
+    "exception": {
+      "title": "异常页面",
+      "forbidden": "403",
+      "notFound": "404",
+      "serverError": "500"
+    },
+    "examples": {
+      "title": "功能示例",
+      "tabs": "标签页",
+      "tablesBasic": "基础表格",
+      "tables": "高级表格",
+      "tablesTree": "左右布局表格",
+      "forms": "表单",
+      "searchBar": "搜索表单",
+      "socketChat": "Socket 连接",
+      "permission": {
+        "title": "前端权限",
+        "switchRole": "切换权限",
+        "buttonAuth": "按钮权限演示",
+        "pageVisibility": "超级管理员可见"
+      }
+    },
+    "system": {
+      "title": "系统管理",
+      "user": "用户管理",
+      "role": "角色管理",
+      "userGroup": "用户组管理",
+      "action": "权限管理",
+      "dictionary": "数据字典",
+      "whitelist": "白名单管理",
+      "userCenter": "个人中心",
+      "menu": "菜单管理",
+      "nested": "嵌套菜单",
+      "menu1": "菜单1",
+      "menu2": "菜单2",
+      "menu21": "菜单2-1",
+      "menu3": "菜单3",
+      "menu31": "菜单3-1",
+      "menu32": "菜单3-2",
+      "menu321": "菜单3-2-1"
+    },
+    "safeguard": {
+      "title": "运维管理",
+      "server": "服务器管理"
+    },
+    "plan": {
+      "title": "版本计划",
+      "log": "更新日志"
+    },
+    "help": {
+      "title": "帮助中心",
+      "document": "官方文档",
+      "liteVersion": "精简版本",
+      "oldVersion": "v2.6.1 版本"
+    }
+  },
+  "table": {
+    "form": {
+      "reset": "重置",
+      "submit": "提交"
+    },
+    "searchBar": {
+      "reset": "重置",
+      "search": "查询",
+      "expand": "展开",
+      "collapse": "收起",
+      "searchInputPlaceholder": "请输入",
+      "searchSelectPlaceholder": "请选择"
+    },
+    "selection": "选择",
+    "sizeOptions": {
+      "small": "紧凑",
+      "default": "默认",
+      "large": "宽松"
+    },
+    "column": {
+      "selection": "勾选",
+      "expand": "展开",
+      "index": "序号"
+    },
+    "zebra": "斑马纹",
+    "border": "边框",
+    "headerBackground": "表头背景"
+  },
+  "auth": {
+    "loginTitle": "欢迎登录",
+    "loginSubtitle": "登录账户以继续",
+    "username": "用户名",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "newPassword": "新密码",
+    "usernameRequired": "请输入用户名",
+    "passwordRequired": "请输入密码",
+    "usernameLength": "请输入用户名",
+    "passwordLength": "请输入密码",
+    "passwordMismatch": "两次输入的密码不一致",
+    "remember": "记住账号",
+    "panelPosition": "切换登录面板位置",
+    "login": "登录",
+    "loginSuccess": "登录成功",
+    "loginFailed": "登录失败",
+    "noAccount": "还没有账户？",
+    "register": "注册",
+    "registerTitle": "创建账户",
+    "registerSubtitle": "填写账户信息并完成安全验证",
+    "registerSuccess": "注册成功，请登录",
+    "registerFailed": "注册失败",
+    "usernameUnavailable": "该用户名已被占用",
+    "backToLogin": "返回登录",
+    "sliderTip": "按住滑块拖动到最右侧",
+    "usernameFirst": "请先输入用户名",
+    "verificationFailed": "验证失败",
+    "sliderPassed": "验证通过",
+    "sliderRequired": "请先完成滑块验证",
+    "captchaRequired": "请完成点选验证",
+    "captchaWrong": "点选顺序不正确，请重试",
+    "captchaPassed": "验证通过",
+    "refresh": "刷新",
+    "resetTitle": "设置新密码",
+    "resetSubtitle": "首次登录或管理员重置后必须先设置新密码",
+    "resetPassword": "确认修改",
+    "resetSuccess": "密码设置成功",
+    "resetFailed": "密码设置失败"
+  },
+  "profile": {
+    "title": "个人中心",
+    "noRole": "未分配角色",
+    "fields": { "username": "用户名", "role": "角色" },
+    "tabs": {
+      "basicInformation": "基本信息",
+      "changePassword": "修改密码"
+    },
+    "password": {
+      "oldPassword": "当前密码",
+      "oldPasswordPlaceholder": "请输入当前密码",
+      "oldPasswordRequired": "请输入当前密码",
+      "newPassword": "新密码",
+      "newPasswordPlaceholder": "请输入新密码",
+      "confirmPassword": "确认密码",
+      "confirmPasswordPlaceholder": "请再次输入新密码",
+      "passwordMismatch": "两次输入的密码不一致",
+      "changeTip": "密码修改后将退出登录，并使所有设备上的旧会话失效。",
+      "update": "修改密码",
+      "success": "密码修改成功，所有设备均需重新登录。"
+    }
+  },
+  "fastEnter": {
+    "quickLinks": "快速链接",
+    "workspace": "工作台",
+    "workspaceDescription": "系统概览与数据统计",
+    "analysis": "分析页",
+    "analysisDescription": "数据分析与可视化",
+    "fireworks": "礼花效果",
+    "fireworksDescription": "动画特效展示",
+    "chat": "聊天",
+    "chatDescription": "即时通讯功能",
+    "docs": "官方文档",
+    "docsDescription": "使用指南与开发文档",
+    "support": "技术支持",
+    "supportDescription": "技术支持与问题反馈",
+    "changelog": "更新日志",
+    "changelogDescription": "版本更新与变更记录",
+    "bilibili": "哔哩哔哩",
+    "bilibiliDescription": "技术分享与交流",
+    "login": "登录",
+    "register": "注册",
+    "pricing": "定价",
+    "profile": "个人中心",
+    "comments": "留言管理"
+  },
+  "notificationContent": {
+    "i18nAdded": "新增国际化",
+    "messageReceived": "冷月呆呆给你发了一条消息",
+    "followedYou": "小肥猪关注了你",
+    "docsAdded": "新增使用文档",
+    "emailReceived": "小肥猪给你发了一封邮件",
+    "menuMockUpdated": "菜单本地模拟数据已更新",
+    "alexFollowed": "池不胖关注了你",
+    "emmaFollowed": "唐不苦关注了你",
+    "samFollowed": "中小鱼关注了你",
+    "chrisFollowed": "何小荷关注了你",
+    "taylorFollowed": "誶誶淰关注了你",
+    "jordanFollowed": "冷月呆呆关注了你"
+  },
+  "dashboardContent": {
+    "common": {
+      "export": "导出",
+      "vsYesterday": "较昨天",
+      "vsLastWeek": "较上周",
+      "thisMonth": "本月",
+      "lastMonth": "上月",
+      "thisYear": "今年",
+      "monthNumber": "{number}月",
+      "male": "男",
+      "female": "女",
+      "weekdays": {
+        "mon": "周一",
+        "tue": "周二",
+        "wed": "周三",
+        "thu": "周四",
+        "fri": "周五",
+        "sat": "周六",
+        "sun": "周日"
+      }
+    },
+    "analysis": {
+      "todaySales": "今日销售",
+      "salesSummary": "销售总结",
+      "totalSales": "总销售额",
+      "totalOrders": "总订单量",
+      "productsSold": "产品销售量",
+      "newCustomers": "新客户数",
+      "totalRevenue": "总收入",
+      "onlineSales": "线上销售",
+      "offlineSales": "线下销售",
+      "visitorInsights": "访客洞察",
+      "returningCustomers": "老客户",
+      "customerSatisfaction": "客户满意度",
+      "targetVsReality": "目标与实际",
+      "actualSales": "实际销售额",
+      "targetSales": "目标销售额",
+      "global": "全球",
+      "commercial": "商业",
+      "salesDistribution": "全国销售分布",
+      "beijing": "北京",
+      "shanghai": "上海",
+      "guangzhou": "广州",
+      "volumeService": "业务量与服务水平",
+      "productNamed": "产品{name}",
+      "businessVolume": "业务量",
+      "serviceVolume": "服务量",
+      "topProducts": "热门产品",
+      "productName": "产品名称",
+      "popularity": "热度",
+      "sales": "销量"
+    },
+    "console": {
+      "aboutProject": "关于项目",
+      "aboutDescription": "{name} 是一款兼具设计美学与高效开发的后台系统",
+      "technologyDescription": "使用了 Vue 3、TypeScript、Vite、Element Plus 等前沿技术",
+      "projectWebsite": "项目官网",
+      "documentation": "文档",
+      "bilibili": "哔哩哔哩",
+      "totalVisits": "总访问次数",
+      "onlineVisitors": "在线访客数",
+      "pageViews": "点击量",
+      "newUsers": "新用户",
+      "userOverview": "用户概述",
+      "userOverviewDescription": "我们为您创建了多个选项，可将它们组合在一起并定制页面",
+      "totalUsers": "总用户量",
+      "dailyVisits": "日访问量",
+      "weeklyChange": "周同比",
+      "visits": "访问量",
+      "growthThisYear": "今年增长 ",
+      "growthThisMonth": "这个月增长 ",
+      "todo": "待办事项",
+      "pending": "待处理 ",
+      "activity": "动态",
+      "newItems": "新增 ",
+      "avatar": "用户",
+      "region": "地区",
+      "gender": "性别",
+      "progress": "进度"
+    },
+    "products": {
+      "smartphone": "智能手机",
+      "laptop": "笔记本电脑",
+      "tablet": "平板电脑",
+      "smartwatch": "智能手表",
+      "earbuds": "无线耳机",
+      "smartSpeaker": "智能音箱"
+    },
+    "todos": {
+      "reviewWork": "查看今天工作内容",
+      "replyEmail": "回复邮件",
+      "prepareReport": "工作汇报整理",
+      "productMeeting": "产品需求会议",
+      "organizeNotes": "整理会议内容",
+      "planTomorrow": "明天工作计划"
+    },
+    "times": {
+      "am0930": "上午 09:30",
+      "am1030": "上午 10:30",
+      "am1100": "上午 11:00",
+      "pm0200": "下午 02:00",
+      "pm0330": "下午 03:30",
+      "pm0630": "下午 06:30"
+    },
+    "names": {
+      "alex": "中小鱼",
+      "emma": "何小荷",
+      "sam": "誶誶淰",
+      "chris": "发呆草",
+      "taylor": "甜筒",
+      "jordan": "冷月呆呆"
+    },
+    "regions": {
+      "beijing": "北京",
+      "shenzhen": "深圳",
+      "shanghai": "上海",
+      "changsha": "长沙",
+      "zhejiang": "浙江",
+      "hubei": "湖北"
+    },
+    "actions": {
+      "followed": "关注了",
+      "published": "发表文章",
+      "asked": "提出问题",
+      "redeemed": "兑换了物品",
+      "closed": "关闭了问题"
+    },
+    "targets": {
+      "vueNotes": "Vue 3 + TypeScript + Vite 项目实战笔记",
+      "themeQuestion": "主题可以配置吗",
+      "bookLife": "《奇特的一生》",
+      "bookHabits": "《高效人士的七个习惯》"
+    }
+  },
+  "system": {
+    "action": { "title": "权限管理" },
+    "role": { "title": "角色管理" },
+    "user": {
+      "title": "用户管理",
+      "keepPassword": "留空表示不修改密码",
+      "approve": "通过",
+      "reject": "拒绝",
+      "lock": "锁定",
+      "unlock": "解锁",
+      "unlockPassword": "解除改密锁定",
+      "lockTip": "输入锁定小时数，0 表示永久锁定"
+    },
+    "userGroup": { "title": "用户组管理" },
+    "dictionary": { "title": "字典管理" },
+    "whitelist": { "title": "白名单管理" },
+    "fields": {
+      "id": "ID",
+      "name": "名称",
+      "group": "分组",
+      "word": "标识",
+      "code": "代码",
+      "resource": "资源",
+      "resourceRules": "资源规则",
+      "menuPaths": "菜单路径",
+      "menuPath": "菜单路径",
+      "buttonPermission": "按钮权限",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "permissions": "权限",
+      "actionCode": "权限代码",
+      "username": "用户名",
+      "userCode": "用户代码",
+      "role": "角色",
+      "status": "状态",
+      "metadata": "元数据",
+      "password": "密码",
+      "members": "成员",
+      "dictionaryKey": "字典键",
+      "dictionaryValue": "字典值",
+      "description": "说明",
+      "enabled": "启用",
+      "category": "类别"
+    },
+    "common": {
+      "create": "新建",
+      "edit": "编辑",
+      "delete": "删除",
+      "deleteSelected": "删除所选",
+      "save": "保存",
+      "cancel": "取消",
+      "search": "查询",
+      "reset": "重置",
+      "operations": "操作",
+      "confirm": "确认",
+      "yes": "是",
+      "no": "否",
+      "refresh": "刷新",
+      "more": "展开",
+      "less": "收起"
+    },
+    "status": { "pending": "待审核", "active": "正常", "locked": "已锁定" },
+    "category": { "permission": "权限", "jwt": "JWT" },
+    "enabled": { "yes": "已启用", "no": "已停用" },
+    "table": {
+      "compact": "紧凑",
+      "default": "默认",
+      "loose": "宽松",
+      "fullscreen": "全屏",
+      "style": "表格样式",
+      "bordered": "边框",
+      "striped": "斑马纹"
+    },
+    "suggestions": {
+      "backend": "后端候选",
+      "history": "历史记录",
+      "removeHistory": "删除这条历史记录"
+    },
+    "messages": {
+      "created": "创建成功",
+      "updated": "更新成功",
+      "deleted": "删除成功",
+      "required": "此项必填",
+      "invalidJson": "请输入有效的 JSON",
+      "approved": "已通过",
+      "rejected": "已拒绝",
+      "rejectionRequired": "请输入拒绝原因",
+      "locked": "已锁定",
+      "unlocked": "已解锁",
+      "passwordUnlocked": "已解除改密锁定",
+      "futureLock": "请输入有效的小时数"
+    },
+    "confirm": { "deleteDescription": "确定删除选中的 {count} 条记录吗？" }
+  }
+}
