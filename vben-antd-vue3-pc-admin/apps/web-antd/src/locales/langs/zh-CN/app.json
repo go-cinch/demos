@@ -1,9 +1,8 @@
 {
   "validation": {
-    "username": "用户名须为 5 至 50 个字符，以英文字母开头，仅限英文字母、数字、连字符或下划线",
-    "password": "密码须为 6 至 72 个 UTF-8 字节",
+    "username": "请输入用户名",
+    "password": "请输入密码",
     "currentPassword": "请输入当前密码",
-    "passwordMax": "密码不能超过 72 个 UTF-8 字节",
     "credentialsRequired": "请输入用户名和密码",
     "passwordRequired": "请输入密码",
     "passwordChangeRequired": "请输入当前密码和新密码",

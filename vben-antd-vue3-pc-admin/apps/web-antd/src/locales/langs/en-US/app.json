@@ -1,9 +1,8 @@
 {
   "validation": {
-    "username": "Username must be 5–50 characters, start with a letter, and contain only letters, numbers, hyphens, or underscores",
-    "password": "Password must be 6–72 bytes",
+    "username": "Username is required",
+    "password": "Password is required",
     "currentPassword": "Current password is required",
-    "passwordMax": "Password must be at most 72 bytes",
     "credentialsRequired": "Username and password are required",
     "passwordRequired": "Password is required",
     "passwordChangeRequired": "Current and new passwords are required",

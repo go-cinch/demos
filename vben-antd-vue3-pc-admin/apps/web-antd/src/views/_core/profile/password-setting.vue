@@ -18,6 +18,7 @@ import {
 } from '#/api';
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
+import { isValidUserPassword } from '#/user-validation';
 
 import LoginPointCaptcha from '../authentication/login-point-captcha.vue';
 
@@ -32,10 +33,6 @@ const passwordSettingRef = ref<PasswordSettingExpose>();
 const submitting = ref(false);
 const passwordCaptcha = ref<AuthApi.PointCaptchaChallenge>();
 
-function passwordByteLength(value: string) {
-  return new TextEncoder().encode(value).length;
-}
-
 const formSchema = computed((): VbenFormSchema[] => {
   const schema: VbenFormSchema[] = [
     {
@@ -45,12 +42,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       componentProps: {
         placeholder: $t('page.profile.password.oldPasswordPlaceholder'),
       },
-      rules: z
-        .string()
-        .min(1, { message: $t('app.validation.currentPassword') })
-        .refine((value) => passwordByteLength(value) <= 72, {
-          message: $t('app.validation.passwordMax'),
-        }),
+      rules: z.string().refine(isValidUserPassword, {
+        message: $t('app.validation.currentPassword'),
+      }),
     },
     {
       fieldName: 'newPassword',
@@ -60,13 +54,9 @@ const formSchema = computed((): VbenFormSchema[] => {
         passwordStrength: true,
         placeholder: $t('page.profile.password.newPasswordPlaceholder'),
       },
-      rules: z.string().refine(
-        (value) => {
-          const length = passwordByteLength(value);
-          return length >= 6 && length <= 72;
-        },
-        { message: $t('app.validation.password') },
-      ),
+      rules: z.string().refine(isValidUserPassword, {
+        message: $t('app.validation.password'),
+      }),
     },
     {
       fieldName: 'confirmPassword',
@@ -169,7 +159,7 @@ async function handleSubmit(values: Recordable<any>) {
 <template>
   <ProfilePasswordSetting
     ref="passwordSettingRef"
-    class="w-1/3"
+    class="w-full lg:w-1/2 xl:w-1/3"
     :form-schema="formSchema"
     :loading="submitting"
     @submit="handleSubmit"

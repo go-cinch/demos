@@ -82,7 +82,6 @@ function calcZIndex() {
     >
       <VbenAvatar :src="avatar" class="mx-auto mb-6 size-20" />
       <Slot
-        :show-forget-password="false"
         :show-register="false"
         :show-remember-me="false"
         :sub-title="$t('authentication.loginAgainSubTitle')"

@@ -26,13 +26,11 @@ defineOptions({
 
 const props = withDefaults(defineProps<Props>(), {
   codeLoginPath: '/auth/code-login',
-  forgetPasswordPath: '/auth/forget-password',
   formSchema: () => [],
   loading: false,
   qrCodeLoginPath: '/auth/qrcode-login',
   registerPath: '/auth/register',
   showCodeLogin: true,
-  showForgetPassword: true,
   showQrcodeLogin: true,
   showRegister: true,
   showRememberMe: true,
@@ -44,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   submit: [Recordable<any>];
-  'values-change': [Recordable<any>, string[]];
+  valuesChange: [Recordable<any>, string[]];
 }>();
 
 const [Form, formApi] = useVbenForm(
@@ -55,7 +53,7 @@ const [Form, formApi] = useVbenForm(
     },
     schema: computed(() => props.formSchema),
     handleValuesChange(values, changedFields) {
-      emit('values-change', { ...values }, changedFields);
+      emit('valuesChange', { ...values }, changedFields);
     },
     showDefaultActions: false,
   }),
@@ -124,7 +122,7 @@ async function restoreRememberedCredentials() {
     rememberedCredentials ?? { password: '', username: '' },
   );
   const values = await formApi.getValues();
-  emit('values-change', values, ['username']);
+  emit('valuesChange', values, ['username']);
 }
 
 onActivated(restoreRememberedCredentials);
@@ -153,10 +151,7 @@ defineExpose({
 
     <Form />
 
-    <div
-      v-if="showRememberMe || showForgetPassword"
-      class="mb-6 flex justify-between"
-    >
+    <div v-if="showRememberMe" class="mb-6 flex justify-between">
       <div class="flex-center">
         <VbenCheckbox
           v-if="showRememberMe"
@@ -166,14 +161,6 @@ defineExpose({
           {{ $t('authentication.rememberMe') }}
         </VbenCheckbox>
       </div>
-
-      <span
-        v-if="showForgetPassword"
-        class="vben-link text-sm font-normal"
-        @click="handleGo(forgetPasswordPath)"
-      >
-        {{ $t('authentication.forgetPassword') }}
-      </span>
     </div>
     <VbenButton
       :class="{

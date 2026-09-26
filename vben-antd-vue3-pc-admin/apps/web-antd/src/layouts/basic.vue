@@ -231,8 +231,7 @@ watch(
         :avatar-alt="userStore.userInfo?.username"
         :menus
         :text="userStore.userInfo?.realName"
-        description="go cinch"
-        tag-text="Pro"
+        description="go-cinch"
         @clear-preferences-and-logout="handleLogout"
         @logout="handleLogout"
       />

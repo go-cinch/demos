@@ -26,8 +26,6 @@
   "terms": "條款",
   "agreeTip": "請同意隱私政策和條款",
   "goToLogin": "去登入",
-  "forgetPassword": "忘記密碼?",
-  "forgetPasswordSubtitle": "輸入您的電子郵件，我們將向您傳送重置密碼的連線",
   "emailTip": "請輸入郵箱",
   "emailValidErrorTip": "你輸入的郵箱格式不正確",
   "sendResetLink": "傳送重置連結",

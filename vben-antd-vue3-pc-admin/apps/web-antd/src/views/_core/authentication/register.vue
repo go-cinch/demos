@@ -137,13 +137,13 @@ async function handleFormFocusout(event: FocusEvent) {
   if (!(input instanceof HTMLInputElement) || input.name !== 'username') {
     return;
   }
-  const username = input.value;
+  const username = input.value.trim();
   if (!isValidUsername(username)) {
     return;
   }
   try {
     const available = await checkUsernameAvailability(username);
-    if (input.value !== username) {
+    if (input.value.trim() !== username) {
       return;
     }
     await registerFormRef.value

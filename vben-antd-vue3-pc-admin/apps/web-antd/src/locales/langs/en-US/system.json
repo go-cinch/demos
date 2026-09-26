@@ -49,6 +49,7 @@
     "lockUntil": "Until a specific time",
     "lockType": "Lock Type",
     "lockedUntil": "Locked Until",
+    "untilPrefix": "Until",
     "review": "Review Registration",
     "decision": "Decision",
     "reason": "Reason",
@@ -137,10 +138,8 @@
     "updated": "Updated successfully",
     "created": "Created successfully",
     "deleted": "Deleted successfully",
-    "rejectionRequired": "Please enter a rejection reason",
     "approved": "Registration approved",
     "rejected": "Registration rejected",
-    "futureLock": "Please select a future lock expiration time",
     "locked": "User locked successfully",
     "unlocked": "User unlocked successfully",
     "passwordUnlocked": "Self-service password change unlocked"
@@ -155,7 +154,9 @@
   "validation": {
     "required": "{field} is required",
     "dictionaryKey": "Use uppercase letters, digits, and underscore-separated segments",
-    "json": "Enter valid JSON"
+    "json": "Enter valid JSON",
+    "rejectionRequired": "Please enter a rejection reason",
+    "futureLock": "Please select a future lock expiration time"
   },
   "menu": {
     "system": "System",

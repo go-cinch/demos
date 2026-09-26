@@ -10,6 +10,7 @@ import { $t } from '@vben/locales';
 import { useDebounceFn } from '@vueuse/core';
 
 import { useAuthStore } from '#/store';
+import { isValidUsername, isValidUserPassword } from '#/user-validation';
 
 import LoginPointCaptcha from './login-point-captcha.vue';
 import ServerSliderCaptcha from './server-slider-captcha.vue';
@@ -38,7 +39,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
       fieldName: 'username',
       label: $t('authentication.username'),
-      rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
+      rules: z.string().refine(isValidUsername, {
+        message: $t('authentication.usernameTip'),
+      }),
     },
     {
       component: 'VbenInputPassword',
@@ -47,7 +50,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
       fieldName: 'password',
       label: $t('authentication.password'),
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
+      rules: z.string().refine(isValidUserPassword, {
+        message: $t('authentication.passwordTip'),
+      }),
     },
   ];
   if (authStore.loginCaptcha) {

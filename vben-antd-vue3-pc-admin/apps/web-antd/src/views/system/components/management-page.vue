@@ -6,8 +6,6 @@ import type {
 } from 'ant-design-vue';
 import type { Dayjs } from 'dayjs';
 
-import { $t } from '#/locales';
-
 import type { Recordable } from '@vben/types';
 
 import type {
@@ -87,6 +85,7 @@ import {
   updateUserGroup,
   updateWhitelist,
 } from '#/api';
+import { $t } from '#/locales';
 
 import { buildChangedPayload, snapshotPayload } from './update-payload';
 import {
@@ -922,11 +921,13 @@ const approvalSubmitting = ref(false);
 const approvalUser = ref<null | UserRecord>(null);
 const approvalDecision = ref<'approve' | 'reject'>('approve');
 const rejectReason = ref('');
+const approvalWarningVisible = ref(false);
 const lockModalOpen = ref(false);
 const lockSubmitting = ref(false);
 const lockUser = ref<null | UserRecord>(null);
 const lockMode = ref<LockMode>('until');
 const lockUntil = ref<Dayjs>();
+const lockWarningVisible = ref(false);
 const actionGroupOptions = ref<ActionGroupOption[]>([]);
 const actionGroupOptionsLoading = ref(false);
 const actionGroupOptionsQuery = ref('');
@@ -957,7 +958,7 @@ const tableSettings = reactive({
 });
 const selectionColumnKey = '__selection__';
 const selectionColumnWidth = 48;
-const adaptiveColumnMinWidth = 120;
+const adaptiveColumnMinWidth = 72;
 const adaptiveColumnMaxWidth = 560;
 const metadataColumnMaxWidth = 320;
 const visibleColumnKeys = ref<string[]>([
@@ -1028,7 +1029,27 @@ function adaptiveColumnValues(
   if (column.display === 'json') {
     return formatJSON(columnValue(record, column)).split('\n');
   }
-  return [];
+  const value = columnValue(record, column);
+  if (column.display === 'date') return [formatDate(value)];
+  if (column.display === 'role') {
+    return [
+      value && typeof value === 'object' && 'name' in value
+        ? String(value.name)
+        : '-',
+    ];
+  }
+  if (column.display === 'status') return [statusLabel(value) || '-'];
+  if (column.display === 'boolean') {
+    return [$t(value ? 'system.enabled.yes' : 'system.enabled.no')];
+  }
+  if (column.display === 'category') {
+    return [
+      $t(value === 0 ? 'system.category.permission' : 'system.category.jwt'),
+    ];
+  }
+  return [
+    value === null || value === undefined || value === '' ? '-' : String(value),
+  ];
 }
 
 function estimatedTagWidth(value: string, maximumWidth: number) {
@@ -1040,9 +1061,18 @@ function estimatedTagWidth(value: string, maximumWidth: number) {
 }
 
 function adaptiveColumnWidth(column: DisplayColumn) {
-  let widestRow = adaptiveColumnMinWidth;
   const maximumColumnWidth =
-    column.display === 'json' ? metadataColumnMaxWidth : adaptiveColumnMaxWidth;
+    column.width ??
+    (column.display === 'json'
+      ? metadataColumnMaxWidth
+      : adaptiveColumnMaxWidth);
+  let widestRow = Math.min(
+    maximumColumnWidth,
+    Math.max(
+      adaptiveColumnMinWidth,
+      estimatedTagWidth(column.title, maximumColumnWidth) + 14,
+    ),
+  );
   const usesLongestValue =
     column.display === 'json' || column.display === 'resource-rules';
   const maximumValueWidth = usesLongestValue ? maximumColumnWidth - 32 : 220;
@@ -1066,14 +1096,7 @@ function adaptiveColumnWidth(column: DisplayColumn) {
 const tableColumns = computed<TableColumnsType<SystemRecord>>(() => {
   const columns: TableColumnsType<SystemRecord> = config.value.columns
     .filter((column) => visibleColumnKeys.value.includes(column.key))
-    .map((column) =>
-      column.display === 'actions' ||
-      column.display === 'json' ||
-      column.display === 'resource-rules' ||
-      column.display === 'users'
-        ? { ...column, width: adaptiveColumnWidth(column) }
-        : column,
-    );
+    .map((column) => ({ ...column, width: adaptiveColumnWidth(column) }));
 
   if (canUpdate.value || canDelete.value) {
     columns.push({
@@ -2095,7 +2118,12 @@ function openApproval(record: Recordable<any>) {
   approvalUser.value = record as UserRecord;
   approvalDecision.value = 'approve';
   rejectReason.value = '';
+  approvalWarningVisible.value = false;
   approvalModalOpen.value = true;
+}
+
+function clearApprovalWarning() {
+  approvalWarningVisible.value = false;
 }
 
 async function submitApproval() {
@@ -2103,9 +2131,10 @@ async function submitApproval() {
   if (!user) return;
   const reason = rejectReason.value.trim();
   if (approvalDecision.value === 'reject' && !reason) {
-    message.warning($t('system.messages.rejectionRequired'));
+    approvalWarningVisible.value = true;
     return;
   }
+  approvalWarningVisible.value = false;
   const metadata = { ...(user.metadata || {}) };
   if (approvalDecision.value === 'approve') {
     delete metadata.reject_register_reason;
@@ -2134,7 +2163,12 @@ function openLock(record: Recordable<any>) {
   lockUser.value = record as UserRecord;
   lockMode.value = 'until';
   lockUntil.value = dayjs().add(1, 'day').startOf('minute');
+  lockWarningVisible.value = false;
   lockModalOpen.value = true;
+}
+
+function clearLockWarning() {
+  lockWarningVisible.value = false;
 }
 
 async function submitLock() {
@@ -2144,9 +2178,10 @@ async function submitLock() {
     lockMode.value === 'until' &&
     (!lockUntil.value || !lockUntil.value.isAfter(dayjs()))
   ) {
-    message.warning($t('system.messages.futureLock'));
+    lockWarningVisible.value = true;
     return;
   }
+  lockWarningVisible.value = false;
   lockSubmitting.value = true;
   try {
     const metadata = {
@@ -2215,7 +2250,7 @@ onMounted(loadInitialData);
       <Card class="system-section-card shrink-0">
         <Form
           :model="filters"
-          class="flex w-full items-start justify-between gap-4"
+          class="flex w-full flex-col items-stretch gap-4 lg:flex-row lg:items-start lg:justify-between"
           layout="inline"
           @finish="search"
         >
@@ -2223,7 +2258,7 @@ onMounted(loadInitialData);
             <FormItem
               v-for="field in visibleFilters"
               :key="field.key"
-              class="shrink-0"
+              class="w-full sm:w-auto sm:shrink-0"
               :label="field.label"
               :name="field.key"
             >
@@ -2240,7 +2275,7 @@ onMounted(loadInitialData);
                 :placeholder="
                   $t('system.common.select', { field: field.label })
                 "
-                style="width: 280px"
+                class="w-full sm:w-[280px]"
                 :options="[
                   { label: $t('system.status.pending'), value: 0 },
                   { label: $t('system.status.active'), value: 1 },
@@ -2257,7 +2292,7 @@ onMounted(loadInitialData);
                 :placeholder="
                   $t('system.common.select', { field: field.label })
                 "
-                style="width: 160px"
+                class="w-full sm:w-40"
                 :options="[
                   { label: $t('system.enabled.yes'), value: 'true' },
                   { label: $t('system.enabled.no'), value: 'false' },
@@ -2273,7 +2308,7 @@ onMounted(loadInitialData);
                 :placeholder="
                   $t('system.common.select', { field: field.label })
                 "
-                style="width: 160px"
+                class="w-full sm:w-40"
                 :options="[
                   { label: $t('system.category.permission'), value: 0 },
                   { label: $t('system.category.jwt'), value: 1 },
@@ -2286,7 +2321,7 @@ onMounted(loadInitialData);
                 v-else-if="field.type === 'input-multi-select'"
                 :value="filters[field.key]"
                 allow-clear
-                class="system-multi-filter"
+                class="system-multi-filter w-full sm:w-[280px]"
                 :default-active-first-option="false"
                 :filter-option="false"
                 mode="tags"
@@ -2394,14 +2429,13 @@ onMounted(loadInitialData);
                 :value="filters[field.key]"
                 allow-clear
                 autocomplete="off"
-                class="shrink-0"
+                class="w-full sm:w-52 sm:shrink-0"
                 :default-active-first-option="false"
                 :dropdown-match-select-width="true"
                 :filter-option="false"
                 :options="filterSuggestionOptions(field.key)"
                 :placeholder="$t('system.common.enter', { field: field.label })"
                 :show-action="['focus']"
-                style="width: 208px"
                 @blur="handleFilterBlur()"
                 @focus="handleFilterFocus"
                 @search="searchBackendFilterSuggestions(field.key, $event)"
@@ -2445,7 +2479,7 @@ onMounted(loadInitialData);
               </AutoComplete>
             </FormItem>
           </div>
-          <Space class="shrink-0">
+          <Space class="w-full justify-end lg:w-auto lg:shrink-0" wrap>
             <Button v-if="canRead" html-type="button" @click="resetSearch">
               {{ $t('system.common.reset') }}
             </Button>
@@ -2474,8 +2508,8 @@ onMounted(loadInitialData);
 
       <div class="min-h-0 flex-1">
         <Card class="system-section-card h-full">
-          <div class="mb-4 flex items-center justify-between">
-            <Space>
+          <div class="mb-4 flex flex-wrap items-center gap-3">
+            <Space wrap>
               <Button v-if="canCreate" type="primary" @click="openEditor()">
                 <IconifyIcon icon="lucide:plus" />
                 {{ $t('system.common.create') }}
@@ -2489,7 +2523,7 @@ onMounted(loadInitialData);
               </Button>
             </Space>
 
-            <Space class="ml-auto" size="small">
+            <Space class="ml-auto" size="small" wrap>
               <Tooltip :title="$t('system.common.refresh')">
                 <Button
                   v-if="canRead"
@@ -2679,9 +2713,9 @@ onMounted(loadInitialData);
                     "
                     @confirm="unlockUser(record)"
                   >
-                    <Button size="small" type="link">{{
-                      $t('system.user.unlock')
-                    }}</Button>
+                    <Button size="small" type="link">
+                      {{ $t('system.user.unlock') }}
+                    </Button>
                   </Popconfirm>
                   <Popconfirm
                     v-if="
@@ -2709,9 +2743,9 @@ onMounted(loadInitialData);
                     "
                     @confirm="removeRecords([getRecordID(record)])"
                   >
-                    <Button danger size="small" type="link">{{
-                      $t('system.common.delete')
-                    }}</Button>
+                    <Button danger size="small" type="link">
+                      {{ $t('system.common.delete') }}
+                    </Button>
                   </Popconfirm>
                 </Space>
               </template>
@@ -2811,12 +2845,12 @@ onMounted(loadInitialData);
                       class="m-0"
                       color="orange"
                     >
-                      Until
+                      {{ $t('system.user.untilPrefix') }}
                       {{ formatLockExpiration(userLockExpiration(record)) }}
                     </Tag>
-                    <Tag v-else class="m-0">{{
-                      $t('system.common.unknown')
-                    }}</Tag>
+                    <Tag v-else class="m-0">
+                      {{ $t('system.common.unknown') }}
+                    </Tag>
                   </div>
                   <pre class="m-0 max-h-40 overflow-auto whitespace-pre-wrap">{{
                     formatJSON(columnValue(record, column))
@@ -3072,8 +3106,12 @@ onMounted(loadInitialData);
         </FormItem>
         <FormItem
           v-if="lockMode === 'until'"
+          :help="
+            lockWarningVisible ? $t('system.validation.futureLock') : undefined
+          "
           :label="$t('system.user.lockedUntil')"
           required
+          :validate-status="lockWarningVisible ? 'warning' : undefined"
         >
           <DatePicker
             v-model:value="lockUntil"
@@ -3081,6 +3119,7 @@ onMounted(loadInitialData);
             :disabled-date="disablePastDate"
             format="YYYY-MM-DD HH:mm:ss"
             show-time
+            @change="clearLockWarning"
           />
         </FormItem>
       </Form>
@@ -3103,17 +3142,25 @@ onMounted(loadInitialData);
               { label: $t('system.user.approve'), value: 'approve' },
               { label: $t('system.user.reject'), value: 'reject' },
             ]"
+            @change="clearApprovalWarning"
           />
         </FormItem>
         <FormItem
           v-if="approvalDecision === 'reject'"
+          :help="
+            approvalWarningVisible
+              ? $t('system.validation.rejectionRequired')
+              : undefined
+          "
           :label="$t('system.user.reason')"
           required
+          :validate-status="approvalWarningVisible ? 'warning' : undefined"
         >
           <Textarea
             v-model:value="rejectReason"
             :auto-size="{ minRows: 3, maxRows: 6 }"
             :placeholder="$t('system.user.rejectionPlaceholder')"
+            @input="clearApprovalWarning"
           />
         </FormItem>
       </Form>
@@ -3145,6 +3192,11 @@ onMounted(loadInitialData);
   background: hsl(var(--card)) !important;
 }
 
+:deep(.ant-table-cell) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 :deep(.system-table-row-striped > .ant-table-cell-fix-right) {
   background: hsl(var(--card)) !important;
 }
@@ -3152,10 +3204,6 @@ onMounted(loadInitialData);
 :deep(.system-resource-rule-tag) {
   overflow-wrap: anywhere;
   white-space: normal;
-}
-
-.system-multi-filter {
-  width: 280px;
 }
 
 :deep(.system-multi-filter .ant-select-selection-overflow) {
@@ -3176,5 +3224,21 @@ onMounted(loadInitialData);
 .system-multiline-filter-tag-content {
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 639px) {
+  :deep(.ant-form-inline .ant-form-item),
+  :deep(.ant-form-inline .ant-form-item-row) {
+    width: 100%;
+  }
+
+  :deep(.ant-form-inline .ant-form-item) {
+    margin-inline-end: 0;
+  }
+
+  :deep(.ant-form-inline .ant-form-item-control) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 </style>

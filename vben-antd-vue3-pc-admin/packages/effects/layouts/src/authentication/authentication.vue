@@ -96,8 +96,12 @@ const logoSrc = computed(() => {
             class="mr-2"
             width="42"
           />
-          <p v-if="appName" class="m-0 text-xl font-medium">
-            {{ appName }}
+          <p v-if="appName" class="m-0 whitespace-nowrap font-medium">
+            <span class="text-base min-[360px]:hidden">Go Cinch</span>
+            <span class="hidden text-lg min-[360px]:inline lg:hidden">
+              Go Cinch Admin
+            </span>
+            <span class="hidden text-xl lg:inline">{{ appName }}</span>
           </p>
         </div>
       </div>

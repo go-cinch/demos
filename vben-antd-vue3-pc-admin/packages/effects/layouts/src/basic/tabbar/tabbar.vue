@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { useContentMaximize, useTabs } from '@vben/hooks';
+import { $t } from '@vben/locales';
 import { preferences } from '@vben/preferences';
 import { useTabbarStore } from '@vben/stores';
 
@@ -46,6 +47,12 @@ const menus = computed(() => {
   });
 });
 
+const tabActionTitles = computed(() => ({
+  close: $t('preferences.tabbar.contextMenu.close'),
+  pin: $t('preferences.tabbar.contextMenu.pin'),
+  unpin: $t('preferences.tabbar.contextMenu.unpin'),
+}));
+
 // 刷新后如果不保持tab状态，关闭其他tab
 if (!preferences.tabbar.persist) {
   tabbarStore.closeOtherTabs(route);
@@ -56,13 +63,16 @@ if (!preferences.tabbar.persist) {
   <TabsView
     :active="currentActive"
     :class="theme"
+    :close-title="tabActionTitles.close"
     :context-menus="createContextMenus"
     :draggable="preferences.tabbar.draggable"
+    :middle-click-to-close="preferences.tabbar.middleClickToClose"
+    :pin-title="tabActionTitles.pin"
     :show-icon="showIcon"
     :style-type="preferences.tabbar.styleType"
     :tabs="currentTabs"
+    :unpin-title="tabActionTitles.unpin"
     :wheelable="preferences.tabbar.wheelable"
-    :middle-click-to-close="preferences.tabbar.middleClickToClose"
     @close="handleClose"
     @pin="pinTab"
     @sort-tabs="tabbarStore.sortTabs"

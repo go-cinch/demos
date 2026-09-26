@@ -3,29 +3,27 @@ import { describe, expect, it } from 'vitest';
 import { isValidUsername, isValidUserPassword } from './user-validation';
 
 describe('user management validation', () => {
-  it('requires usernames to start with an ASCII letter and use allowed characters', () => {
-    for (const username of ['abcde', 'User_01', 'user-name']) {
-      expect(isValidUsername(username)).toBe(true);
-    }
+  it('accepts every non-blank trimmed username', () => {
     for (const username of [
-      'abcd',
+      'a',
       '用户名称一',
       '1user',
-      '-user',
-      '_user',
       'user.name',
-      'user name',
-      ' abcde ',
-      `a${'b'.repeat(50)}`,
+      ' user name ',
+      `a${'b'.repeat(100)}`,
     ]) {
+      expect(isValidUsername(username)).toBe(true);
+    }
+    for (const username of ['', '   ', '\t\n']) {
       expect(isValidUsername(username)).toBe(false);
     }
   });
 
-  it('validates passwords by UTF-8 byte length', () => {
-    expect(isValidUserPassword('12345')).toBe(false);
-    expect(isValidUserPassword('123456')).toBe(true);
+  it('accepts every non-blank trimmed password', () => {
+    expect(isValidUserPassword('1')).toBe(true);
     expect(isValidUserPassword('密码')).toBe(true);
-    expect(isValidUserPassword('a'.repeat(73))).toBe(false);
+    expect(isValidUserPassword(' a '.repeat(100))).toBe(true);
+    expect(isValidUserPassword('')).toBe(false);
+    expect(isValidUserPassword('   ')).toBe(false);
   });
 });

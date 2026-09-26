@@ -16,9 +16,12 @@ defineOptions({
   inheritAttrs: false,
 });
 const props = withDefaults(defineProps<Props>(), {
+  closeTitle: 'Close tab',
   contentClass: 'vben-tabs-content',
   contextMenus: () => [],
+  pinTitle: 'Pin tab',
   tabs: () => [],
+  unpinTitle: 'Unpin tab',
 });
 
 const emit = defineEmits<{
@@ -116,24 +119,24 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
               <!-- pin-icon -->
               <Pin
                 v-show="!tab.affixTab"
-                aria-label="Pin tab"
+                :aria-label="pinTitle"
                 class="pointer-events-none mr-0 h-3.5 w-0 shrink-0 scale-75 cursor-pointer rounded-full opacity-0 transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:mr-0.5 group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
-                title="Pin tab"
+                :title="pinTitle"
                 @click.stop="() => emit('pin', tab)"
               />
               <!-- close-icon -->
               <X
                 v-show="!tab.affixTab && tabsView.length > 1 && tab.closable"
-                aria-label="Close tab"
+                :aria-label="closeTitle"
                 class="size-3 cursor-pointer rounded-full stroke-accent-foreground/80 transition-all group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
-                title="Close tab"
+                :title="closeTitle"
                 @click.stop="() => emit('close', tab.key)"
               />
               <PinOff
                 v-show="tab.affixTab"
-                aria-label="Unpin tab"
+                :aria-label="unpinTitle"
                 class="pointer-events-none mt-px h-3.5 w-0 shrink-0 scale-75 cursor-pointer rounded-full opacity-0 transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
-                title="Unpin tab"
+                :title="unpinTitle"
                 @click.stop="() => emit('unpin', tab)"
               />
             </div>

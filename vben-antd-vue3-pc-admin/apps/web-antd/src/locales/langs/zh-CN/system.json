@@ -49,6 +49,7 @@
     "lockUntil": "至指定时间",
     "lockType": "锁定方式",
     "lockedUntil": "锁定截止时间",
+    "untilPrefix": "截至",
     "review": "注册审核",
     "decision": "审核结果",
     "reason": "原因",
@@ -137,10 +138,8 @@
     "updated": "修改成功",
     "created": "创建成功",
     "deleted": "删除成功",
-    "rejectionRequired": "请输入驳回原因",
     "approved": "注册审核已通过",
     "rejected": "注册申请已驳回",
-    "futureLock": "请选择未来的锁定截止时间",
     "locked": "用户锁定成功",
     "unlocked": "用户解锁成功",
     "passwordUnlocked": "自助修改密码已解锁"
@@ -155,7 +154,9 @@
   "validation": {
     "required": "请输入{field}",
     "dictionaryKey": "请使用大写字母、数字，并以下划线分隔各段",
-    "json": "请输入有效的 JSON"
+    "json": "请输入有效的 JSON",
+    "rejectionRequired": "请输入驳回原因",
+    "futureLock": "请选择未来的锁定截止时间"
   },
   "menu": {
     "system": "系统管理",

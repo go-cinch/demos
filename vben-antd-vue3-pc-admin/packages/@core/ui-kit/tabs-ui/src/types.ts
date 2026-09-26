@@ -10,6 +10,8 @@ export type TabsEmits = {
 
 export interface TabsProps {
   active?: string;
+  /** Localized accessible label for the close action. */
+  closeTitle?: string;
   /**
    * @zh_CN content class
    * @default tabs-chrome
@@ -39,6 +41,9 @@ export interface TabsProps {
    */
   middleClickToClose?: boolean;
 
+  /** Localized accessible label for the pin action. */
+  pinTitle?: string;
+
   /**
    * @zh_CN tab最小宽度
    * 仅限 tabs-chrome
@@ -58,6 +63,9 @@ export interface TabsProps {
    * @zh_CN 选项卡数据
    */
   tabs?: TabDefinition[];
+
+  /** Localized accessible label for the unpin action. */
+  unpinTitle?: string;
 
   /**
    * @zh_CN 是否响应滚轮事件

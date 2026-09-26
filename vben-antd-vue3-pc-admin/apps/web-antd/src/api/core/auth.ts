@@ -162,7 +162,7 @@ async function encryptCredential(
  * 登录
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  if (!data.username || !data.password) {
+  if (!data.username?.trim() || !data.password?.trim()) {
     throw new TypeError($t('app.validation.credentialsRequired'));
   }
   const encrypted = await encryptCredential('login', {
@@ -231,7 +231,7 @@ export function getLoginFailure(
 export async function createRegistrationCredentialApi(
   data: AuthApi.RegisterParams,
 ) {
-  if (!data.username || !data.password) {
+  if (!data.username?.trim() || !data.password?.trim()) {
     throw new TypeError($t('app.validation.credentialsRequired'));
   }
   return encryptCredential('register', {
@@ -247,7 +247,7 @@ export async function createRegistrationCredentialApi(
 export async function createRegistrationPasswordCredentialApi(
   password: string,
 ) {
-  if (!password) {
+  if (!password.trim()) {
     throw new TypeError($t('app.validation.passwordRequired'));
   }
   return encryptCredential('register', { password });
@@ -284,7 +284,7 @@ export async function verifySliderCaptchaApi(
  * 修改当前登录账号的密码。
  */
 export async function changePasswordApi(data: AuthApi.ChangePasswordParams) {
-  if (!data.oldPassword || !data.newPassword) {
+  if (!data.oldPassword.trim() || !data.newPassword.trim()) {
     throw new TypeError($t('app.validation.passwordChangeRequired'));
   }
   const encrypted = await encryptCredential('password_change', {
@@ -366,7 +366,9 @@ export async function logoutApi(refreshToken: string) {
 
 /** Complete the required first-login password reset and replace both tokens. */
 export async function resetPasswordApi(newPassword: string) {
-  if (!newPassword) throw new TypeError($t('app.validation.passwordRequired'));
+  if (!newPassword.trim()) {
+    throw new TypeError($t('app.validation.passwordRequired'));
+  }
   const encrypted = await encryptCredential('password_reset', {
     new_password: newPassword,
   });
