@@ -15,7 +15,7 @@ on:
         options:
           - all
           - auth
-          - vben-antd-vue3-pc-admin
+          - vben-antd-vue3
 
 permissions:
   contents: read
@@ -53,8 +53,8 @@ jobs:
           projects = [
               {"name": "auth", "dockerfile": "auth/Dockerfile"},
               {
-                  "name": "vben-antd-vue3-pc-admin",
-                  "dockerfile": "vben-antd-vue3-pc-admin/scripts/deploy/Dockerfile",
+                  "name": "vben-antd-vue3",
+                  "dockerfile": "vben-antd-vue3/scripts/deploy/Dockerfile",
               },
           ]
           with open(os.environ["GITHUB_EVENT_PATH"]) as source:
@@ -270,8 +270,8 @@ jobs:
 
           manifests = {
               "auth": Path("go-app/auth/overlays/single/kustomization.yaml"),
-              "vben-antd-vue3-pc-admin": Path(
-                  "go-app/vben-antd-vue3-pc-admin/overlays/single/kustomization.yaml"
+              "vben-antd-vue3": Path(
+                  "go-app/vben-antd-vue3/overlays/single/kustomization.yaml"
               ),
           }
           digest_files = sorted(Path(os.environ["DIGEST_DIR"]).glob("*.digest"))
