@@ -30,7 +30,7 @@ export interface UserInfoWithPermissions extends UserInfo {
 const menuHomePaths: [menu: string, path: string][] = [
   ['/dashboard/overview', '/dashboard/overview'],
   ['/system/user', '/system/user'],
-  ['/system/group', '/system/user-group'],
+  ['/system/user-group', '/system/user-group'],
   ['/system/role', '/system/role'],
   ['/system/action', '/system/action'],
   ['/system/whitelist', '/system/whitelist'],

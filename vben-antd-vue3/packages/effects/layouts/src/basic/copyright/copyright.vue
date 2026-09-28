@@ -12,9 +12,9 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
-  companyName: 'go cinch',
+  companyName: 'go-cinch',
   companySiteLink: 'https://github.com/go-cinch/demos',
-  date: '2024',
+  date: String(new Date().getFullYear()),
   icp: '',
   icpLink: '',
 });

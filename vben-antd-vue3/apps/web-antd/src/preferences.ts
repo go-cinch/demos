@@ -21,7 +21,7 @@ export const applicationBrandingPreferences = {
     name: import.meta.env.VITE_APP_TITLE,
   },
   copyright: {
-    companyName: 'go cinch',
+    companyName: 'go-cinch',
     companySiteLink: 'https://github.com/go-cinch/demos',
     date: String(new Date().getFullYear()),
   },

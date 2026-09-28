@@ -6,7 +6,7 @@ const routes: RouteRecordRaw[] = [
       authority: [
         '*',
         '/system/user',
-        '/system/group',
+        '/system/user-group',
         '/system/role',
         '/system/action',
         '/system/whitelist',
@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
       {
         component: () => import('#/views/system/user-group/index.vue'),
         meta: {
-          authority: ['*', '/system/group'],
+          authority: ['*', '/system/user-group'],
           icon: 'lucide:users-round',
           title: 'system.menu.groups',
         },

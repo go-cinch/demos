@@ -117,13 +117,16 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
               class="absolute top-1/2 right-1.5 z-3 flex items-center overflow-hidden translate-y-[-50%]"
             >
               <!-- pin-icon -->
-              <Pin
+              <button
                 v-show="!tab.affixTab"
                 :aria-label="pinTitle"
-                class="pointer-events-none mr-0 h-3.5 w-0 shrink-0 scale-75 cursor-pointer rounded-full opacity-0 transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:mr-0.5 group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
+                class="mr-0 flex h-3.5 w-0 shrink-0 scale-75 cursor-pointer items-center justify-center overflow-hidden rounded-full border-0 bg-transparent p-0 opacity-0 transition-all duration-200 ease-out group-hover:mr-0.5 group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 focus-visible:mr-0.5 focus-visible:w-3.5 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none group-[.is-active]:text-primary hover:bg-accent hover:text-accent-foreground group-[.is-active]:dark:text-accent-foreground"
                 :title="pinTitle"
+                type="button"
                 @click.stop="() => emit('pin', tab)"
-              />
+              >
+                <Pin aria-hidden="true" class="size-3.5 shrink-0" />
+              </button>
               <!-- close-icon -->
               <X
                 v-show="!tab.affixTab && tabsView.length > 1 && tab.closable"
@@ -132,19 +135,24 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
                 :title="closeTitle"
                 @click.stop="() => emit('close', tab.key)"
               />
-              <PinOff
+              <button
                 v-show="tab.affixTab"
                 :aria-label="unpinTitle"
-                class="pointer-events-none mt-px h-3.5 w-0 shrink-0 scale-75 cursor-pointer rounded-full opacity-0 transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
+                class="mt-px flex h-3.5 w-0 shrink-0 scale-75 cursor-pointer items-center justify-center overflow-hidden rounded-full border-0 bg-transparent p-0 opacity-0 transition-all duration-200 ease-out group-hover:w-3.5 group-hover:scale-100 group-hover:opacity-100 focus-visible:w-3.5 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none group-[.is-active]:text-primary hover:bg-accent hover:text-accent-foreground group-[.is-active]:dark:text-accent-foreground"
                 :title="unpinTitle"
+                type="button"
                 @click.stop="() => emit('unpin', tab)"
-              />
+              >
+                <PinOff aria-hidden="true" class="size-3.5 shrink-0" />
+              </button>
             </div>
 
             <!-- tab-item-main -->
             <div
               :class="
-                tab.affixTab ? 'pr-0 group-hover:pr-3' : 'pr-3 group-hover:pr-7'
+                tab.affixTab
+                  ? 'pr-0 group-hover:pr-3 group-focus-within:pr-3'
+                  : 'pr-3 group-hover:pr-7 group-focus-within:pr-7'
               "
               class="mx-3 mr-4 flex h-full items-center overflow-hidden rounded-tl-[5px] rounded-tr-[5px] text-accent-foreground transition-all duration-300 group-[.is-active]:text-primary group-[.is-active]:dark:text-accent-foreground"
             >

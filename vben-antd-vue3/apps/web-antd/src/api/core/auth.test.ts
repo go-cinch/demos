@@ -78,7 +78,7 @@ describe('changePasswordApi', () => {
     encryption.plaintext = undefined;
   });
 
-  it('encrypts the one-time slider proof into login credentials', async () => {
+  it('trims the username but preserves the password in login credentials', async () => {
     vi.mocked(authPublicRequestClient.post).mockResolvedValue({
       challenge_id: 'challenge-id',
       key_id: 'login-key',
@@ -86,14 +86,15 @@ describe('changePasswordApi', () => {
     });
 
     await loginApi({
-      password: 'password',
+      password: '  password  ',
       slider_proof: 'slider-proof',
-      username: 'readonly',
+      username: '  readonly  ',
     });
 
     expect(JSON.parse(new TextDecoder().decode(encryption.plaintext!))).toEqual(
       expect.objectContaining({
         challenge_id: 'challenge-id',
+        password: '  password  ',
         slider_proof: 'slider-proof',
         username: 'readonly',
       }),

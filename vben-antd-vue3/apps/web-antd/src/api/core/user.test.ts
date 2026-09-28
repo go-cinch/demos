@@ -54,4 +54,20 @@ describe('getUserInfoApi', () => {
 
     expect(result.homePath).toBe('/system/dictionary');
   });
+
+  it('uses the canonical user-group menu URI as the user-group home page', async () => {
+    vi.mocked(authRequestClient.get).mockResolvedValue({
+      code: 'ABC12345',
+      id: 1,
+      permission: {
+        btns: ['system.user.group.read'],
+        menus: ['/system/user-group'],
+      },
+      username: 'operator',
+    });
+
+    const result = await getUserInfoApi();
+
+    expect(result.homePath).toBe('/system/user-group');
+  });
 });

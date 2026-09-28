@@ -162,15 +162,17 @@ async function encryptCredential(
  * 登录
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  if (!data.username?.trim() || !data.password?.trim()) {
+  const username = data.username?.trim();
+  const password = data.password;
+  if (!username || !password?.trim()) {
     throw new TypeError($t('app.validation.credentialsRequired'));
   }
   const encrypted = await encryptCredential('login', {
     captcha_id: data.captcha_id,
     captcha_points: data.captcha_points,
-    password: data.password,
+    password,
     remember_me: data.remember_me === true,
-    username: data.username,
+    username,
     slider_proof: data.slider_proof,
   });
   return authPublicRequestClient.post<AuthApi.LoginResult>(

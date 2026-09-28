@@ -208,7 +208,7 @@ const trendItems = computed<WorkbenchTrendItem[]>(() => [
     avatar: 'svg:avatar-4',
     content: $t('page.dashboard.workspacePage.trends.items.publishedVite'),
     date: $t('page.dashboard.workspacePage.trends.dates.twoDaysAgo'),
-    title: 'go cinch',
+    title: 'go-cinch',
   },
   {
     avatar: 'svg:avatar-1',
@@ -238,7 +238,7 @@ const trendItems = computed<WorkbenchTrendItem[]>(() => [
     avatar: 'svg:avatar-4',
     content: $t('page.dashboard.workspacePage.trends.items.publishedAdminVben'),
     date: '2021-03-01 20:00',
-    title: 'go cinch',
+    title: 'go-cinch',
   },
 ]);
 

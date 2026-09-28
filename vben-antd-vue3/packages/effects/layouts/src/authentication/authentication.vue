@@ -71,7 +71,7 @@ const logoSrc = computed(() => {
       <template v-if="copyright" #copyright>
         <slot name="copyright">
           <Copyright
-            v-if="preferences.copyright.enable"
+            v-if="preferences.footer.enable && preferences.copyright.enable"
             v-bind="preferences.copyright"
           />
         </slot>
@@ -149,7 +149,7 @@ const logoSrc = computed(() => {
         <template v-if="copyright" #copyright>
           <slot name="copyright">
             <Copyright
-              v-if="preferences.copyright.enable"
+              v-if="preferences.footer.enable && preferences.copyright.enable"
               v-bind="preferences.copyright"
             />
           </slot>
@@ -166,7 +166,7 @@ const logoSrc = computed(() => {
       <template v-if="copyright" #copyright>
         <slot name="copyright">
           <Copyright
-            v-if="preferences.copyright.enable"
+            v-if="preferences.footer.enable && preferences.copyright.enable"
             v-bind="preferences.copyright"
           />
         </slot>
