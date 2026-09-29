@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f3f6fa" />
+    <meta name="description" content="Go Cinch · 月白移动管理端" />
+    <title>Go Cinch · TDesign Mobile</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="%BASE_URL%go-cinch.svg" />
+    <script>
+      (() => {
+        let dark = false;
+        let accent = 'moon';
+        try {
+          const stored = JSON.parse(localStorage.getItem('cinch-mobile-preferences') || '{}');
+          dark = stored.dark === true;
+          if (['moon', 'green', 'violet'].includes(stored.accent)) accent = stored.accent;
+        } catch {
+          /* Use application defaults when storage is unavailable or invalid. */
+        }
+        const theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.accent = accent;
+        document.documentElement.setAttribute('theme-mode', theme);
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#182330' : '#f3f6fa';
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app-bootstrap-loading" role="status" aria-label="Loading">
+      <span class="bootstrap-loading-orb" aria-hidden="true"></span>
+    </div>
+    <script>
+      // Never leave the static startup cover behind when a bundle or request stalls.
+      window.setTimeout(() => document.querySelector('#app-bootstrap-loading')?.remove(), 5000);
+    </script>
+    <style>
+      #app-bootstrap-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        display: grid;
+        place-items: center;
+        background: #f3f6fa;
+        color: #45628b;
+        --bootstrap-orb-shadow: rgba(69, 98, 139, 0.3);
+      }
+      :root[data-accent='green'] #app-bootstrap-loading {
+        color: #49756a;
+        --bootstrap-orb-shadow: rgba(73, 117, 106, 0.3);
+      }
+      :root[data-accent='violet'] #app-bootstrap-loading {
+        color: #77658d;
+        --bootstrap-orb-shadow: rgba(119, 101, 141, 0.3);
+      }
+      .bootstrap-loading-orb {
+        position: relative;
+        width: 12px;
+        height: 12px;
+        background: currentColor;
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 var(--bootstrap-orb-shadow);
+        animation: bootstrap-orb-breathe 1.6s ease-in-out infinite;
+      }
+      .bootstrap-loading-orb::after {
+        position: absolute;
+        inset: -8px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        opacity: 0.18;
+        content: '';
+      }
+      @keyframes bootstrap-orb-breathe {
+        0%,
+        100% {
+          transform: scale(0.88);
+          box-shadow: 0 0 0 0 var(--bootstrap-orb-shadow);
+          opacity: 0.72;
+        }
+        50% {
+          transform: scale(1);
+          box-shadow: 0 0 0 12px rgba(69, 98, 139, 0);
+          opacity: 1;
+        }
+      }
+      :root[data-theme='dark'] #app-bootstrap-loading {
+        background: #182330;
+        color: #b3c9e9;
+        --bootstrap-orb-shadow: rgba(179, 201, 233, 0.3);
+      }
+      :root[data-theme='dark'][data-accent='green'] #app-bootstrap-loading {
+        color: #afd9c9;
+        --bootstrap-orb-shadow: rgba(175, 217, 201, 0.3);
+      }
+      :root[data-theme='dark'][data-accent='violet'] #app-bootstrap-loading {
+        color: #cdbbdf;
+        --bootstrap-orb-shadow: rgba(205, 187, 223, 0.3);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bootstrap-loading-orb {
+          animation: none;
+          opacity: 0.85;
+        }
+      }
+    </style>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
