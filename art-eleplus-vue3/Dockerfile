@@ -6,6 +6,7 @@ FROM node:${NODE_VERSION} AS builder
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV CI=true
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 RUN corepack enable
 
