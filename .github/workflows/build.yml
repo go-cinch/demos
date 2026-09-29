@@ -106,9 +106,12 @@ jobs:
                       "git", "diff", "--no-renames", "--name-only", "-z",
                       before, "HEAD", "--",
                   ]).decode().split("\0")
+                  workflow_changed = ".github/workflows/build.yml" in changed
                   selected = [
                       p for p in projects
-                      if any(path.startswith(p["name"] + "/") for path in changed)
+                      if workflow_changed or any(
+                          path.startswith(p["name"] + "/") for path in changed
+                      )
                   ]
 
           matrix = json.dumps({"include": selected}, separators=(",", ":"))
