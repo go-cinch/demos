@@ -15,13 +15,15 @@ func (a *Application) generatedModules() ([]modules.HTTPModule, []modules.GRPCMo
 	httpModules = append(httpModules, module1)
 	module2 := a.dictionaryModule
 	httpModules = append(httpModules, module2)
-	module3 := a.roleModule
+	module3 := a.msgModule
 	httpModules = append(httpModules, module3)
-	module4 := a.userModule
+	module4 := a.roleModule
 	httpModules = append(httpModules, module4)
-	module5 := a.groupModule
+	module5 := a.userModule
 	httpModules = append(httpModules, module5)
-	module6 := a.whitelistModule
+	module6 := a.groupModule
 	httpModules = append(httpModules, module6)
+	module7 := a.whitelistModule
+	httpModules = append(httpModules, module7)
 	return httpModules, grpcModules
 }

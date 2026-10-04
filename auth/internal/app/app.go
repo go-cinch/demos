@@ -17,6 +17,7 @@ import (
 	actionmodule "auth/internal/modules/action"
 	authmodule "auth/internal/modules/auth"
 	dictionarymodule "auth/internal/modules/dictionary"
+	msgmodule "auth/internal/modules/msg"
 	rolemodule "auth/internal/modules/role"
 	usermodule "auth/internal/modules/user"
 	groupmodule "auth/internal/modules/usergroup"
@@ -34,6 +35,7 @@ import (
 )
 
 type Application struct {
+	msgModule  *msgmodule.Module
 	pagination pagination.Limits
 
 	authenticator    *authn.Manager
@@ -251,6 +253,7 @@ func (a *Application) wireBusinessModules() {
 	a.groupModule = groupmodule.New(a.db, a.pagination, a.actionModule, a.userModule)
 	a.authModule = authmodule.New(a.db, a.authenticator, a.credentials, a.loginSessions, a.loginCaptcha, a.sliderCaptcha, a.passwordGuard, a.authSwitches)
 	a.whitelistModule = whitelistmodule.New(a.db, a.pagination)
+	a.msgModule = msgmodule.New(a.db, a.pagination)
 }
 
 func SignalContext() (context.Context, context.CancelFunc) {

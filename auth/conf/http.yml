@@ -1,5 +1,5 @@
 http:
-  addr: ":8080"
+  addr: ":8081"
   timeout: 30s
   readHeaderTimeout: 5s
   idleTimeout: 2m
@@ -10,7 +10,7 @@ http:
         description: "prod"
       - url: "https://dev.example.com/api/auth"
         description: "dev"
-      - url: "http://127.0.0.1:8080"
+      - url: "http://127.0.0.1:8081"
         description: "local"
   profiler:
     enabled: false

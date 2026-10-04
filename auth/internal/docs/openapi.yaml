@@ -9,7 +9,7 @@ servers:
     description: "prod"
   - url: "https://dev.example.com/api/auth"
     description: "dev"
-  - url: "http://127.0.0.1:8080"
+  - url: "http://127.0.0.1:8081"
     description: "local"
 paths:
   /action:
@@ -1234,6 +1234,556 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /msg:
+    post:
+      summary: "POST /msg"
+      operationId: postMsg
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Idempotent
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: "Bad Request; invalid idempotency key"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "idempotency key has already been used"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error; internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/inbox:
+    get:
+      summary: "GET /msg/inbox"
+      operationId: getMsgInbox
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: p
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: p
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+        - name: read
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: s
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: s
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/inbox/read-all:
+    post:
+      summary: "POST /msg/inbox/read-all"
+      operationId: postMsgInboxReadAll
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Idempotent
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "Bad Request; invalid idempotency key"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "idempotency key has already been used"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error; internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/inbox/{id}:
+    delete:
+      summary: "DELETE /msg/inbox/{id}"
+      operationId: deleteMsgInboxId
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "invalid message fields; Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      summary: "GET /msg/inbox/{id}"
+      operationId: getMsgInboxId
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: "invalid message fields; Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      summary: "PATCH /msg/inbox/{id}"
+      operationId: patchMsgInboxId
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read]
+              properties:
+                read:
+                  type: boolean
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "invalid message fields; Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/recipient-option:
+    get:
+      summary: "GET /msg/recipient-option"
+      operationId: getMsgRecipientOption
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecipientOption"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/sent:
+    get:
+      summary: "GET /msg/sent"
+      operationId: getMsgSent
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: p
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: p
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+        - name: s
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: s
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/sent/{id}:
+    delete:
+      summary: "DELETE /msg/sent/{id}"
+      operationId: deleteMsgSentId
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "invalid message fields; Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      summary: "GET /msg/sent/{id}"
+      operationId: getMsgSentId
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: "invalid message fields; Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /msg/unread-count:
+    get:
+      summary: "GET /msg/unread-count"
+      operationId: getMsgUnreadCount
+      tags: ["Msg"]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+                    format: int64
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /role:
     get:
       summary: "GET /role"
@@ -2371,6 +2921,26 @@ components:
         word:
           type: string
           example: "user.read"
+    CreateInput:
+      type: object
+      required: [content, expired_at, recipient_ids, scope, title, type]
+      properties:
+        content:
+          type: string
+        expired_at:
+          type: integer
+          format: int64
+        recipient_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        scope:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
     CreateRoleInput:
       type: object
       required: [name, word]
@@ -2563,6 +3133,23 @@ components:
         t:
           type: integer
           format: int64
+    ListResult:
+      type: object
+      required: [items, p, s, t]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        p:
+          type: integer
+          format: int32
+        s:
+          type: integer
+          format: int32
+        t:
+          type: integer
+          format: int64
     ListRolesResult:
       type: object
       required: [items, p, s, t]
@@ -2664,6 +3251,44 @@ components:
           $ref: "#/components/schemas/PointCaptchaChallenge"
         captcha_required:
           type: boolean
+    Message:
+      type: object
+      required: [content, created_at, expired_at, id, published_at, read_at, scope, sender_id, title, type, updated_at]
+      properties:
+        content:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        expired_at:
+          type: integer
+          format: int64
+        id:
+          type: integer
+          format: int64
+        published_at:
+          type: integer
+          format: int64
+        read_at:
+          type: integer
+          format: int64
+        recipient_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        scope:
+          type: string
+        sender_id:
+          type: integer
+          format: int64
+        title:
+          type: string
+        type:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
     PasswordChangeFailureResponse:
       type: object
       required: [captcha_required, error_code, msg]
@@ -2737,6 +3362,15 @@ components:
         n:
           type: string
         use:
+          type: string
+    RecipientOption:
+      type: object
+      required: [id, username]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
           type: string
     RefreshPointCaptchaInput:
       type: object
