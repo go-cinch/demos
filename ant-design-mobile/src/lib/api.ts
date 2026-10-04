@@ -260,6 +260,7 @@ export function canMenu(path: string) {
   return (
     path === '/dashboard/overview' ||
     path === '/profile' ||
+    path === '/msg/inbox' ||
     !!session.user?.permission.menus.some(
       (value) =>
         value === '*' || value === (path === '/system/user-group' ? '/system/group' : path),
