@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
+      allowedHosts: ["preview-local.go-cinch.top"],
       host: "0.0.0.0",
       port: Number(env.VITE_PORT || 5173),
       proxy: proxyTarget

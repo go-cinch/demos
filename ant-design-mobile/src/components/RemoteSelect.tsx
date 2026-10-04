@@ -17,6 +17,7 @@ export default function RemoteSelect({
   resource,
   multiple = false,
   group = false,
+  msgRecipients = false,
   options,
   initial = [],
 }: {
@@ -27,6 +28,7 @@ export default function RemoteSelect({
   resource?: ResourceKind;
   multiple?: boolean;
   group?: boolean;
+  msgRecipients?: boolean;
   options?: Option[];
   initial?: Option[];
 }) {
@@ -58,7 +60,12 @@ export default function RemoteSelect({
         try {
           let data: Option[] = [];
           let more = false;
-          if (group) {
+          if (msgRecipients) {
+            const result = await request<{ id: number; username: string }[]>(
+              `/msg/recipient-option?q=${encodeURIComponent(query)}`,
+            );
+            data = result.map((u) => ({ value: u.id, label: u.username }));
+          } else if (group) {
             const result = await request<{ items: string[] }>(
               `/action/group?keyword=${encodeURIComponent(query)}`,
             );
@@ -89,7 +96,7 @@ export default function RemoteSelect({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, query, resource, group, options, retry, page]);
+  }, [open, query, resource, group, options, retry, page, msgRecipients]);
   function choose(v: string | number) {
     onChange(
       multiple ? (selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]) : v,
@@ -125,7 +132,7 @@ export default function RemoteSelect({
         title={label}
         top={
           <>
-            {(resource || group) && (
+            {(resource || group || msgRecipients) && (
               <SearchBar
                 value={query}
                 onChange={(value) => {

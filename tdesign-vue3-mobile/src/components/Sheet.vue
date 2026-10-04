@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { CSSProperties } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { sheetStack } from '../lib/sheets';
 import { t } from '../locales';
@@ -19,6 +20,27 @@ function updateContainer() {
   container.value = document.fullscreenElement || document.body;
 }
 onMounted(() => document.addEventListener('fullscreenchange', updateContainer));
+const bounds = shallowRef<CSSProperties>({});
+function updateBounds() {
+  const device = document.querySelector<HTMLElement>('.device');
+  if (device && innerWidth >= 901) {
+    const rect = device.getBoundingClientRect();
+    const border = device.clientLeft;
+    bounds.value = {
+      width: `${device.clientWidth}px`,
+      maxWidth: `${device.clientWidth}px`,
+      left: `${rect.left + border}px`,
+      right: 'auto',
+      bottom: `${Math.max(0, innerHeight - rect.bottom + border)}px`,
+      margin: 0,
+      maxHeight: `${device.clientHeight}px`,
+    };
+  } else bounds.value = {};
+}
+onMounted(() => {
+  window.addEventListener('resize', updateBounds);
+  window.visualViewport?.addEventListener('resize', updateBounds);
+});
 const identity = Symbol('sheet');
 const active = computed(() => sheetStack.at(-1) === identity);
 function removeLayer() {
@@ -60,6 +82,7 @@ watch(
   async (value) => {
     if (value) {
       updateContainer();
+      updateBounds();
       sheetStack.push(identity);
       previous = document.activeElement as HTMLElement;
       window.addEventListener('keydown', keyboard);
@@ -76,6 +99,8 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateBounds);
+  window.visualViewport?.removeEventListener('resize', updateBounds);
   document.removeEventListener('fullscreenchange', updateContainer);
   removeLayer();
   window.removeEventListener('keydown', keyboard);
@@ -95,10 +120,12 @@ onBeforeUnmount(() => {
     :z-index="2000 + Math.max(0, sheetStack.indexOf(identity)) * 20"
     :overlay-props="{ zIndex: 1999 + Math.max(0, sheetStack.indexOf(identity)) * 20 }"
     :close-on-overlay-click="false"
+    :style="bounds"
     class="cinch-popup"
     ><section
       ref="panel"
       class="sheet"
+      :style="{ maxHeight: bounds.maxHeight }"
       role="dialog"
       aria-modal="true"
       :aria-hidden="!active"

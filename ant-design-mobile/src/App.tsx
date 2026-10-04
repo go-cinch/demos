@@ -18,7 +18,9 @@ import { locale, t, toggleLocale } from './locales';
 import type { ResourceKind } from './lib/types';
 import { Icon, IconButton, Sheet, Copyright, TextField, Loading, NoData } from './components/UI';
 import PageSkeleton from './components/PageSkeleton';
+import MsgBell from './components/MsgBell';
 import Settings, { Choices } from './components/Settings';
+const MsgPage = lazy(() => import('./pages/MsgPage'));
 const Auth = lazy(() => import('./pages/AuthPage')),
   Overview = lazy(() => import('./pages/OverviewPage')),
   Management = lazy(() => import('./pages/ManagementPage')),
@@ -68,14 +70,9 @@ export default function App() {
     [authTools, setAuthTools] = useState(false),
     [panel, setPanel] = useState(''),
     [query, setQuery] = useState(''),
-    [tabs, setTabs] = useState([{ path: '/dashboard/overview', pinned: true }]),
     [lock, setLock] = useState<Lock | null>(readLock),
     [password, setPassword] = useState(''),
     [lockError, setLockError] = useState(''),
-    [desktopShell, setDesktopShell] = useState(
-      () => window.matchMedia('(min-width: 901px) and (min-height: 521px)').matches,
-    ),
-    [wideAuth, setWideAuth] = useState(() => window.matchMedia('(min-width: 901px)').matches),
     [initialLoadingExpired, setInitialLoadingExpired] = useState(performance.now() >= 5000);
   const content = useRef<HTMLDivElement>(null);
   function clearLock() {
@@ -85,25 +82,10 @@ export default function App() {
     } catch {}
   }
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 901px) and (min-height: 521px)');
-    const authMedia = window.matchMedia('(min-width: 901px)');
-    const update = () => {
-      setDesktopShell(media.matches);
-      setWideAuth(authMedia.matches);
-    };
-    media.addEventListener('change', update);
-    authMedia.addEventListener('change', update);
-    return () => {
-      media.removeEventListener('change', update);
-      authMedia.removeEventListener('change', update);
-    };
-  }, []);
-  useEffect(() => {
     void initializeSession();
     const ended = () => {
       clearLock();
       setPanel('');
-      setTabs([{ path: '/dashboard/overview', pinned: true }]);
       navigate('/auth/login', { replace: true });
     };
     const reset = () => navigate('/auth/reset-password', { replace: true });
@@ -138,12 +120,6 @@ export default function App() {
     setTools(false);
     setAuthTools(false);
     content.current?.scrollTo({ top: 0 });
-    if (!auth && canMenu(location.pathname))
-      setTabs((all) =>
-        all.some((x) => x.path === location.pathname)
-          ? all
-          : [...all, { path: location.pathname, pinned: false }],
-      );
   }, [location.pathname, location.search, session.ready, session.user?.id]);
   useEffect(() => {
     if (lock && session.user && lock.userId !== session.user.id) clearLock();
@@ -196,14 +172,6 @@ export default function App() {
     );
     setPanel('');
   };
-  const tabName = (path: string) =>
-    path === '/dashboard/overview'
-      ? t('home')
-      : path === '/dashboard/workspace'
-        ? t('page.dashboard.workspace')
-        : path === '/profile'
-          ? t('page.auth.profile')
-          : modules.value.find((m) => m.path === path)?.label || path;
   const searchEntries = [
     { path: '/dashboard/overview', label: t('home'), icon: 'home' },
     ...(canMenu('/dashboard/workspace')
@@ -238,6 +206,8 @@ export default function App() {
             element={<Management key={resource} resource={resource} />}
           />
         ))}
+        <Route path="/msg/inbox" element={<MsgPage key="inbox" />} />
+        <Route path="/system/msg" element={<MsgPage key="sent" />} />
         <Route path="/profile" element={<Profile />} />
         <Route
           path="*"
@@ -288,59 +258,51 @@ export default function App() {
         {t('home')}
       </a>
       {auth ? (
-        <>
-          <header className="auth-topbar">
-            {brand}
-            <div className="auth-tools-wrap">
-              <IconButton
-                name={authTools ? 'close' : 'ellipsis'}
-                label={t('more')}
-                expanded={authTools}
-                controls="auth-tools-menu"
-                onClick={() => setAuthTools((value) => !value)}
-              />
-              {authTools && (
-                <div id="auth-tools-menu" className="auth-tools-menu">
-                  <IconButton
-                    name="palette"
-                    label={t('color')}
-                    onClick={() => {
-                      setSettings(true);
-                      setAuthTools(false);
-                    }}
-                  />
-                  {wideAuth && (
+        <div className="studio auth-studio">
+          <div className="device">
+            <header className="auth-topbar">
+              {brand}
+              <div className="auth-tools-wrap">
+                <IconButton
+                  name={authTools ? 'close' : 'ellipsis'}
+                  label={t('more')}
+                  expanded={authTools}
+                  controls="auth-tools-menu"
+                  onClick={() => setAuthTools((value) => !value)}
+                />
+                {authTools && (
+                  <div id="auth-tools-menu" className="auth-tools-menu">
                     <IconButton
-                      name="layout"
-                      label={t('panel')}
+                      name="palette"
+                      label={t('color')}
                       onClick={() => {
-                        setPanel('loginPosition');
+                        setSettings(true);
                         setAuthTools(false);
                       }}
                     />
-                  )}
-                  <IconButton
-                    name="translate"
-                    label={t('language')}
-                    onClick={() => {
-                      toggleLocale();
-                      setAuthTools(false);
-                    }}
-                  />
-                  <IconButton
-                    name={p.dark ? 'sunny' : 'moon'}
-                    label={t('theme')}
-                    onClick={() => {
-                      p.dark = !p.dark;
-                      setAuthTools(false);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </header>
-          {routes}
-        </>
+                    <IconButton
+                      name="translate"
+                      label={t('language')}
+                      onClick={() => {
+                        toggleLocale();
+                        setAuthTools(false);
+                      }}
+                    />
+                    <IconButton
+                      name={p.dark ? 'sunny' : 'moon'}
+                      label={t('theme')}
+                      onClick={() => {
+                        p.dark = !p.dark;
+                        setAuthTools(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </header>
+            <div className="app-scroll auth-content">{routes}</div>
+          </div>
+        </div>
       ) : (
         <>
           <div
@@ -362,6 +324,7 @@ export default function App() {
                   </span>
                 </Link>
                 <div className="top-tools">
+                  <MsgBell />
                   <button
                     className="icon-button"
                     aria-label={t('more')}
@@ -402,8 +365,8 @@ export default function App() {
                     />
                     <IconButton
                       name="notification"
-                      label={t('messages')}
-                      onClick={() => setPanel('messages')}
+                      label={t('app.msg.inbox')}
+                      onClick={() => navigate('/msg/inbox')}
                     />
                     <IconButton
                       name="lock-on"
@@ -416,44 +379,6 @@ export default function App() {
                     />
                   </nav>
                 </>
-              )}
-              {desktopShell && (
-                <nav className="page-tabs" aria-label={t('openedPages')}>
-                  {tabs.map((tab) => (
-                    <div
-                      key={tab.path}
-                      role="group"
-                      aria-label={tabName(tab.path)}
-                      className={location.pathname === tab.path ? 'active' : ''}
-                    >
-                      <Link to={tab.path}>{tabName(tab.path)}</Link>
-                      <button
-                        className="tab-pin"
-                        aria-label={t(tab.pinned ? 'unpin' : 'pin')}
-                        onClick={() =>
-                          setTabs((all) =>
-                            all.map((x) => (x.path === tab.path ? { ...x, pinned: !x.pinned } : x)),
-                          )
-                        }
-                      >
-                        <Icon name="pin" size={12} />
-                      </button>
-                      {!tab.pinned && (
-                        <button
-                          aria-label={`${t('close')} ${tabName(tab.path)}`}
-                          onClick={() => {
-                            const next = tabs.filter((x) => x.path !== tab.path);
-                            setTabs(next);
-                            if (location.pathname === tab.path)
-                              navigate(next.at(-1)?.path || '/dashboard/overview');
-                          }}
-                        >
-                          <Icon name="close" size={12} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </nav>
               )}
               <main ref={content} id="main" className="app-scroll">
                 {routes}
@@ -568,15 +493,6 @@ export default function App() {
               ].map((value) => ({ value, label: value }))}
             />
           </>
-        ) : panel === 'messages' ? (
-          <>
-            <NoData text={t('messagesUnavailable')} />
-            <p className="notice">{t('messagesHint')}</p>
-            <Link className="menu-row" to="/dashboard/overview" onClick={() => setPanel('')}>
-              {t('home')}
-              <Icon name="chevron-right" />
-            </Link>
-          </>
         ) : panel === 'lock' ? (
           <form
             noValidate
@@ -599,7 +515,7 @@ export default function App() {
           </form>
         ) : null}
       </Sheet>
-      <Settings open={settings} onClose={() => setSettings(false)} showLoginPosition={wideAuth} />
+      <Settings open={settings} onClose={() => setSettings(false)} showLoginPosition={false} />
     </ConfigProvider>
   );
 }

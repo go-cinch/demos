@@ -217,3 +217,23 @@ it('cannot restore an ended session from a late refresh response', async () => {
   expect(api.session.accessToken).toBe('');
   expect(api.session.refreshToken).toBe('');
 });
+
+it('accepts canonical and retained legacy group menus without granting other resources', async () => {
+  for (const menu of ['/system/user-group', '/system/group']) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          id: 1,
+          username: 'operator',
+          code: 'ABC12345',
+          permission: { menus: [menu], btns: [] },
+        }),
+      ),
+    );
+    await api.loadUser();
+    expect(api.canMenu('/system/user-group')).toBe(true);
+    expect(api.canMenu('/system/msg')).toBe(false);
+    expect(api.canMenu('/system/user')).toBe(false);
+  }
+});

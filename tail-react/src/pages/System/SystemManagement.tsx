@@ -1,3 +1,4 @@
+import ResultToolbar from "./ResultToolbar";
 import { ApiError } from "@/api/client";
 import {
   createRecord,
@@ -15,13 +16,7 @@ import Switch from "@/components/form/switch/Switch";
 import Checkbox from "@/components/form/input/Checkbox";
 import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/context/AuthContext";
-import {
-  AspectIcon,
-  ChevronLeftIcon,
-  ListIcon,
-  RegenerateIcon,
-  SettingsAltIcon,
-} from "@/icons";
+import { ChevronLeftIcon } from "@/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -683,111 +678,18 @@ export default function SystemManagement() {
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                aria-label={t("common.refresh")}
-                className={`${buttonClass} border border-gray-300 dark:border-gray-700`}
-                onClick={() => void load()}
-                title={t("common.refresh")}
-              >
-                <RegenerateIcon className="size-4" />
-              </button>
-              <details className="relative">
-                <summary
-                  className={`${buttonClass} cursor-pointer list-none border border-gray-300 dark:border-gray-700`}
-                  aria-label={t("table.density")}
-                  role="button"
-                >
-                  <ListIcon className="size-4" />
-                </summary>
-                <div className="absolute end-0 z-40 mt-2 w-36 rounded-xl border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-700 dark:bg-gray-900">
-                  {(["compact", "default", "loose"] as const).map((density) => (
-                    <button
-                      className={`block w-full rounded-lg px-3 py-2 text-start text-sm ${tableDensity === density ? "bg-brand-50 text-brand-600 dark:bg-brand-500/15" : "hover:bg-gray-100 dark:hover:bg-white/5"}`}
-                      key={density}
-                      onClick={() => setTableDensity(density)}
-                      type="button"
-                    >
-                      {t(`table.${density}`)}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <button
-                aria-label={t(
-                  isFullscreen ? "table.exitFullscreen" : "table.fullscreen",
-                )}
-                className={`${buttonClass} border border-gray-300 dark:border-gray-700`}
-                onClick={() => setIsFullscreen((current) => !current)}
-                title={t(
-                  isFullscreen ? "table.exitFullscreen" : "table.fullscreen",
-                )}
-              >
-                <AspectIcon className="size-4" />
-              </button>
-              <details className="relative">
-                <summary
-                  className={`${buttonClass} cursor-pointer list-none border border-gray-300 dark:border-gray-700`}
-                  aria-label={t("table.columns")}
-                  role="button"
-                >
-                  <ListIcon className="size-4" />
-                </summary>
-                <div className="absolute end-0 z-40 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-700 dark:bg-gray-900">
-                  <p className="mb-2 text-sm font-semibold">
-                    {t("table.visibleColumns")}
-                  </p>
-                  {config.columns.map((column) => (
-                    <label
-                      className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5"
-                      key={column.key}
-                    >
-                      <Checkbox
-                        checked={visibleColumnKeys.includes(column.key)}
-                        onChange={() =>
-                          setVisibleColumnKeys((current) =>
-                            current.includes(column.key)
-                              ? current.filter((key) => key !== column.key)
-                              : [...current, column.key],
-                          )
-                        }
-                      />
-                      {t(column.label)}
-                    </label>
-                  ))}
-                </div>
-              </details>
-              <details className="relative">
-                <summary
-                  className={`${buttonClass} cursor-pointer list-none border border-gray-300 dark:border-gray-700`}
-                  aria-label={t("table.style")}
-                  role="button"
-                >
-                  <SettingsAltIcon className="size-4" />
-                </summary>
-                <div className="absolute end-0 z-40 mt-2 w-48 rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-700 dark:bg-gray-900">
-                  {(["bordered", "striped", "sticky"] as const).map(
-                    (setting) => (
-                      <label
-                        className="flex items-center justify-between gap-3 py-2 text-sm"
-                        key={setting}
-                      >
-                        {t(`table.${setting}`)}
-                        <Switch
-                          checked={tableSettings[setting]}
-                          onChange={(checked) =>
-                            setTableSettings((current) => ({
-                              ...current,
-                              [setting]: checked,
-                            }))
-                          }
-                        />
-                      </label>
-                    ),
-                  )}
-                </div>
-              </details>
-            </div>
+            <ResultToolbar
+              refresh={() => void load()}
+              density={tableDensity}
+              setDensity={setTableDensity}
+              fullscreen={isFullscreen}
+              toggleFullscreen={() => setIsFullscreen((v) => !v)}
+              columns={config.columns}
+              visible={visibleColumnKeys}
+              setVisible={setVisibleColumnKeys}
+              settings={tableSettings}
+              setSettings={setTableSettings}
+            />
           </div>
           {error && (
             <p className="m-5 rounded-lg bg-error-50 p-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
@@ -820,9 +722,7 @@ export default function SystemManagement() {
                         checked={allSelected}
                         onChange={(checked) =>
                           setSelected(
-                            checked
-                              ? records.map((record) => record.id)
-                              : [],
+                            checked ? records.map((record) => record.id) : [],
                           )
                         }
                       />
