@@ -24,6 +24,7 @@ const titleKeys: Record<
   | 'dictionaries'
   | 'whitelist'
   | 'profile'
+  | 'messages'
 > = {
   '/dashboard/overview': 'overview',
   '/dashboard/workspace': 'workspace',
@@ -33,7 +34,8 @@ const titleKeys: Record<
   '/system/action': 'actions',
   '/system/dictionary': 'dictionaries',
   '/system/whitelist': 'whitelist',
-  '/profile': 'profile'
+  '/profile': 'profile',
+  '/system/msg': 'messages'
 };
 
 function readTabs(): OpenTab[] {

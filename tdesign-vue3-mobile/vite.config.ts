@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue()],
     server: {
+      allowedHosts: ['preview-local.go-cinch.top'],
       port: Number(env.VITE_PORT || 5670),
       strictPort: true,
       proxy: env.AUTH_PROXY_TARGET

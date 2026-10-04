@@ -12,6 +12,7 @@ const Ecommerce = lazy(() => import("@/pages/Dashboard/Ecommerce"));
 const Workspace = lazy(() => import("@/pages/Dashboard/Workspace"));
 const NotFound = lazy(() => import("@/pages/OtherPage/NotFound"));
 const Profile = lazy(() => import("@/pages/Profile/Profile"));
+const MessagePage = lazy(() => import("@/pages/System/MessagePage"));
 const SystemManagement = lazy(() => import("@/pages/System/SystemManagement"));
 
 function RouteFallback() {
@@ -53,6 +54,8 @@ export default function App() {
               <Route path="/dashboard/overview" element={<Ecommerce />} />
               <Route path="/dashboard/workspace" element={<Workspace />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/msg/inbox" element={<MessagePage embedded />} />
+              <Route path="/system/msg" element={<MessagePage sent />} />
               <Route path="/system/:resource" element={<SystemManagement />} />
             </Route>
           </Route>

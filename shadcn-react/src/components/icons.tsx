@@ -1,4 +1,12 @@
 import {
+  IconRefresh,
+  IconList,
+  IconMinimize,
+  IconMaximize,
+  IconColumns3,
+  IconSettings2
+} from '@tabler/icons-react';
+import {
   IconAdjustmentsHorizontal,
   IconAlertCircle,
   IconAlertTriangle,
@@ -93,6 +101,12 @@ import {
 export type Icon = React.ComponentType<IconProps>;
 
 export const Icons = {
+  refresh: IconRefresh,
+  list: IconList,
+  minimize: IconMinimize,
+  maximize: IconMaximize,
+  columns: IconColumns3,
+  tableSettings: IconSettings2,
   // General
   alertCircle: IconAlertCircle,
   warning: IconAlertTriangle,

@@ -1,3 +1,4 @@
+import Avatar from "@/components/ui/avatar/Avatar";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { useAuth } from "@/context/AuthContext";
 import { LogoutIcon, UserCircleIcon } from "@/icons";
@@ -18,9 +19,7 @@ export default function UserDropdown() {
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
-        <span className="flex size-10 items-center justify-center rounded-full bg-brand-50 text-brand-500 dark:bg-brand-500/15">
-          <UserCircleIcon className="size-6" />
-        </span>
+        <Avatar alt={auth.user?.username || ""} size="medium" />
         <span className="hidden text-sm font-medium lg:block">
           {auth.user?.username}
         </span>

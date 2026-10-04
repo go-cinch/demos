@@ -258,7 +258,9 @@ export function canMenu(path: string) {
     path === '/profile' ||
     !!session.user?.permission.menus.some(
       (value) =>
-        value === '*' || value === (path === '/system/user-group' ? '/system/group' : path),
+        value === '*' ||
+        value === path ||
+        (path === '/system/user-group' && value === '/system/group'),
     )
   );
 }

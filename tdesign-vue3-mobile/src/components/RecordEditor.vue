@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { focusFirstInvalid, message, resolveMessage, type Feedback } from '../lib/form-feedback';
+import { message, resolveMessage, type Feedback } from '../lib/form-feedback';
 import { computed, reactive, ref, watch } from 'vue';
 import { useUnsavedForm } from '../lib/unsaved-form';
 import DiscardSheet from './DiscardSheet.vue';
@@ -11,6 +11,7 @@ import { dictionaryKeyValid, nonempty, trimCredential } from '../lib/validation'
 import { t } from '../locales';
 import Sheet from './Sheet.vue';
 import Field from './Field.vue';
+import EditorForm from './EditorForm.vue';
 import RemoteSelect from './RemoteSelect.vue';
 const props = defineProps<{ resource: ResourceKind; record: RecordData | null }>();
 const open = defineModel<boolean>({ default: false });
@@ -18,7 +19,7 @@ const emit = defineEmits<{ saved: [] }>();
 const config = computed(() => configs.value[props.resource]);
 const form = reactive<Record<string, any>>({});
 const errors = ref<Record<string, Feedback>>({});
-const formElement = ref<HTMLFormElement>();
+const formElement = ref<InstanceType<typeof EditorForm>>();
 const error = ref<Feedback>('');
 const sheet = ref<InstanceType<typeof Sheet>>();
 const busy = ref(false);
@@ -106,7 +107,7 @@ async function submit() {
     }
   }
   if (Object.keys(errors.value).length) {
-    await focusFirstInvalid(formElement.value);
+    await formElement.value?.focusInvalid();
     return;
   }
   let payload = normalized(form);
@@ -136,7 +137,7 @@ async function submit() {
     :title="
       t(record ? 'system.common.editTitle' : 'system.common.createTitle', { entity: config.entity })
     "
-    ><form ref="formElement" novalidate @submit.prevent="submit">
+    ><EditorForm ref="formElement" :busy="busy" @submit="submit">
       <Field
         v-for="field in config.fields"
         :key="field.key"
@@ -196,14 +197,16 @@ async function submit() {
         ><Field v-if="record" name="edit-department" :label="t('department')"
           ><t-input id="edit-department" v-model="form.department" name="department" /></Field
       ></template>
-      <p v-if="error" class="form-error" role="alert">{{ resolveMessage(error) }}</p>
-      <div class="sheet-actions">
+      <template #feedback
+        ><p v-if="error" class="form-error" role="alert">{{ resolveMessage(error) }}</p></template
+      >
+      <template #actions>
         <t-button :disabled="busy" @click="sheet?.requestClose()">{{ t('cancel') }}</t-button
         ><t-button theme="primary" type="submit" :loading="busy">{{
           record ? t('save') : t('system.common.create')
         }}</t-button>
-      </div>
-    </form></Sheet
+      </template>
+    </EditorForm></Sheet
   >
   <DiscardSheet v-model="discardOpen" @decide="decide" />
 </template>

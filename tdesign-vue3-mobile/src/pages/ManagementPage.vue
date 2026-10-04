@@ -9,6 +9,9 @@ import { configs } from '../lib/resource-config';
 import { dateTime, initials, labelFor, parseDateTime } from '../lib/format';
 import { t } from '../locales';
 import Icon from '../components/Icon.vue';
+import RecordPagination from '../components/RecordPagination.vue';
+import ResultToolbar from '../components/ResultToolbar.vue';
+import ResultOptions from '../components/ResultOptions.vue';
 import Sheet from '../components/Sheet.vue';
 import Field from '../components/Field.vue';
 import SearchField from '../components/SearchField.vue';
@@ -66,12 +69,6 @@ const record = ref<RecordData | null>(null);
 const detail = ref(false);
 const editor = ref(false);
 const options = ref('');
-const optionsOpen = computed({
-  get: () => !!options.value,
-  set: (v: boolean) => {
-    if (!v) options.value = '';
-  },
-});
 const density = ref('default');
 const visibleColumns = ref<string[]>([...defaultColumns[props.resource]]);
 const fixedColumn = computed(() => identityColumn[props.resource]);
@@ -92,12 +89,6 @@ const extraColumns = computed(() =>
     (column) => hasColumn(column.key) && !summaryColumns.value.includes(column.key),
   ),
 );
-function toggleColumn(key: string) {
-  if (key === fixedColumn.value) return;
-  visibleColumns.value = hasColumn(key)
-    ? visibleColumns.value.filter((item) => item !== key)
-    : [...visibleColumns.value, key];
-}
 const recordTitle = (item: RecordData) =>
   props.resource === 'whitelist' ? `#${item.id}` : labelFor(item);
 
@@ -340,7 +331,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
       <div class="results-region">
-        <div class="result-toolbar">
+        <ResultToolbar @refresh="load" @options="options = $event">
           <button
             v-if="can(resource, 'create')"
             class="create-button create-labeled"
@@ -349,24 +340,7 @@ onBeforeUnmount(() => {
           >
             <Icon name="add" :size="20" /><span>{{ t('system.common.create') }}</span>
           </button>
-          <div class="result-tools">
-            <button :aria-label="t('system.common.refresh')" @click="load">
-              <Icon name="refresh" :size="18" /></button
-            ><button
-              :aria-label="t('system.table.density')"
-              @click="options = 'system.table.density'"
-            >
-              <Icon name="view-list" :size="18" /></button
-            ><button
-              :aria-label="t('system.table.visibleColumns')"
-              @click="options = 'system.table.visibleColumns'"
-            >
-              <Icon name="view-column" :size="18" /></button
-            ><button :aria-label="t('system.table.style')" @click="options = 'system.table.style'">
-              <Icon name="table" :size="18" />
-            </button>
-          </div>
-        </div>
+        </ResultToolbar>
         <div class="selection-tools">
           <div class="selection-actions">
             <button
@@ -482,36 +456,21 @@ onBeforeUnmount(() => {
           </article>
           <t-empty v-if="!records.length" :description="t('noResults')" />
         </div>
-        <div class="pagination">
-          <button
-            class="pagination-button"
-            :disabled="page <= 1 || loading"
-            @click="
-              page--;
-              load();
-            "
-          >
-            <Icon name="chevron-left" :size="16" /><span>{{ t('previous') }}</span>
-          </button>
-          <div class="page-config">
-            <span>{{ t('page', { page }) }}</span>
-            <button :aria-label="t('pageSize')" @click="options = 'pageSize'">
-              <span>{{ size }} / {{ t('pageUnit') }}</span>
-              <Icon name="chevron-down" :size="13" />
-            </button>
-          </div>
-          <button
-            class="pagination-button"
-            :disabled="page * size >= total || loading"
-            @click="
-              page++;
-              load();
-            "
-          >
-            <span>{{ t('next') }}</span
-            ><Icon name="chevron-right" :size="16" />
-          </button>
-        </div></div></template
+        <RecordPagination
+          :page="page"
+          :size="size"
+          :total="total"
+          :loading="loading"
+          @previous="
+            page--;
+            load();
+          "
+          @next="
+            page++;
+            load();
+          "
+          @page-size="options = 'pageSize'"
+        /></div></template
     ><t-empty v-else :description="t('noAccess')" /><Sheet
       v-model="detail"
       :title="`${config.entity} · ${t('detail')}`"
@@ -618,47 +577,20 @@ onBeforeUnmount(() => {
           >
         </div>
       </form></Sheet
-    ><Sheet v-model="optionsOpen" :title="t(options)"
-      ><t-radio-group v-if="options === 'system.table.density'" v-model="density"
-        ><t-radio
-          v-for="value in ['compact', 'default', 'loose']"
-          :key="value"
-          :value="value"
-          :label="t(`system.table.${value}`)" /></t-radio-group
-      ><t-radio-group
-        v-else-if="options === 'pageSize'"
-        v-model="size"
-        @change="
-          page = 1;
-          load();
-        "
-        ><t-radio
-          v-for="value in [10, 20, 50, 100]"
-          :key="value"
-          :value="value"
-          :label="`${value} / ${t('pageUnit')}`" /></t-radio-group
-      ><template v-else-if="options === 'system.table.visibleColumns'"
-        ><p class="field-hint">{{ t('columnsHint') }}</p>
-        <div v-for="column in config.columns" :key="column.key" class="switch-row">
-          <span>{{ column.title }}</span
-          ><t-switch
-            :value="hasColumn(column.key)"
-            :aria-label="column.title"
-            :disabled="column.key === fixedColumn"
-            @change="toggleColumn(column.key)"
-          /></div></template
-      ><template v-else
-        ><div class="switch-row">
-          <span>{{ t('system.table.bordered') }}</span
-          ><t-switch v-model="bordered" :aria-label="t('system.table.bordered')" />
-        </div>
-        <div class="switch-row">
-          <span>{{ t('system.table.striped') }}</span
-          ><t-switch v-model="striped" :aria-label="t('system.table.striped')" />
-        </div>
-        <div class="switch-row">
-          <span>{{ t('system.table.sticky') }}</span
-          ><t-switch v-model="sticky" :aria-label="t('system.table.sticky')" /></div></template
-    ></Sheet>
+    ><ResultOptions
+      v-model:option="options"
+      v-model:density="density"
+      v-model:size="size"
+      v-model:visible="visibleColumns"
+      v-model:bordered="bordered"
+      v-model:striped="striped"
+      v-model:sticky="sticky"
+      :columns="config.columns"
+      :fixed-column="fixedColumn"
+      @size-change="
+        page = 1;
+        load();
+      "
+    />
   </section>
 </template>
