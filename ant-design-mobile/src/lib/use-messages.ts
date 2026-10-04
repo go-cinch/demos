@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { msgApi, msgChanged, type Msg, type MsgInput } from "./msg";
+import { useMessageFeed } from "./use-message-feed";
 const emptyDraft = (): MsgInput => ({
   title: "",
   content: "",
@@ -13,6 +14,7 @@ export function useMessages(
   readable: boolean,
   tr: (key: string) => string,
   parseExpiry: (value: string) => number,
+  infinite = false,
 ) {
   const [rows, setRows] = useState<Msg[]>([]),
     [total, setTotal] = useState(0),
@@ -21,7 +23,7 @@ export function useMessages(
   const [type, setType] = useState(""),
     [status, setStatus] = useState(""),
     [loading, setLoading] = useState(false),
-    [error, setError] = useState(""),
+    [error, setPageError] = useState(""),
     [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState(false),
     [selected, setSelected] = useState<Msg | null>(null),
@@ -40,7 +42,9 @@ export function useMessages(
     sending = useRef(false),
     key = useRef(""),
     lastPayload = useRef("");
-  const load = useCallback(async () => {
+  const feed = useMessageFeed(infinite && readable && !sent, type, size);
+  const setError = infinite ? feed.setError : setPageError;
+  const loadPage = useCallback(async () => {
     const current = ++generation.current;
     if (!readable) {
       setRows([]);
@@ -48,7 +52,7 @@ export function useMessages(
       return;
     }
     setLoading(true);
-    setError("");
+    setPageError("");
     try {
       const result = await msgApi.list(sent, {
         p: page,
@@ -65,13 +69,14 @@ export function useMessages(
       setTotal(result.t);
     } catch (e) {
       if (current === generation.current && mounted.current) {
-        setError((e as Error).message);
+        setPageError((e as Error).message);
         setRows([]);
       }
     } finally {
       if (current === generation.current && mounted.current) setLoading(false);
     }
   }, [sent, readable, page, size, type, status]);
+  const load = infinite ? feed.load : loadPage;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -272,8 +277,8 @@ export function useMessages(
     return () => window.removeEventListener("beforeunload", protect);
   }, [dirty]);
   return {
-    rows,
-    total,
+    rows: infinite ? feed.rows : rows,
+    total: infinite ? feed.total : total,
     page,
     setPage,
     size,
@@ -288,8 +293,13 @@ export function useMessages(
       setPage(1);
       setStatus(v);
     },
-    loading,
-    error,
+    loading: infinite ? feed.loading : loading,
+    error: infinite ? feed.error : error,
+    loadingMore: feed.loadingMore,
+    moreError: feed.moreError,
+    hasMore: feed.hasMore,
+    refreshing: feed.refreshing,
+    loadMore: feed.loadMore,
     busy,
     load,
     detail,

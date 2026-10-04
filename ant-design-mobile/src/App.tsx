@@ -157,7 +157,7 @@ export default function App() {
   )
     return <Navigate to="/dashboard/overview?denied=1" replace />;
   const active =
-    location.pathname === '/profile'
+    location.pathname === '/profile' || location.pathname === '/msg/inbox'
       ? 'mine'
       : location.pathname.startsWith('/system/')
         ? 'manage'

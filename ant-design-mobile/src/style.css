@@ -4227,3 +4227,18 @@ a:focus-visible,
     white-space: nowrap;
   }
 }
+
+/* Message management keeps its original table layout. */
+.message-record-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 2px;
+}
+.message-compose-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
