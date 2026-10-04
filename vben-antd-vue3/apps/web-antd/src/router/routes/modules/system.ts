@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
         '/system/action',
         '/system/whitelist',
         '/system/dictionary',
+        '/system/msg',
       ],
       icon: 'lucide:settings',
       order: 100,
@@ -19,6 +20,7 @@ const routes: RouteRecordRaw[] = [
     name: 'SystemManagement',
     path: '/system',
     children: [
+
       {
         component: () => import('#/views/system/user/index.vue'),
         meta: {
@@ -79,8 +81,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'lucide:list-checks',
           title: 'system.menu.whitelist',
         },
+
         name: 'SystemWhitelist',
         path: 'whitelist',
+      },
+      {
+        path: 'msg',
+        name: 'SystemMsg',
+        component: () => import('#/views/msg/index.vue'),
+        meta: { authority: ['*', '/system/msg'], icon: 'lucide:mail', title: 'msg.manage' },
       },
     ],
   },

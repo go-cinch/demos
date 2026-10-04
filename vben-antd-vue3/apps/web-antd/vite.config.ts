@@ -8,6 +8,7 @@ export default defineConfig(async ({ mode }) => {
     application: { nitroMock: false },
     vite: {
       server: {
+        allowedHosts: ['preview-local.go-cinch.top'],
         proxy: {
           ...(AUTH_PROXY_TARGET
             ? {

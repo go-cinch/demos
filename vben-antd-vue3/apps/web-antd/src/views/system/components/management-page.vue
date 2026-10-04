@@ -1,9 +1,5 @@
 <script lang="ts" setup>
-import type {
-  FormInstance,
-  TableColumnsType,
-  TablePaginationConfig,
-} from 'ant-design-vue';
+import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 import type { Dayjs } from 'dayjs';
 
 import type { Recordable } from '@vben/types';
@@ -37,24 +33,20 @@ import { useDebounceFn, useFullscreen, useTimeoutFn } from '@vueuse/core';
 import {
   AutoComplete,
   Button,
-  Card,
   Checkbox,
   DatePicker,
-  Form,
   FormItem,
   Input,
   InputPassword,
   message,
   Modal,
   Popconfirm,
-  Popover,
   Select,
   Space,
   Switch,
   Table,
   Tag,
   Textarea,
-  Tooltip,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
@@ -87,6 +79,10 @@ import {
 } from '#/api';
 import { $t } from '#/locales';
 
+import ManagementCard from './management-card.vue';
+import ManagementForm from './management-form.vue';
+import ManagementSearch from './management-search.vue';
+import ManagementToolbar from './management-toolbar.vue';
 import { buildChangedPayload, snapshotPayload } from './update-payload';
 import {
   isValidUsername,
@@ -915,7 +911,7 @@ const editingRecord = ref<null | SystemRecord>(null);
 const idempotencyKey = ref('');
 const formModel = reactive<FormModel>({});
 const initialEditorValues = ref<FormModel>({});
-const formRef = ref<FormInstance>();
+const formRef = ref<InstanceType<typeof ManagementForm>>();
 const approvalModalOpen = ref(false);
 const approvalSubmitting = ref(false);
 const approvalUser = ref<null | UserRecord>(null);
@@ -946,11 +942,6 @@ const searchExpanded = ref(false);
 const filtersDirty = ref(false);
 const tableContainerRef = ref<HTMLElement>();
 const tableSize = ref<TableSize>('middle');
-const densityOptions = computed<{ label: string; value: TableSize }[]>(() => [
-  { label: $t('system.table.compact'), value: 'small' },
-  { label: $t('system.table.default'), value: 'middle' },
-  { label: $t('system.table.loose'), value: 'large' },
-]);
 const tableSettings = reactive({
   bordered: true,
   sticky: true,
@@ -1344,10 +1335,6 @@ function tableRowClassName(_record: SystemRecord, index: number) {
   return tableSettings.striped && index % 2 === 1
     ? 'system-table-row-striped'
     : '';
-}
-
-function setTableSize(value: TableSize) {
-  tableSize.value = value;
 }
 
 function toggleAllColumns() {
@@ -2247,222 +2234,163 @@ onMounted(loadInitialData);
       class="flex h-full flex-col gap-4"
       :class="{ 'bg-background p-4': isFullscreen }"
     >
-      <Card class="system-section-card shrink-0">
-        <Form
-          :model="filters"
-          class="flex w-full flex-col items-stretch gap-4 lg:flex-row lg:items-start lg:justify-between"
-          layout="inline"
-          @finish="search"
-        >
-          <div class="flex flex-1 flex-wrap items-start gap-x-2 gap-y-3">
-            <FormItem
-              v-for="field in visibleFilters"
-              :key="field.key"
-              class="w-full sm:w-auto sm:shrink-0"
-              :label="field.label"
-              :name="field.key"
+      <ManagementCard class="system-section-card shrink-0">
+        <ManagementSearch :model="filters" @finish="search">
+          <FormItem
+            v-for="field in visibleFilters"
+            :key="field.key"
+            class="w-full sm:w-auto sm:shrink-0"
+            :label="field.label"
+            :name="field.key"
+          >
+            <Select
+              v-if="
+                field.type === 'status' || field.type === 'status-multi-select'
+              "
+              v-model:value="filters[field.key]"
+              allow-clear
+              :mode="
+                field.type === 'status-multi-select' ? 'multiple' : undefined
+              "
+              :placeholder="$t('system.common.select', { field: field.label })"
+              class="system-filter-control"
+              :data-testid="`system-filter-${field.key}`"
+              style="--filter-width: 280px"
+              :options="[
+                { label: $t('system.status.pending'), value: 0 },
+                { label: $t('system.status.active'), value: 1 },
+                { label: $t('system.status.locked'), value: 2 },
+              ]"
+              @blur="handleFilterBlur()"
+              @change="markFiltersChanged"
+              @focus="handleFilterFocus"
+            />
+            <Select
+              v-else-if="field.type === 'enabled'"
+              v-model:value="filters[field.key]"
+              allow-clear
+              :placeholder="$t('system.common.select', { field: field.label })"
+              class="system-filter-control"
+              :data-testid="`system-filter-${field.key}`"
+              style="--filter-width: 160px"
+              :options="[
+                { label: $t('system.enabled.yes'), value: 'true' },
+                { label: $t('system.enabled.no'), value: 'false' },
+              ]"
+              @blur="handleFilterBlur()"
+              @change="markFiltersChanged"
+              @focus="handleFilterFocus"
+            />
+            <Select
+              v-else-if="field.type === 'category'"
+              v-model:value="filters[field.key]"
+              allow-clear
+              :placeholder="$t('system.common.select', { field: field.label })"
+              class="system-filter-control"
+              :data-testid="`system-filter-${field.key}`"
+              style="--filter-width: 160px"
+              :options="[
+                { label: $t('system.category.permission'), value: 0 },
+                { label: $t('system.category.jwt'), value: 1 },
+              ]"
+              @blur="handleFilterBlur()"
+              @change="markFiltersChanged"
+              @focus="handleFilterFocus"
+            />
+            <Select
+              v-else-if="field.type === 'input-multi-select'"
+              :value="filters[field.key]"
+              allow-clear
+              class="system-multi-filter system-filter-control"
+              :data-testid="`system-filter-${field.key}`"
+              style="--filter-width: 280px"
+              :default-active-first-option="false"
+              :filter-option="false"
+              mode="tags"
+              :not-found-content="null"
+              :options="filterSuggestionOptions(field.key)"
+              :placeholder="$t('system.common.enter', { field: field.label })"
+              :show-action="['focus']"
+              :token-separators="[',']"
+              @blur="handleFilterBlur(field.key)"
+              @focus="handleFilterFocus"
+              @search="searchBackendFilterSuggestions(field.key, $event)"
+              @update:value="updateMultiFilterValue(field.key, $event)"
             >
-              <Select
-                v-if="
-                  field.type === 'status' ||
-                  field.type === 'status-multi-select'
-                "
-                v-model:value="filters[field.key]"
-                allow-clear
-                :mode="
-                  field.type === 'status-multi-select' ? 'multiple' : undefined
-                "
-                :placeholder="
-                  $t('system.common.select', { field: field.label })
-                "
-                class="w-full sm:w-[280px]"
-                :options="[
-                  { label: $t('system.status.pending'), value: 0 },
-                  { label: $t('system.status.active'), value: 1 },
-                  { label: $t('system.status.locked'), value: 2 },
-                ]"
-                @blur="handleFilterBlur()"
-                @change="markFiltersChanged"
-                @focus="handleFilterFocus"
-              />
-              <Select
-                v-else-if="field.type === 'enabled'"
-                v-model:value="filters[field.key]"
-                allow-clear
-                :placeholder="
-                  $t('system.common.select', { field: field.label })
-                "
-                class="w-full sm:w-40"
-                :options="[
-                  { label: $t('system.enabled.yes'), value: 'true' },
-                  { label: $t('system.enabled.no'), value: 'false' },
-                ]"
-                @blur="handleFilterBlur()"
-                @change="markFiltersChanged"
-                @focus="handleFilterFocus"
-              />
-              <Select
-                v-else-if="field.type === 'category'"
-                v-model:value="filters[field.key]"
-                allow-clear
-                :placeholder="
-                  $t('system.common.select', { field: field.label })
-                "
-                class="w-full sm:w-40"
-                :options="[
-                  { label: $t('system.category.permission'), value: 0 },
-                  { label: $t('system.category.jwt'), value: 1 },
-                ]"
-                @blur="handleFilterBlur()"
-                @change="markFiltersChanged"
-                @focus="handleFilterFocus"
-              />
-              <Select
-                v-else-if="field.type === 'input-multi-select'"
-                :value="filters[field.key]"
-                allow-clear
-                class="system-multi-filter w-full sm:w-[280px]"
-                :default-active-first-option="false"
-                :filter-option="false"
-                mode="tags"
-                :not-found-content="null"
-                :options="filterSuggestionOptions(field.key)"
-                :placeholder="$t('system.common.enter', { field: field.label })"
-                :show-action="['focus']"
-                :token-separators="[',']"
-                @blur="handleFilterBlur(field.key)"
-                @focus="handleFilterFocus"
-                @search="searchBackendFilterSuggestions(field.key, $event)"
-                @update:value="updateMultiFilterValue(field.key, $event)"
+              <template
+                v-if="field.splitLines"
+                #tagRender="{ closable, label, onClose }"
               >
-                <template
-                  v-if="field.splitLines"
-                  #tagRender="{ closable, label, onClose }"
+                <Tag
+                  class="system-multiline-filter-tag"
+                  :closable="closable"
+                  @close="onClose"
                 >
-                  <Tag
-                    class="system-multiline-filter-tag"
-                    :closable="closable"
-                    @close="onClose"
-                  >
-                    <span class="system-multiline-filter-tag-content">
-                      <span
-                        v-for="item in resourceRules(String(label))"
-                        :key="item"
-                      >
-                        {{ item }}
-                      </span>
+                  <span class="system-multiline-filter-tag-content">
+                    <span
+                      v-for="item in resourceRules(String(label))"
+                      :key="item"
+                    >
+                      {{ item }}
                     </span>
-                  </Tag>
-                </template>
-                <template #option="{ label, source, value }">
+                  </span>
+                </Tag>
+              </template>
+              <template #option="{ label, source, value }">
+                <div
+                  v-if="source === 'history'"
+                  class="flex w-full min-w-0 items-center justify-between gap-2"
+                >
                   <div
-                    v-if="source === 'history'"
-                    class="flex w-full min-w-0 items-center justify-between gap-2"
+                    v-if="field.splitLines"
+                    class="flex min-w-0 flex-1 flex-wrap gap-1"
                   >
-                    <div
-                      v-if="field.splitLines"
-                      class="flex min-w-0 flex-1 flex-wrap gap-1"
+                    <Tag
+                      v-for="item in resourceRules(String(value))"
+                      :key="item"
+                      class="m-0 max-w-full truncate"
                     >
-                      <Tag
-                        v-for="item in resourceRules(String(value))"
-                        :key="item"
-                        class="m-0 max-w-full truncate"
-                      >
-                        {{ item }}
-                      </Tag>
-                    </div>
-                    <Tag v-else class="m-0 min-w-0 truncate">{{ value }}</Tag>
-                    <button
-                      :aria-label="
-                        $t('system.suggestions.removeHistory', { value })
-                      "
-                      class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                      tabindex="-1"
-                      type="button"
-                      @click.prevent.stop="
-                        removeFilterHistory(field.key, String(value))
-                      "
-                      @mousedown.prevent.stop
-                    >
-                      <IconifyIcon class="size-3.5" icon="lucide:x" />
-                    </button>
+                      {{ item }}
+                    </Tag>
                   </div>
-                  <template v-else-if="source === 'backend'">
-                    <Space v-if="field.splitLines" :size="[4, 4]" wrap>
-                      <Tag
-                        v-for="item in resourceRules(String(value))"
-                        :key="item"
-                        class="m-0"
-                      >
-                        <span
-                          v-for="(segment, index) in filterSuggestionSegments(
-                            item,
-                            field.key,
-                          )"
-                          :key="index"
-                          :class="{
-                            'font-bold text-red-500': segment.matched,
-                          }"
-                        >
-                          {{ segment.text }}
-                        </span>
-                      </Tag>
-                    </Space>
-                    <span v-else>
+                  <Tag v-else class="m-0 min-w-0 truncate">{{ value }}</Tag>
+                  <button
+                    :aria-label="
+                      $t('system.suggestions.removeHistory', { value })
+                    "
+                    class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    tabindex="-1"
+                    type="button"
+                    @click.prevent.stop="
+                      removeFilterHistory(field.key, String(value))
+                    "
+                    @mousedown.prevent.stop
+                  >
+                    <IconifyIcon class="size-3.5" icon="lucide:x" />
+                  </button>
+                </div>
+                <template v-else-if="source === 'backend'">
+                  <Space v-if="field.splitLines" :size="[4, 4]" wrap>
+                    <Tag
+                      v-for="item in resourceRules(String(value))"
+                      :key="item"
+                      class="m-0"
+                    >
                       <span
                         v-for="(segment, index) in filterSuggestionSegments(
-                          String(label),
+                          item,
                           field.key,
                         )"
                         :key="index"
-                        :class="{ 'font-bold text-red-500': segment.matched }"
+                        :class="{
+                          'font-bold text-red-500': segment.matched,
+                        }"
                       >
                         {{ segment.text }}
                       </span>
-                    </span>
-                  </template>
-                  <span v-else>{{ label }}</span>
-                </template>
-              </Select>
-              <AutoComplete
-                v-else
-                :value="filters[field.key]"
-                allow-clear
-                autocomplete="off"
-                class="w-full sm:w-52 sm:shrink-0"
-                :default-active-first-option="false"
-                :dropdown-match-select-width="true"
-                :filter-option="false"
-                :options="filterSuggestionOptions(field.key)"
-                :placeholder="$t('system.common.enter', { field: field.label })"
-                :show-action="['focus']"
-                @blur="handleFilterBlur()"
-                @focus="handleFilterFocus"
-                @search="searchBackendFilterSuggestions(field.key, $event)"
-                @update:value="updateTextFilterValue(field.key, $event)"
-              >
-                <template #option="{ label, source, value }">
-                  <div
-                    v-if="source === 'history'"
-                    class="flex w-full min-w-0 items-center justify-between gap-2"
-                  >
-                    <Tag class="m-0 min-w-0 truncate">{{ value }}</Tag>
-                    <button
-                      :aria-label="
-                        $t('system.suggestions.removeHistory', { value })
-                      "
-                      class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                      tabindex="-1"
-                      type="button"
-                      @click.prevent.stop="
-                        removeFilterHistory(field.key, String(value))
-                      "
-                      @mousedown.prevent.stop
-                    >
-                      <IconifyIcon class="size-3.5" icon="lucide:x" />
-                    </button>
-                  </div>
-                  <span v-else-if="source === 'backend'">
+                    </Tag>
+                  </Space>
+                  <span v-else>
                     <span
                       v-for="(segment, index) in filterSuggestionSegments(
                         String(label),
@@ -2474,12 +2402,66 @@ onMounted(loadInitialData);
                       {{ segment.text }}
                     </span>
                   </span>
-                  <span v-else>{{ label }}</span>
                 </template>
-              </AutoComplete>
-            </FormItem>
-          </div>
-          <Space class="w-full justify-end lg:w-auto lg:shrink-0" wrap>
+                <span v-else>{{ label }}</span>
+              </template>
+            </Select>
+            <AutoComplete
+              v-else
+              :value="filters[field.key]"
+              allow-clear
+              autocomplete="off"
+              class="system-filter-control"
+              :data-testid="`system-filter-${field.key}`"
+              :default-active-first-option="false"
+              :dropdown-match-select-width="true"
+              :filter-option="false"
+              :options="filterSuggestionOptions(field.key)"
+              :placeholder="$t('system.common.enter', { field: field.label })"
+              :show-action="['focus']"
+              @blur="handleFilterBlur()"
+              @focus="handleFilterFocus"
+              @search="searchBackendFilterSuggestions(field.key, $event)"
+              @update:value="updateTextFilterValue(field.key, $event)"
+            >
+              <template #option="{ label, source, value }">
+                <div
+                  v-if="source === 'history'"
+                  class="flex w-full min-w-0 items-center justify-between gap-2"
+                >
+                  <Tag class="m-0 min-w-0 truncate">{{ value }}</Tag>
+                  <button
+                    :aria-label="
+                      $t('system.suggestions.removeHistory', { value })
+                    "
+                    class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    tabindex="-1"
+                    type="button"
+                    @click.prevent.stop="
+                      removeFilterHistory(field.key, String(value))
+                    "
+                    @mousedown.prevent.stop
+                  >
+                    <IconifyIcon class="size-3.5" icon="lucide:x" />
+                  </button>
+                </div>
+                <span v-else-if="source === 'backend'">
+                  <span
+                    v-for="(segment, index) in filterSuggestionSegments(
+                      String(label),
+                      field.key,
+                    )"
+                    :key="index"
+                    :class="{ 'font-bold text-red-500': segment.matched }"
+                  >
+                    {{ segment.text }}
+                  </span>
+                </span>
+                <span v-else>{{ label }}</span>
+              </template>
+            </AutoComplete>
+          </FormItem>
+          <template #actions>
             <Button v-if="canRead" html-type="button" @click="resetSearch">
               {{ $t('system.common.reset') }}
             </Button>
@@ -2502,12 +2484,12 @@ onMounted(loadInitialData);
                 "
               />
             </Button>
-          </Space>
-        </Form>
-      </Card>
+          </template>
+        </ManagementSearch>
+      </ManagementCard>
 
       <div class="min-h-0 flex-1">
-        <Card class="system-section-card h-full">
+        <ManagementCard class="system-section-card h-full">
           <div class="mb-4 flex flex-wrap items-center gap-3">
             <Space wrap>
               <Button v-if="canCreate" type="primary" @click="openEditor()">
@@ -2523,127 +2505,38 @@ onMounted(loadInitialData);
               </Button>
             </Space>
 
-            <Space class="ml-auto" size="small" wrap>
-              <Tooltip :title="$t('system.common.refresh')">
-                <Button
-                  v-if="canRead"
-                  :aria-label="$t('system.common.refresh')"
-                  :loading="loading"
-                  size="small"
-                  @click="loadData"
-                >
-                  <IconifyIcon icon="lucide:refresh-cw" />
-                </Button>
-              </Tooltip>
-
-              <Popover
-                overlay-class-name="system-compact-popover"
-                placement="bottomRight"
-                trigger="click"
-              >
-                <template #content>
-                  <div class="flex w-24 flex-col">
-                    <Button
-                      v-for="item in densityOptions"
-                      :key="item.value"
-                      block
-                      size="small"
-                      :type="tableSize === item.value ? 'primary' : 'text'"
-                      @click="setTableSize(item.value)"
-                    >
-                      {{ item.label }}
-                    </Button>
-                  </div>
-                </template>
-                <Button :aria-label="$t('system.table.density')" size="small">
-                  <IconifyIcon icon="lucide:rows-3" />
-                </Button>
-              </Popover>
-
-              <Tooltip
-                :title="
-                  isFullscreen
-                    ? $t('system.table.exitFullscreen')
-                    : $t('system.table.fullscreen')
-                "
-              >
-                <Button
-                  :aria-label="$t('system.table.fullscreen')"
-                  size="small"
-                  @click="toggleFullscreen()"
-                >
-                  <IconifyIcon
-                    :icon="isFullscreen ? 'lucide:minimize' : 'lucide:maximize'"
-                  />
-                </Button>
-              </Tooltip>
-
-              <Popover
-                placement="bottomRight"
-                :title="$t('system.table.visibleColumns')"
-                trigger="click"
-              >
-                <template #content>
-                  <div class="flex w-48 flex-col gap-2">
-                    <Checkbox
-                      :checked="allColumnsSelected"
-                      :indeterminate="columnsIndeterminate"
-                      @change="toggleAllColumns"
-                    >
-                      {{ $t('system.common.selectAll') }}
-                    </Checkbox>
-                    <div class="border-border border-t"></div>
-                    <Checkbox
-                      v-for="column in columnOptions"
-                      :key="column.value"
-                      :checked="visibleColumnKeys.includes(column.value)"
-                      @change="toggleColumn(column.value)"
-                    >
-                      {{ column.label }}
-                    </Checkbox>
-                  </div>
-                </template>
-                <Button :aria-label="$t('system.table.columns')" size="small">
-                  <IconifyIcon icon="lucide:columns-3" />
-                </Button>
-              </Popover>
-
-              <Popover
-                overlay-class-name="system-compact-popover"
-                placement="bottomRight"
-                :title="$t('system.table.style')"
-                trigger="click"
-              >
-                <template #content>
-                  <div
-                    class="grid w-40 grid-cols-[1fr_auto] items-center gap-2"
+            <ManagementToolbar
+              v-model:size="tableSize"
+              v-model:bordered="tableSettings.bordered"
+              v-model:striped="tableSettings.striped"
+              v-model:sticky="tableSettings.sticky"
+              :can-read="canRead"
+              :loading="loading"
+              :is-fullscreen="isFullscreen"
+              @refresh="loadData"
+              @fullscreen="toggleFullscreen()"
+            >
+              <template #columns>
+                <div class="flex w-48 flex-col gap-2">
+                  <Checkbox
+                    :checked="allColumnsSelected"
+                    :indeterminate="columnsIndeterminate"
+                    @change="toggleAllColumns"
                   >
-                    <span>{{ $t('system.table.bordered') }}</span>
-                    <Switch
-                      v-model:checked="tableSettings.bordered"
-                      size="small"
-                    />
-                    <span>{{ $t('system.table.striped') }}</span>
-                    <Switch
-                      v-model:checked="tableSettings.striped"
-                      size="small"
-                    />
-                    <Tooltip :title="$t('system.table.stickyHint')">
-                      <span class="cursor-help">{{
-                        $t('system.table.sticky')
-                      }}</span>
-                    </Tooltip>
-                    <Switch
-                      v-model:checked="tableSettings.sticky"
-                      size="small"
-                    />
-                  </div>
-                </template>
-                <Button :aria-label="$t('system.table.style')" size="small">
-                  <IconifyIcon icon="lucide:settings-2" />
-                </Button>
-              </Popover>
-            </Space>
+                    {{ $t('system.common.selectAll') }}
+                  </Checkbox>
+                  <div class="border-border border-t"></div>
+                  <Checkbox
+                    v-for="column in columnOptions"
+                    :key="column.value"
+                    :checked="visibleColumnKeys.includes(column.value)"
+                    @change="toggleColumn(column.value)"
+                  >
+                    {{ column.label }}
+                  </Checkbox>
+                </div>
+              </template>
+            </ManagementToolbar>
           </div>
 
           <Table
@@ -2877,7 +2770,7 @@ onMounted(loadInitialData);
               </template>
             </template>
           </Table>
-        </Card>
+        </ManagementCard>
       </div>
     </div>
 
@@ -2895,13 +2788,7 @@ onMounted(loadInitialData);
       width="680px"
       @ok="submitEditor"
     >
-      <Form
-        ref="formRef"
-        :label-col="{ span: 6 }"
-        :model="formModel"
-        :rules="formRules"
-        :wrapper-col="{ span: 17 }"
-      >
+      <ManagementForm ref="formRef" :model="formModel" :rules="formRules">
         <FormItem
           v-for="field in editorFields"
           :key="field.key"
@@ -3085,7 +2972,7 @@ onMounted(loadInitialData);
             "
           />
         </FormItem>
-      </Form>
+      </ManagementForm>
     </Modal>
 
     <Modal
@@ -3094,7 +2981,7 @@ onMounted(loadInitialData);
       :title="$t('system.user.lockTitle', { name: lockUser?.username || '' })"
       @ok="submitLock"
     >
-      <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
+      <ManagementForm :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
         <FormItem :label="$t('system.user.lockType')" required>
           <Select
             v-model:value="lockMode"
@@ -3122,7 +3009,7 @@ onMounted(loadInitialData);
             @change="clearLockWarning"
           />
         </FormItem>
-      </Form>
+      </ManagementForm>
     </Modal>
 
     <Modal
@@ -3131,7 +3018,7 @@ onMounted(loadInitialData);
       :title="$t('system.user.review')"
       @ok="submitApproval"
     >
-      <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
+      <ManagementForm :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
         <FormItem :label="$t('system.user.entity')">
           {{ approvalUser?.username }}
         </FormItem>
@@ -3163,27 +3050,12 @@ onMounted(loadInitialData);
             @input="clearApprovalWarning"
           />
         </FormItem>
-      </Form>
+      </ManagementForm>
     </Modal>
   </Page>
 </template>
 
 <style scoped>
-:deep(.system-section-card.ant-card) {
-  border-color: hsl(var(--border));
-  border-radius: 8px;
-}
-
-:global(.system-compact-popover .ant-popover-inner) {
-  min-width: 0;
-  padding: 8px;
-}
-
-:global(.system-compact-popover .ant-popover-title) {
-  min-width: 0;
-  margin-bottom: 6px;
-}
-
 :deep(.system-table-row-striped > td) {
   background-color: rgb(127 127 127 / 6%) !important;
 }
@@ -3224,21 +3096,5 @@ onMounted(loadInitialData);
 .system-multiline-filter-tag-content {
   display: flex;
   flex-direction: column;
-}
-
-@media (max-width: 639px) {
-  :deep(.ant-form-inline .ant-form-item),
-  :deep(.ant-form-inline .ant-form-item-row) {
-    width: 100%;
-  }
-
-  :deep(.ant-form-inline .ant-form-item) {
-    margin-inline-end: 0;
-  }
-
-  :deep(.ant-form-inline .ant-form-item-control) {
-    flex: 1;
-    min-width: 0;
-  }
 }
 </style>
