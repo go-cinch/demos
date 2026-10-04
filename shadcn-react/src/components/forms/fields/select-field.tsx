@@ -31,6 +31,7 @@ export function SelectField({
         {required && ' *'}
       </FieldLabel>
       <Select
+        items={options}
         name={field.name}
         value={field.state.value}
         onValueChange={(value) => field.handleChange(value ?? '')}

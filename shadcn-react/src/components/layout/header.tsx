@@ -1,5 +1,7 @@
 'use client';
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import MsgBell from '@/features/messages/msg-bell';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import SearchInput from '@/components/search-input';
 import { ThemeModeToggle } from '@/components/themes/theme-mode-toggle';
@@ -29,7 +31,6 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useLocale } from '@/features/i18n/locale-context';
 import { useCopyright } from '@/features/preferences/copyright-context';
 import {
-  IconBell,
   IconLock,
   IconLogout,
   IconMaximize,
@@ -159,26 +160,7 @@ export default function Header() {
           >
             {fullscreen ? <IconMinimize /> : <IconMaximize />}
           </Button>
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  title={pick('Messages', '消息')}
-                  aria-label={pick('Messages', '消息')}
-                />
-              }
-            >
-              <IconBell />
-            </PopoverTrigger>
-            <PopoverContent align='end' className='w-72'>
-              <div className='font-medium'>{pick('Messages', '消息')}</div>
-              <p className='mt-2 text-sm text-muted-foreground'>
-                {pick('No new messages', '暂无新消息')}
-              </p>
-            </PopoverContent>
-          </Popover>
+          <MsgBell />
           <Button
             variant='ghost'
             size='icon'
@@ -198,7 +180,11 @@ export default function Header() {
                 />
               }
             >
-              <IconUser />
+              <Avatar>
+                <AvatarFallback>
+                  {auth.user?.username.trim().slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end' className='min-w-48'>
               <DropdownMenuItem

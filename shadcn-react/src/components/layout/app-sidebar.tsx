@@ -43,11 +43,42 @@ import * as React from 'react';
 
 const systemItems = [
   { key: 'users', path: '/system/user', menu: '/system/user', icon: IconUsers },
-  { key: 'roles', path: '/system/role', menu: '/system/role', icon: IconShieldCheck },
-  { key: 'groups', path: '/system/user-group', menu: '/system/group', icon: IconUsersGroup },
-  { key: 'actions', path: '/system/action', menu: '/system/action', icon: IconKey },
-  { key: 'dictionaries', path: '/system/dictionary', menu: '/system/dictionary', icon: IconBook2 },
-  { key: 'whitelist', path: '/system/whitelist', menu: '/system/whitelist', icon: IconListCheck }
+  {
+    key: 'roles',
+    path: '/system/role',
+    menu: '/system/role',
+    icon: IconShieldCheck
+  },
+  {
+    key: 'groups',
+    path: '/system/user-group',
+    menu: '/system/group',
+    icon: IconUsersGroup
+  },
+  {
+    key: 'actions',
+    path: '/system/action',
+    menu: '/system/action',
+    icon: IconKey
+  },
+  {
+    key: 'dictionaries',
+    path: '/system/dictionary',
+    menu: '/system/dictionary',
+    icon: IconBook2
+  },
+  {
+    key: 'whitelist',
+    path: '/system/whitelist',
+    menu: '/system/whitelist',
+    icon: IconListCheck
+  },
+  {
+    key: 'messages',
+    path: '/system/msg',
+    menu: '/system/msg',
+    icon: IconListCheck
+  }
 ] as const;
 
 export default function AppSidebar() {
@@ -58,9 +89,19 @@ export default function AppSidebar() {
   const allowed = (menu: string) => menus.includes('*') || menus.includes(menu);
   const visibleSystem = systemItems.filter((item) => allowed(item.menu));
   const dashboardItems = [
-    { key: 'overview' as const, path: '/dashboard/overview', icon: IconDashboard },
+    {
+      key: 'overview' as const,
+      path: '/dashboard/overview',
+      icon: IconDashboard
+    },
     ...(menus.includes('*')
-      ? [{ key: 'workspace' as const, path: '/dashboard/workspace', icon: IconSettings }]
+      ? [
+          {
+            key: 'workspace' as const,
+            path: '/dashboard/workspace',
+            icon: IconSettings
+          }
+        ]
       : [])
   ];
   return (

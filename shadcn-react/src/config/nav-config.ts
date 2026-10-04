@@ -30,11 +30,43 @@ export const navGroups: NavGroup[] = [
         shortcut: ['s', 'u'],
         items: []
       },
-      { title: 'Roles / 角色管理', url: '/system/role', icon: 'account', items: [] },
-      { title: 'User Groups / 用户组管理', url: '/system/user-group', icon: 'teams', items: [] },
-      { title: 'Actions / 权限管理', url: '/system/action', icon: 'code', items: [] },
-      { title: 'Data Dictionary / 数据字典', url: '/system/dictionary', icon: 'forms', items: [] },
-      { title: 'Whitelist / 白名单管理', url: '/system/whitelist', icon: 'circleCheck', items: [] },
+      {
+        title: 'Roles / 角色管理',
+        url: '/system/role',
+        icon: 'account',
+        items: []
+      },
+      {
+        title: 'User Groups / 用户组管理',
+        url: '/system/user-group',
+        icon: 'teams',
+        items: []
+      },
+      {
+        title: 'Actions / 权限管理',
+        url: '/system/action',
+        icon: 'code',
+        items: []
+      },
+      {
+        title: 'Data Dictionary / 数据字典',
+        url: '/system/dictionary',
+        icon: 'forms',
+        items: []
+      },
+      {
+        title: 'Whitelist / 白名单管理',
+        url: '/system/whitelist',
+        icon: 'circleCheck',
+        items: []
+      },
+      {
+        title: 'Messages / 消息',
+        url: '/system/msg',
+        icon: 'notification',
+        items: []
+      },
+
       {
         title: 'Profile / 个人中心',
         url: '/profile',
