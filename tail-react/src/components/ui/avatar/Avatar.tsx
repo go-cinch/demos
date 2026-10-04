@@ -1,7 +1,7 @@
 import { cn } from "@/utils";
 
 interface AvatarProps {
-  src: string; // URL of the avatar image
+  src?: string; // URL of the avatar image
   alt?: string; // Alt text for the avatar
   size?: "xsmall" | "small" | "medium" | "large" | "xlarge" | "xxlarge"; // Avatar size
   status?: "online" | "offline" | "busy" | "none"; // Status indicator
@@ -42,14 +42,24 @@ const Avatar: React.FC<AvatarProps> = ({
   return (
     <div className={cn("relative rounded-full", sizeClasses[size], className)}>
       {/* Avatar Image */}
-      <img
-        width="0"
-        height="0"
-        sizes="100vw"
-        src={src}
-        alt={alt}
-        className="w-full rounded-full object-cover"
-      />
+      {src ? (
+        <img
+          width="0"
+          height="0"
+          sizes="100vw"
+          src={src}
+          alt={alt}
+          className="w-full rounded-full object-cover"
+        />
+      ) : (
+        <span
+          role="img"
+          aria-label={alt}
+          className="flex size-full items-center justify-center rounded-full bg-gray-100 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+        >
+          {alt.trim().slice(0, 2).toUpperCase()}
+        </span>
+      )}
 
       {/* Status Indicator */}
       {status !== "none" && (

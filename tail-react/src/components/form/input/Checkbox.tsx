@@ -3,6 +3,8 @@ import { cn } from "@/utils";
 
 interface CheckboxProps {
   label?: string;
+  ariaLabel?: string;
+  indeterminate?: boolean;
   checked: boolean;
   className?: string;
   id?: string;
@@ -12,6 +14,8 @@ interface CheckboxProps {
 
 const Checkbox: React.FC<CheckboxProps> = ({
   label,
+  ariaLabel,
+  indeterminate = false,
   checked,
   id,
   onChange,
@@ -22,22 +26,31 @@ const Checkbox: React.FC<CheckboxProps> = ({
     <label
       className={cn(
         "flex items-center gap-3 group cursor-pointer",
-        disabled && "cursor-not-allowed opacity-60"
+        disabled && "cursor-not-allowed opacity-60",
       )}
     >
       <div className="relative flex items-center justify-center w-5 h-5">
         <input
           id={id}
+          aria-label={ariaLabel}
+          aria-checked={indeterminate ? "mixed" : checked}
+          ref={(node) => {
+            if (node) node.indeterminate = indeterminate;
+          }}
           type="checkbox"
           className={cn(
             "w-5 h-5 appearance-none cursor-pointer dark:border-gray-700 border border-gray-300 checked:border-transparent rounded-md checked:bg-brand-500 disabled:opacity-60",
-            className
+            className,
+            indeterminate && "bg-brand-500 border-brand-500",
           )}
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
         />
-        {checked && (
+        {indeterminate && (
+          <span className="pointer-events-none absolute h-0.5 w-2.5 bg-white" />
+        )}
+        {checked && !indeterminate && (
           <svg
             className="pointer-events-none absolute inset-0 m-auto"
             xmlns="http://www.w3.org/2000/svg"

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
 interface ButtonProps {
+  "data-testid"?: string;
+  type?: "button" | "submit" | "reset";
   children: ReactNode; // Button text or content
   size?: "sm" | "md"; // Button size
-  variant?: "primary" | "outline"; // Button variant
+  variant?: "primary" | "outline" | "danger"; // Button variant
   startIcon?: ReactNode; // Icon before the text
   endIcon?: ReactNode; // Icon after the text
   onClick?: () => void; // Click handler
@@ -13,6 +15,8 @@ interface ButtonProps {
 
 const Button: React.FC<ButtonProps> = ({
   children,
+  "data-testid": dataTestID,
+  type,
   size = "md",
   variant = "primary",
   startIcon,
@@ -29,6 +33,8 @@ const Button: React.FC<ButtonProps> = ({
 
   // Variant Classes
   const variantClasses = {
+    danger:
+      "bg-white text-error-500 ring-1 ring-inset ring-error-500 hover:bg-error-50 dark:bg-gray-800 dark:text-error-400 dark:ring-error-500",
     primary:
       "bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300",
     outline:
@@ -37,6 +43,8 @@ const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
+      type={type}
+      data-testid={dataTestID}
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition ${className} ${
         sizeClasses[size]
       } ${variantClasses[variant]} ${
