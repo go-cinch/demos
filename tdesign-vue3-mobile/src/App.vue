@@ -68,7 +68,7 @@ watch(
   },
 );
 const active = computed(() =>
-  route.path === '/profile'
+  route.path === '/profile' || route.path === '/msg/inbox'
     ? 'mine'
     : route.path.startsWith('/system/') || route.path === '/dashboard/workspace'
       ? 'manage'

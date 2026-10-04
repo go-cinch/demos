@@ -2569,3 +2569,47 @@ h1 {
     white-space: nowrap;
   }
 }
+
+/* A notification feed has its own layout, separate from resource tables. */
+.message-filters {
+  margin-bottom: 16px;
+}
+.message-type-tabs {
+  display: flex;
+  gap: 12px;
+}
+.message-type-tabs {
+  border-bottom: 1px solid var(--line);
+}
+.message-type-tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+.message-type-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.message-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.message-feed-footer {
+  overflow-anchor: none;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+}

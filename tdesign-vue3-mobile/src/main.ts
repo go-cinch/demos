@@ -13,7 +13,7 @@ import {
   Textarea,
 } from 'tdesign-mobile-vue';
 import 'tdesign-mobile-vue/es/style/index.css';
-import './style.css';
+import './tdesign-mobile.css';
 import App from './App.vue';
 import { router } from './router';
 import AccessibleSwitch from './components/AccessibleSwitch.vue';
