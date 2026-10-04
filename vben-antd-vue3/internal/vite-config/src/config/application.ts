@@ -77,6 +77,7 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
       css: createCssOptions(injectGlobalScss),
       plugins,
       server: {
+        allowedHosts: ['preview-local.go-cinch.top'],
         host: true,
         port,
         warmup: {

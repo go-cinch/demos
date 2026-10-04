@@ -24,6 +24,7 @@ export const modules = {
         icon: 'check-rectangle',
         path: '/system/whitelist',
       },
+      { resource: 'msg', label: t('app.msg.manage'), icon: 'notification', path: '/system/msg' },
     ].filter((item) => canMenu(item.path));
   },
 };

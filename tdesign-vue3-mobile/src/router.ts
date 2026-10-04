@@ -59,6 +59,8 @@ export const router = createRouter({
       component: () => import('./pages/ManagementPage.vue'),
       props: { resource },
     })),
+    { path: '/msg/inbox', component: () => import('./pages/MsgPage.vue') },
+    { path: '/system/msg', component: () => import('./pages/MsgPage.vue') },
     { path: '/profile', component: () => import('./pages/ProfilePage.vue') },
     { path: '/:pathMatch(.*)*', component: () => import('./pages/NotFoundPage.vue') },
   ],

@@ -16,7 +16,6 @@ import { nonempty } from '../lib/validation';
 import { message, type Feedback } from '../lib/form-feedback';
 import type { PointCaptcha as Challenge, CaptchaPoint } from '../lib/types';
 import { t } from '../locales';
-import { preferences as p } from '../lib/preferences';
 import { Copyright, Field, TextField, Toggle, ErrorBox, Icon } from '../components/UI';
 import { ServerSlider, PointCaptcha } from '../components/Captcha';
 export default function AuthPage() {
@@ -160,7 +159,7 @@ export default function AuthPage() {
     }
   }
   return (
-    <main id="main" className={`auth-page position-${p.loginPosition}`}>
+    <main id="main" className="auth-page">
       <section className="auth-panel">
         <p className="eyebrow">CINCH · {t('moon')}</p>
         <h1>

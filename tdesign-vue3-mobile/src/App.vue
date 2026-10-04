@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MsgBell from './components/MsgBell.vue';
 import { message, type Feedback } from './lib/form-feedback';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -48,6 +49,7 @@ const query = computed(() =>
     ...(canMenu('/dashboard/workspace')
       ? [{ path: '/dashboard/workspace', label: t('page.dashboard.workspace'), icon: 'app' }]
       : []),
+    { path: '/msg/inbox', label: t('app.msg.inbox'), icon: 'mail' },
     ...modules.value,
     { path: '/profile', label: t('page.auth.profile'), icon: 'user' },
   ].filter((x) => x.label.toLowerCase().includes(search.value.toLowerCase())),
@@ -58,35 +60,13 @@ const popup = computed({
     if (!v) panel.value = '';
   },
 });
-const tabs = ref<{ path: string; pinned: boolean }[]>([
-  { path: '/dashboard/overview', pinned: true },
-]);
-const tabName = (path: string) =>
-  path === '/dashboard/overview'
-    ? t('home')
-    : path === '/dashboard/workspace'
-      ? t('page.dashboard.workspace')
-      : path === '/profile'
-        ? t('page.auth.profile')
-        : modules.value.find((m) => m.path === path)?.label || path;
 watch(
   () => route.path,
-  (path) => {
-    if (!path.startsWith('/auth/') && !tabs.value.some((x) => x.path === path))
-      tabs.value.push({ path, pinned: false });
+  () => {
     toolsOpen.value = false;
+    authToolsOpen.value = false;
   },
 );
-watch(
-  () => session.user,
-  (user) => {
-    if (!user) tabs.value = [{ path: '/dashboard/overview', pinned: true }];
-  },
-);
-function closeTab(path: string) {
-  tabs.value = tabs.value.filter((x) => x.path !== path);
-  if (route.path === path) void router.push(tabs.value.at(-1)?.path || '/dashboard/overview');
-}
 const active = computed(() =>
   route.path === '/profile'
     ? 'mine'
@@ -187,79 +167,67 @@ async function signout() {
         <span class="page-loading-orb" aria-hidden="true" />
       </div>
     </Transition>
-    <header v-if="auth" class="auth-topbar">
-      <RouterLink to="/" class="brand"
-        ><img :src="p.dark ? '/go-cinch-white.svg' : '/go-cinch.svg'" alt="" /><span
-          class="brand-wide"
-          >Go Cinch Admin by TDesign Mobile Vue</span
-        ><span class="brand-narrow">Go Cinch Admin</span
-        ><span class="brand-tiny">Go Cinch</span></RouterLink
-      >
-      <div ref="authTools" class="auth-tools-wrap">
-        <button
-          class="icon-button"
-          :aria-label="t('more')"
-          :aria-expanded="authToolsOpen"
-          aria-controls="auth-tools-menu"
-          @click.stop="authToolsOpen = !authToolsOpen"
-        >
-          <Icon :name="authToolsOpen ? 'close' : 'ellipsis'" />
-        </button>
-        <Transition name="auth-tools">
-          <div v-if="authToolsOpen" id="auth-tools-menu" class="auth-tools-menu">
+    <div v-if="auth" class="studio auth-studio">
+      <div class="device">
+        <header class="auth-topbar">
+          <RouterLink to="/" class="brand"
+            ><img :src="p.dark ? '/go-cinch-white.svg' : '/go-cinch.svg'" alt="" /><span
+              class="brand-wide"
+              >Go Cinch Admin by TDesign Mobile Vue</span
+            ><span class="brand-narrow">Go Cinch Admin</span
+            ><span class="brand-tiny">Go Cinch</span></RouterLink
+          >
+          <div ref="authTools" class="auth-tools-wrap">
             <button
-              :aria-label="t('color')"
-              :title="t('color')"
-              @click="
-                settings = true;
-                closeAuthTools();
-              "
+              class="icon-button"
+              :aria-label="t('more')"
+              :aria-expanded="authToolsOpen"
+              aria-controls="auth-tools-menu"
+              @click.stop="authToolsOpen = !authToolsOpen"
             >
-              <Icon name="palette" />
+              <Icon :name="authToolsOpen ? 'close' : 'ellipsis'" />
             </button>
-            <button
-              class="login-position-control"
-              :aria-label="t('panel')"
-              :title="t('panel')"
-              @click="
-                p.loginPosition =
-                  p.loginPosition === 'left'
-                    ? 'center'
-                    : p.loginPosition === 'center'
-                      ? 'right'
-                      : 'left';
-                closeAuthTools();
-              "
-            >
-              <Icon name="layout" />
-            </button>
-            <button
-              :aria-label="t('language')"
-              :title="t('language')"
-              @click="
-                toggleLocale();
-                closeAuthTools();
-              "
-            >
-              <Icon name="translate" />
-            </button>
-            <button
-              :aria-label="t('theme')"
-              :title="t('theme')"
-              @click="
-                p.dark = !p.dark;
-                closeAuthTools();
-              "
-            >
-              <Icon :name="p.dark ? 'sunny' : 'moon'" />
-            </button>
+            <Transition name="auth-tools">
+              <div v-if="authToolsOpen" id="auth-tools-menu" class="auth-tools-menu">
+                <button
+                  :aria-label="t('color')"
+                  :title="t('color')"
+                  @click="
+                    settings = true;
+                    closeAuthTools();
+                  "
+                >
+                  <Icon name="palette" />
+                </button>
+                <button
+                  :aria-label="t('language')"
+                  :title="t('language')"
+                  @click="
+                    toggleLocale();
+                    closeAuthTools();
+                  "
+                >
+                  <Icon name="translate" />
+                </button>
+                <button
+                  :aria-label="t('theme')"
+                  :title="t('theme')"
+                  @click="
+                    p.dark = !p.dark;
+                    closeAuthTools();
+                  "
+                >
+                  <Icon :name="p.dark ? 'sunny' : 'moon'" />
+                </button>
+              </div>
+            </Transition>
           </div>
-        </Transition>
+        </header>
+        <main id="main" class="main auth-content">
+          <PageSkeleton v-if="routeSkeleton" />
+          <RouterView v-else />
+        </main>
       </div>
-    </header>
-    <div v-if="auth" id="main">
-      <PageSkeleton v-if="routeSkeleton" />
-      <RouterView v-else />
     </div>
     <div v-else class="studio" :inert="locked" :aria-hidden="locked">
       <div class="device">
@@ -272,6 +240,7 @@ async function signout() {
             </div></RouterLink
           >
           <div class="top-tools">
+            <MsgBell v-if="session.user && !session.resetRequired" />
             <button
               class="icon-button"
               :aria-label="t('more')"
@@ -282,24 +251,6 @@ async function signout() {
             </button>
           </div>
         </header>
-        <div class="page-tabs">
-          <div v-for="tab in tabs" :key="tab.path" :class="{ active: route.path === tab.path }">
-            <RouterLink :to="tab.path">{{ tabName(tab.path) }}</RouterLink
-            ><button
-              class="tab-pin"
-              :aria-label="t(tab.pinned ? 'unpin' : 'pin')"
-              @click="tab.pinned = !tab.pinned"
-            >
-              <Icon name="pin" :size="14" /></button
-            ><button
-              v-if="!tab.pinned"
-              :aria-label="`${t('close')} ${tabName(tab.path)}`"
-              @click="closeTab(tab.path)"
-            >
-              <Icon name="close" :size="14" />
-            </button>
-          </div>
-        </div>
         <main id="main" class="main">
           <PageSkeleton v-if="routeSkeleton" :variant="routeSkeletonVariant" />
           <RouterView v-else :key="route.path" /><Copyright v-if="p.footer" />

@@ -25,6 +25,7 @@ const labelKeys: Record<string, string> = {
   "/dashboard/overview": "dashboard.overview",
   "/dashboard/workspace": "dashboard.workspace",
   "/profile": "profile.title",
+  "/system/msg": "msg.manage",
   "/system/user": "system.users",
   "/system/role": "system.roles",
   "/system/user-group": "system.userGroups",

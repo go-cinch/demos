@@ -11,6 +11,7 @@ const props = defineProps<{
   label: string;
   resource?: ResourceKind;
   multiple?: boolean;
+  msgRecipients?: boolean;
   group?: boolean;
   options?: { value: string | number; label: string }[];
   initial?: { value: string | number; label: string }[];
@@ -72,6 +73,12 @@ async function load() {
       );
       if (current === generation)
         loaded.value = result.items.map((value) => ({ value, label: value }));
+    } else if (props.msgRecipients) {
+      const result = await request<{ id: number; username: string }[]>(
+        `/msg/recipient-option?q=${encodeURIComponent(query.value)}`,
+      );
+      if (current === generation)
+        loaded.value = result.map((user) => ({ value: user.id, label: user.username }));
     } else if (props.resource) {
       const q = query.value.trim();
       const fields = props.resource === 'user' ? ['username', 'code'] : ['name', 'word'];

@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
 import {
+  BellAltIcon,
   ChevronDownIcon,
   DashboardAltIcon,
   GridIcon,
@@ -65,6 +66,12 @@ const systemItems = [
     path: "/system/whitelist",
     label: "system.whitelists",
     icon: ListIcon,
+  },
+  {
+    permission: "/system/msg",
+    path: "/system/msg",
+    label: "msg.manage",
+    icon: BellAltIcon,
   },
 ];
 

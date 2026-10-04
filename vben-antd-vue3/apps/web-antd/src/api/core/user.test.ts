@@ -70,4 +70,19 @@ describe('getUserInfoApi', () => {
 
     expect(result.homePath).toBe('/system/user-group');
   });
+  it('maps the retained legacy group permission to the canonical route without duplicating it', async () => {
+    vi.mocked(authRequestClient.get).mockResolvedValue({
+      code: 'ABC12345',
+      id: 1,
+      username: 'operator',
+      permission: {
+        btns: ['system.user.group.read'],
+        menus: [' /system/group ', '/system/user-group'],
+      },
+    });
+    const result = await getUserInfoApi();
+    expect(result.roles).toEqual(['/system/user-group']);
+    expect(result.homePath).toBe('/system/user-group');
+    expect(result.permission.btns).toEqual(['system.user.group.read']);
+  });
 });

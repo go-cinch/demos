@@ -1,3 +1,6 @@
+import ResultToolbar from '../components/ResultToolbar';
+import RecordPagination from '../components/RecordPagination';
+import ResultOptions from '../components/ResultOptions';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button, Checkbox } from 'antd-mobile';
@@ -6,9 +9,8 @@ import { configs } from '../lib/resource-config';
 import { initials, labelFor } from '../lib/format';
 import type { RecordData, ResourceKind } from '../lib/types';
 import { t } from '../locales';
-import { Icon, IconButton, Sheet, Toggle, ErrorBox, NoData } from '../components/UI';
+import { Icon, IconButton, Sheet, ErrorBox, NoData } from '../components/UI';
 import PageSkeleton from '../components/PageSkeleton';
-import { Choices } from '../components/Settings';
 import SearchField from '../components/SearchField';
 import RecordEditor from '../components/RecordEditor';
 import RecordOperation from '../components/RecordOperation';
@@ -277,44 +279,20 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
             )}
           <div ref={resultTop} className="result-anchor" aria-hidden="true" />
           <div className="results-region">
-            <div className="result-toolbar">
-              <div>
-                {can(resource, 'create') && (
-                  <Button
-                    className="create-record"
-                    aria-label={t('system.common.create')}
-                    size="small"
-                    color="primary"
-                    onClick={() => openEditor(null)}
-                  >
-                    <Icon name="add" size={16} />
-                    <span className="create-label">{t('system.common.create')}</span>
-                  </Button>
-                )}
-              </div>
-              <div className="result-tools">
-                <IconButton
-                  name="refresh"
-                  label={t('system.common.refresh')}
-                  onClick={() => setRevision((v) => v + 1)}
-                />
-                <IconButton
-                  name="view-list"
-                  label={t('system.table.density')}
-                  onClick={() => setOptions('system.table.density')}
-                />
-                <IconButton
-                  name="view-column"
-                  label={t('system.table.visibleColumns')}
-                  onClick={() => setOptions('system.table.visibleColumns')}
-                />
-                <IconButton
-                  name="table"
-                  label={t('system.table.style')}
-                  onClick={() => setOptions('system.table.style')}
-                />
-              </div>
-            </div>
+            <ResultToolbar refresh={() => setRevision((v) => v + 1)} options={setOptions}>
+              {can(resource, 'create') && (
+                <Button
+                  className="create-record"
+                  aria-label={t('system.common.create')}
+                  size="small"
+                  color="primary"
+                  onClick={() => openEditor(null)}
+                >
+                  <Icon name="add" size={16} />
+                  <span className="create-label">{t('system.common.create')}</span>
+                </Button>
+              )}
+            </ResultToolbar>
             <div className="selection-tools">
               <div className="selection-actions">
                 {can(resource, 'delete') && records.length > 0 && (
@@ -531,41 +509,17 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
             ) : (
               <NoData text={t('noResults')} />
             )}
-            <div className="pagination">
-              <button
-                className="pagination-button"
-                disabled={page === 1 || loading}
-                onClick={() => {
-                  scrollToResults.current = true;
-                  setPage((v) => v - 1);
-                }}
-              >
-                <Icon name="chevron-left" size={16} />
-                <span>{t('previous')}</span>
-              </button>
-              <div className="page-config">
-                <span>
-                  {t('page', { page })} / {Math.max(1, Math.ceil(total / size))}
-                </span>
-                <button aria-label={t('pageSize')} onClick={() => setOptions('pageSize')}>
-                  <span>
-                    {size} / {t('pageUnit')}
-                  </span>
-                  <Icon name="chevron-down" size={13} />
-                </button>
-              </div>
-              <button
-                className="pagination-button"
-                disabled={page * size >= total || loading}
-                onClick={() => {
-                  scrollToResults.current = true;
-                  setPage((v) => v + 1);
-                }}
-              >
-                <span>{t('next')}</span>
-                <Icon name="chevron-right" size={16} />
-              </button>
-            </div>
+            <RecordPagination
+              page={page}
+              size={size}
+              total={total}
+              loading={loading}
+              change={(value) => {
+                scrollToResults.current = true;
+                setPage(value);
+              }}
+              options={() => setOptions('pageSize')}
+            />
           </div>
         </>
       ) : (
@@ -663,52 +617,25 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
           onSaved={saved}
         />
       )}
-      <Sheet open={!!options} onClose={() => setOptions('')} title={t(options)}>
-        {options === 'system.table.density' ? (
-          <Choices
-            value={density}
-            onChange={(v) => setDensity(String(v))}
-            options={['compact', 'default', 'loose'].map((value) => ({
-              value,
-              label: t(`system.table.${value}`),
-            }))}
-          />
-        ) : options === 'pageSize' ? (
-          <Choices
-            value={size}
-            onChange={(v) => {
-              setSize(Number(v));
-              setPage(1);
-            }}
-            options={[10, 20, 50, 100].map((value) => ({
-              value,
-              label: `${value} / ${t('pageUnit')}`,
-            }))}
-          />
-        ) : options === 'system.table.visibleColumns' ? (
-          <>
-            <p className="notice">{t('columnsHint')}</p>
-            {config.columns.map((c) => (
-              <Toggle
-                key={c.key}
-                label={c.title}
-                checked={columns.includes(c.key)}
-                disabled={c.key === identityColumn[resource]}
-                onChange={(v) => {
-                  if (c.key === identityColumn[resource]) return;
-                  setColumns((all) => (v ? [...all, c.key] : all.filter((x) => x !== c.key)));
-                }}
-              />
-            ))}
-          </>
-        ) : (
-          <>
-            <Toggle label={t('system.table.bordered')} checked={bordered} onChange={setBordered} />
-            <Toggle label={t('system.table.striped')} checked={striped} onChange={setStriped} />
-            <Toggle label={t('system.table.sticky')} checked={sticky} onChange={setSticky} />
-          </>
-        )}
-      </Sheet>
+      <ResultOptions
+        options={options}
+        setOptions={setOptions}
+        density={density}
+        setDensity={setDensity}
+        size={size}
+        setSize={setSize}
+        setPage={setPage}
+        columns={columns}
+        setColumns={setColumns}
+        fields={config.columns}
+        identity={identityColumn[resource]}
+        bordered={bordered}
+        setBordered={setBordered}
+        striped={striped}
+        setStriped={setStriped}
+        sticky={sticky}
+        setSticky={setSticky}
+      />
     </section>
   );
 }

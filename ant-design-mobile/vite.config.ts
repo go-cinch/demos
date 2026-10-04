@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      allowedHosts: ['preview-local.go-cinch.top'],
       port: Number(env.VITE_PORT || 5671),
       strictPort: true,
       proxy: env.AUTH_PROXY_TARGET

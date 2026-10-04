@@ -1,19 +1,24 @@
+import { createPortal } from "react-dom";
 import { useEffect, useRef } from "react";
 
 interface ModalProps {
+  ariaLabel?: string;
   isOpen: boolean;
   onClose: () => void;
   className?: string;
   children: React.ReactNode;
+  closeLabel?: string;
   showCloseButton?: boolean; // New prop to control close button visibility
   isFullscreen?: boolean; // Default to false for backwards compatibility
 }
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
+  ariaLabel,
   onClose,
   children,
   className,
+  closeLabel = "Close",
   showCloseButton = true, // Default to true for backwards compatibility
   isFullscreen = false,
 }) => {
@@ -50,10 +55,10 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   const contentClasses = isFullscreen
-    ? "w-full h-full"
+    ? "relative w-full h-full"
     : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
 
-  return (
+  return createPortal(
     <div className="modal fixed inset-0 z-99999 flex items-center justify-center overflow-y-auto">
       {!isFullscreen && (
         <div
@@ -64,12 +69,14 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         ref={modalRef}
         aria-modal="true"
+        aria-label={ariaLabel}
         className={`${contentClasses} ${className}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
       >
         {showCloseButton && (
           <button
+            aria-label={closeLabel}
             onClick={onClose}
             className="absolute inset-e-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 sm:inset-e-6 sm:top-6 sm:h-11 sm:w-11 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
           >
@@ -91,6 +98,7 @@ export const Modal: React.FC<ModalProps> = ({
         )}
         <div>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

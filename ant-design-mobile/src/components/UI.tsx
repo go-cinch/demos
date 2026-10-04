@@ -251,14 +251,19 @@ export function Sheet({
     function position() {
       const viewport = window.visualViewport;
       const height = viewport?.height || innerHeight;
-      const width = Math.min(620, innerWidth);
+      const device = document.querySelector<HTMLElement>('.device');
+      const frame = device && innerWidth >= 901 ? device.getBoundingClientRect() : null;
+      const border = device?.clientLeft || 0;
+      const width = frame ? device!.clientWidth : Math.min(620, innerWidth);
       setBounds({
         width,
         maxWidth: width,
-        left: (innerWidth - width) / 2,
+        left: frame ? frame.left + border : (innerWidth - width) / 2,
         right: 'auto',
-        bottom: Math.max(0, innerHeight - height - (viewport?.offsetTop || 0)),
-        maxHeight: Math.max(100, height - 22),
+        bottom: frame
+          ? Math.max(0, innerHeight - frame.bottom + border)
+          : Math.max(0, innerHeight - height - (viewport?.offsetTop || 0)),
+        maxHeight: frame ? device!.clientHeight : Math.max(100, height - 22),
       });
     }
     position();

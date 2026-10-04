@@ -38,16 +38,12 @@ const menuHomePaths: [menu: string, path: string][] = [
 ];
 
 function normalizePermissions(values?: string[]) {
-  return [
-    ...new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
-  ];
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))];
 }
 
 function resolveHomePath(menus: string[]) {
   if (menus.includes('*')) return '/dashboard/overview';
-  return (
-    menuHomePaths.find(([menu]) => menus.includes(menu))?.[1] ?? '/profile'
-  );
+  return menuHomePaths.find(([menu]) => menus.includes(menu))?.[1] ?? '/profile';
 }
 
 /**
@@ -57,7 +53,12 @@ export async function getUserInfoApi() {
   const user = await authRequestClient.get<AuthUserInfo>('/auth/info');
   const permission: AuthPermission = {
     btns: normalizePermissions(user.permission?.btns),
-    menus: normalizePermissions(user.permission?.menus),
+    // Older retained seed migrations used /system/group for this same capability.
+    menus: normalizePermissions(
+      user.permission?.menus?.map((value) =>
+        value.trim() === '/system/group' ? '/system/user-group' : value,
+      ),
+    ),
   };
   return {
     avatar: '',
