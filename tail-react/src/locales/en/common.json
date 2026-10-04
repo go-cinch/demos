@@ -64,7 +64,10 @@
     "username": "Username",
     "usernameExists": "This username is already in use"
   },
-  "category": { "jwt": "JWT", "permission": "Permission" },
+  "category": {
+    "jwt": "JWT",
+    "permission": "Permission"
+  },
   "confirm": {
     "delete": "Delete the selected record(s)? This cannot be undone."
   },
@@ -88,8 +91,14 @@
       "title": "Customer demographics",
       "usa": "United States"
     },
-    "metrics": { "customers": "Customers", "orders": "Orders" },
-    "monthlySales": { "series": "Sales", "title": "Monthly sales" },
+    "metrics": {
+      "customers": "Customers",
+      "orders": "Orders"
+    },
+    "monthlySales": {
+      "series": "Sales",
+      "title": "Monthly sales"
+    },
     "monthlyTarget": {
       "earned": "You earned {amount} more this month. Keep up the good work!",
       "revenue": "Revenue",
@@ -230,7 +239,11 @@
     "searchMultiple": "Search and select multiple options",
     "searchSingle": "Search and select an option"
   },
-  "nav": { "main": "MAIN", "management": "System", "profile": "Profile" },
+  "nav": {
+    "main": "MAIN",
+    "management": "System",
+    "profile": "Profile"
+  },
   "notFound": {
     "back": "Back to dashboard",
     "description": "The page you requested could not be found.",
@@ -243,7 +256,11 @@
     "description": "Review your identity and update your password.",
     "title": "Profile"
   },
-  "status": { "active": "Active", "locked": "Locked", "pending": "Pending" },
+  "status": {
+    "active": "Active",
+    "locked": "Locked",
+    "pending": "Pending"
+  },
   "system": {
     "action": "permission",
     "actionTitle": "Action Management",
@@ -341,5 +358,82 @@
     },
     "todos": "To-dos",
     "weather": "Focus on the work that matters today."
+  },
+  "msg": {
+    "select": "Select",
+    "selectAll": "Select all",
+    "notifications": "Notifications",
+    "viewAll": "View All Messages",
+    "account": "Account menu",
+    "clear": "Clear",
+    "inbox": "My messages",
+    "manage": "Messages",
+    "hint": "Read notifications and manage your inbox.",
+    "manageHint": "Publish broadcasts or targeted messages and review sent messages.",
+    "send": "Send message",
+    "sent": "Message sent",
+    "title": "Title",
+    "content": "Content",
+    "type": "Message type",
+    "system": "System",
+    "notice": "Notice",
+    "scope": "Audience",
+    "all": "Everyone",
+    "targeted": "Selected users",
+    "recipients": "Recipients",
+    "expiry": "Expires at",
+    "noExpiry": "No expiry",
+    "published": "Published at",
+    "read": "Read",
+    "unread": "Unread",
+    "allStatus": "All statuses",
+    "allTypes": "All types",
+    "markRead": "Mark as read",
+    "readAll": "Mark all as read",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this message from your inbox?",
+    "deleteGlobal": "Delete for everyone",
+    "deleteGlobalConfirm": "This permanently removes the message for every recipient. Delete it?",
+    "detail": "Message details",
+    "view": "View",
+    "refresh": "Refresh",
+    "empty": "No messages",
+    "error": "Unable to load. Please retry.",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "actions": "Actions",
+    "count": "{count} unread",
+    "titleError": "Enter a title of up to 200 characters",
+    "contentError": "Enter content of up to 20000 characters",
+    "recipientError": "Choose 1–1000 recipients",
+    "expiryError": "Choose a valid future time",
+    "sender": "Sender ID",
+    "recipientIDs": "Recipient IDs",
+    "noPermission": "You do not have permission to view sent messages",
+    "density": "Density",
+    "normal": "Normal",
+    "compact": "Compact",
+    "columns": "Visible fields",
+    "style": "List style",
+    "striped": "Striped",
+    "plain": "Plain",
+    "fullscreen": "Fullscreen",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}, {total} messages",
+    "pageSize": "Page size",
+    "searchUser": "Search username",
+    "saved": "Done",
+    "close": "Close",
+    "expired": "Expired",
+    "unsaved": "Discard the unsent message?",
+    "clearPreviewConfirm": "Delete the {count} messages currently shown in notifications from your inbox?",
+    "loading": "Loading messages…",
+    "history": "Message history",
+    "deleteSelected": "Delete selected",
+    "readSelectedConfirm": "Mark selected messages as read?",
+    "deleteSelectedConfirm": "Delete selected messages from your inbox?",
+    "deleteSelectedGlobalConfirm": "Delete selected messages for every recipient?"
   }
 }

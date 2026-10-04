@@ -24,15 +24,7 @@ const visible = defineModel<boolean>({ default: false });
           :label="t('green')" /><t-radio
           :block="false"
           value="violet"
-          :label="t('violet')" /></t-radio-group></Field
-    ><Field class="login-position-control" name="login-position" :label="t('panel')"
-      ><t-radio-group v-model="p.loginPosition" class="radio-options"
-        ><t-radio
-          :block="false"
-          v-for="value in ['left', 'center', 'right']"
-          :key="value"
-          :value="value"
-          :label="t(value)" /></t-radio-group
+          :label="t('violet')" /></t-radio-group
     ></Field>
     <h3>{{ t('layout') }}</h3>
     <div class="switch-row">

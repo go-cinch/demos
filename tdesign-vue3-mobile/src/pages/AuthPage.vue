@@ -15,7 +15,6 @@ import type { PointCaptcha as Challenge, CaptchaPoint } from '../lib/types';
 import { rememberCredentials, rememberedCredentials } from '../lib/storage';
 import { nonempty, trimCredential } from '../lib/validation';
 import { t } from '../locales';
-import { preferences } from '../lib/preferences';
 import Field from '../components/Field.vue';
 import ServerSlider from '../components/ServerSlider.vue';
 import PointCaptcha from '../components/PointCaptcha.vue';
@@ -214,7 +213,7 @@ async function submit() {
 }
 </script>
 <template>
-  <div class="auth-page" :class="`position-${preferences.loginPosition}`">
+  <div class="auth-page">
     <section class="auth-panel">
       <h1>
         {{
