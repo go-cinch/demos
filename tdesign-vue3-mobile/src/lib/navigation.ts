@@ -3,6 +3,7 @@ import { canMenu } from './api';
 import { t } from '../locales';
 export const modules = computed(() =>
   [
+    { resource: 'msg', label: t('app.msg.manage'), icon: 'notification', path: '/system/msg' },
     { resource: 'user', label: t('system.menu.users'), icon: 'usergroup', path: '/system/user' },
     { resource: 'role', label: t('system.menu.roles'), icon: 'secured', path: '/system/role' },
     {
