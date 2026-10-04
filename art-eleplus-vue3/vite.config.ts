@@ -26,6 +26,7 @@ export default ({ mode }: { mode: string }) => {
     },
     base: VITE_BASE_URL,
     server: {
+      allowedHosts: ['preview-local.go-cinch.top'],
       port: Number(VITE_PORT),
       proxy: authProxyTarget
         ? {

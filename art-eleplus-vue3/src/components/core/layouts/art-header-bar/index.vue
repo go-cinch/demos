@@ -158,10 +158,22 @@
         <ArtIconButton
           v-if="shouldShowNotification"
           icon="ri:notification-2-line"
+          ref="noticeAnchor"
           class="action-messages notice-button relative"
+          role="button"
+          tabindex="0"
+          @keydown.enter="visibleNotice"
+          @keydown.space.prevent="visibleNotice"
+          :title="$t('msg.inbox')"
+          :aria-label="$t('msg.inbox')"
           @click="visibleNotice"
         >
-          <div class="absolute top-2 right-2 size-1.5 !bg-danger rounded-full"></div>
+          <span
+            v-if="(unreadCount ?? 0) > 0"
+            data-testid="message-unread-dot"
+            class="absolute top-2 right-2 size-2 rounded-full"
+            style="background: var(--el-color-primary)"
+          ></span>
         </ArtIconButton>
 
         <!-- 锁屏 -->
@@ -173,7 +185,7 @@
         />
 
         <!-- 用户头像、菜单 -->
-        <ArtUserMenu class="action-avatar" />
+        <div class="action-avatar"><ArtUserMenu /></div>
       </div>
     </div>
 
@@ -181,11 +193,12 @@
     <ArtWorkTab />
 
     <!-- 通知 -->
-    <ArtNotification v-model:value="showNotice" ref="notice" />
+    <ArtNotification v-model:value="showNotice" :anchor="noticeAnchor?.$el" ref="notice" />
   </div>
 </template>
 
 <script setup lang="ts">
+  import { useMsgCount } from '@/composables/useMsgCount'
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
   import { useFullscreen, useWindowSize } from '@vueuse/core'
@@ -235,6 +248,8 @@
   const { language } = storeToRefs(userStore)
   const { menuList } = storeToRefs(menuStore)
 
+  const unreadCount = useMsgCount()
+  const noticeAnchor = ref<{ $el: HTMLElement }>()
   const showNotice = ref(false)
   const notice = ref(null)
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'

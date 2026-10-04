@@ -1,456 +1,317 @@
-<!-- 通知组件 -->
-<template>
-  <div
-    class="art-notification-panel art-card-sm !shadow-xl"
-    :style="{
-      transform: show ? 'scaleY(1)' : 'scaleY(0.9)',
-      opacity: show ? 1 : 0
-    }"
-    v-show="visible"
-    @click.stop
-  >
-    <div class="flex-cb px-3.5 mt-3.5">
-      <span class="text-base font-medium text-g-800">{{ $t('notice.title') }}</span>
-      <span class="text-xs text-g-800 px-1.5 py-1 c-p select-none rounded hover:bg-g-200">
-        {{ $t('notice.btnRead') }}
-      </span>
-    </div>
-
-    <ul class="box-border flex items-end w-full h-12.5 px-3.5 border-b-d">
-      <li
-        v-for="(item, index) in barList"
-        :key="index"
-        class="h-12 leading-12 mr-5 overflow-hidden text-[13px] text-g-700 c-p select-none"
-        :class="{ 'bar-active': barActiveIndex === index }"
-        @click="changeBar(index)"
-      >
-        {{ item.name }} ({{ item.num }})
-      </li>
-    </ul>
-
-    <div class="w-full h-[calc(100%-95px)]">
-      <div class="h-[calc(100%-60px)] overflow-y-scroll scrollbar-thin">
-        <!-- 通知 -->
-        <ul v-show="barActiveIndex === 0">
-          <li
-            v-for="(item, index) in noticeList"
-            :key="index"
-            class="box-border flex-c px-3.5 py-3.5 c-p last:border-b-0 hover:bg-g-200/60"
-          >
-            <div
-              class="size-9 leading-9 text-center rounded-lg flex-cc"
-              :class="[getNoticeStyle(item.type).iconClass]"
-            >
-              <ArtSvgIcon class="text-lg !bg-transparent" :icon="getNoticeStyle(item.type).icon" />
-            </div>
-            <div class="w-[calc(100%-45px)] ml-3.5">
-              <h4 class="text-sm font-normal leading-5.5 text-g-900">{{ $t(item.title) }}</h4>
-              <p class="mt-1.5 text-xs text-g-500">{{ item.time }}</p>
-            </div>
-          </li>
-        </ul>
-
-        <!-- 消息 -->
-        <ul v-show="barActiveIndex === 1">
-          <li
-            v-for="(item, index) in msgList"
-            :key="index"
-            class="box-border flex-c px-3.5 py-3.5 c-p last:border-b-0 hover:bg-g-200/60"
-          >
-            <div class="w-9 h-9">
-              <img :src="item.avatar" class="w-full h-full rounded-lg" />
-            </div>
-            <div class="w-[calc(100%-45px)] ml-3.5">
-              <h4 class="text-xs font-normal leading-5.5">{{ $t(item.title) }}</h4>
-              <p class="mt-1.5 text-xs text-g-500">{{ item.time }}</p>
-            </div>
-          </li>
-        </ul>
-
-        <!-- 待办 -->
-        <ul v-show="barActiveIndex === 2">
-          <li
-            v-for="(item, index) in pendingList"
-            :key="index"
-            class="box-border px-5 py-3.5 last:border-b-0"
-          >
-            <h4>{{ item.title }}</h4>
-            <p class="text-xs text-g-500">{{ item.time }}</p>
-          </li>
-        </ul>
-
-        <!-- 空状态 -->
-        <div
-          v-show="currentTabIsEmpty"
-          class="relative top-25 h-full text-g-500 text-center !bg-transparent"
-        >
-          <ArtSvgIcon icon="system-uicons:inbox" class="text-5xl" />
-          <p class="mt-3.5 text-xs !bg-transparent"
-            >{{ $t('notice.text[0]') }}{{ barList[barActiveIndex].name }}</p
-          >
-        </div>
-      </div>
-
-      <div class="relative box-border w-full px-3.5">
-        <ElButton class="w-full mt-3" @click="handleViewAll" v-ripple>
-          {{ $t('notice.viewAll') }}
-        </ElButton>
-      </div>
-    </div>
-
-    <div class="h-25"></div>
-  </div>
-</template>
-
 <script setup lang="ts">
-  import { computed, ref, watch, type Ref, type ComputedRef } from 'vue'
+  import { onBeforeUnmount, ref, watch, onMounted } from 'vue'
+  import { useRoute } from 'vue-router'
+  import MessageTable from '@/views/msg/MessageTable.vue'
   import { useI18n } from 'vue-i18n'
-
-  // 导入头像图片
-  import avatar1 from '@/assets/images/avatar/avatar1.webp'
-  import avatar2 from '@/assets/images/avatar/avatar2.webp'
-  import avatar3 from '@/assets/images/avatar/avatar3.webp'
-  import avatar4 from '@/assets/images/avatar/avatar4.webp'
-  import avatar5 from '@/assets/images/avatar/avatar5.webp'
-  import avatar6 from '@/assets/images/avatar/avatar6.webp'
-
-  defineOptions({ name: 'ArtNotification' })
-
-  interface NoticeItem {
-    /** 标题 */
-    title: string
-    /** 时间 */
-    time: string
-    /** 类型 */
-    type: NoticeType
-  }
-
-  interface MessageItem {
-    /** 标题 */
-    title: string
-    /** 时间 */
-    time: string
-    /** 头像 */
-    avatar: string
-  }
-
-  interface PendingItem {
-    /** 标题 */
-    title: string
-    /** 时间 */
-    time: string
-  }
-
-  interface BarItem {
-    /** 名称 */
-    name: ComputedRef<string>
-    /** 数量 */
-    num: number
-  }
-
-  interface NoticeStyle {
-    /** 图标 */
-    icon: string
-    /** icon 样式 */
-    iconClass: string
-  }
-
-  type NoticeType = 'email' | 'message' | 'collection' | 'user' | 'notice'
-
-  const { t } = useI18n()
-
-  const props = defineProps<{
-    value: boolean
-  }>()
-
-  const emit = defineEmits<{
-    'update:value': [value: boolean]
-  }>()
-
-  const show = ref(false)
-  const visible = ref(false)
-  const barActiveIndex = ref(0)
-
-  const useNotificationData = () => {
-    // 通知数据
-    const noticeList = ref<NoticeItem[]>([
-      {
-        title: 'notificationContent.i18nAdded',
-        time: '2024-6-13 0:10',
-        type: 'notice'
-      },
-      {
-        title: 'notificationContent.messageReceived',
-        time: '2024-4-21 8:05',
-        type: 'message'
-      },
-      {
-        title: 'notificationContent.followedYou',
-        time: '2020-3-17 21:12',
-        type: 'collection'
-      },
-      {
-        title: 'notificationContent.docsAdded',
-        time: '2024-02-14 0:20',
-        type: 'notice'
-      },
-      {
-        title: 'notificationContent.emailReceived',
-        time: '2024-1-20 0:15',
-        type: 'email'
-      },
-      {
-        title: 'notificationContent.menuMockUpdated',
-        time: '2024-1-17 22:06',
-        type: 'notice'
-      }
-    ])
-
-    // 消息数据
-    const msgList = ref<MessageItem[]>([
-      {
-        title: 'notificationContent.alexFollowed',
-        time: '2021-2-26 23:50',
-        avatar: avatar1
-      },
-      {
-        title: 'notificationContent.emmaFollowed',
-        time: '2021-2-21 8:05',
-        avatar: avatar2
-      },
-      {
-        title: 'notificationContent.samFollowed',
-        time: '2020-1-17 21:12',
-        avatar: avatar3
-      },
-      {
-        title: 'notificationContent.chrisFollowed',
-        time: '2021-01-14 0:20',
-        avatar: avatar4
-      },
-      {
-        title: 'notificationContent.taylorFollowed',
-        time: '2020-12-20 0:15',
-        avatar: avatar5
-      },
-      {
-        title: 'notificationContent.jordanFollowed',
-        time: '2020-12-17 22:06',
-        avatar: avatar6
-      }
-    ])
-
-    // 待办数据
-    const pendingList = ref<PendingItem[]>([])
-
-    // 标签栏数据
-    const barList = computed<BarItem[]>(() => [
-      {
-        name: computed(() => t('notice.bar[0]')),
-        num: noticeList.value.length
-      },
-      {
-        name: computed(() => t('notice.bar[1]')),
-        num: msgList.value.length
-      },
-      {
-        name: computed(() => t('notice.bar[2]')),
-        num: pendingList.value.length
-      }
-    ])
-
-    return {
-      noticeList,
-      msgList,
-      pendingList,
-      barList
-    }
-  }
-
-  // 样式管理
-  const useNotificationStyles = () => {
-    const noticeStyleMap: Record<NoticeType, NoticeStyle> = {
-      email: {
-        icon: 'ri:mail-line',
-        iconClass: 'bg-warning/12 text-warning'
-      },
-      message: {
-        icon: 'ri:volume-down-line',
-        iconClass: 'bg-success/12 text-success'
-      },
-      collection: {
-        icon: 'ri:heart-3-line',
-        iconClass: 'bg-danger/12 text-danger'
-      },
-      user: {
-        icon: 'ri:volume-down-line',
-        iconClass: 'bg-info/12 text-info'
-      },
-      notice: {
-        icon: 'ri:notification-3-line',
-        iconClass: 'bg-theme/12 text-theme'
-      }
-    }
-
-    const getNoticeStyle = (type: NoticeType): NoticeStyle => {
-      const defaultStyle: NoticeStyle = {
-        icon: 'ri:arrow-right-circle-line',
-        iconClass: 'bg-theme/12 text-theme'
-      }
-
-      return noticeStyleMap[type] || defaultStyle
-    }
-
-    return {
-      getNoticeStyle
-    }
-  }
-
-  // 动画管理
-  const useNotificationAnimation = () => {
-    const showNotice = (open: boolean) => {
-      if (open) {
-        visible.value = true
-        setTimeout(() => {
-          show.value = true
-        }, 5)
-      } else {
-        show.value = false
-        setTimeout(() => {
-          visible.value = false
-        }, 350)
-      }
-    }
-
-    return {
-      showNotice
-    }
-  }
-
-  // 标签页管理
-  const useTabManagement = (
-    noticeList: Ref<NoticeItem[]>,
-    msgList: Ref<MessageItem[]>,
-    pendingList: Ref<PendingItem[]>,
-    businessHandlers: {
-      handleNoticeAll: () => void
-      handleMsgAll: () => void
-      handlePendingAll: () => void
-    }
-  ) => {
-    const changeBar = (index: number) => {
-      barActiveIndex.value = index
-    }
-
-    // 检查当前标签页是否为空
-    const currentTabIsEmpty = computed(() => {
-      const tabDataMap = [noticeList.value, msgList.value, pendingList.value]
-
-      const currentData = tabDataMap[barActiveIndex.value]
-      return currentData && currentData.length === 0
-    })
-
-    const handleViewAll = () => {
-      // 查看全部处理器映射
-      const viewAllHandlers: Record<number, () => void> = {
-        0: businessHandlers.handleNoticeAll,
-        1: businessHandlers.handleMsgAll,
-        2: businessHandlers.handlePendingAll
-      }
-
-      const handler = viewAllHandlers[barActiveIndex.value]
-      handler?.()
-
-      // 关闭通知面板
-      emit('update:value', false)
-    }
-
-    return {
-      changeBar,
-      currentTabIsEmpty,
-      handleViewAll
-    }
-  }
-
-  // 业务逻辑处理
-  const useBusinessLogic = () => {
-    const handleNoticeAll = () => {
-      // 处理查看全部通知
-      console.log('查看全部通知')
-    }
-
-    const handleMsgAll = () => {
-      // 处理查看全部消息
-      console.log('查看全部消息')
-    }
-
-    const handlePendingAll = () => {
-      // 处理查看全部待办
-      console.log('查看全部待办')
-    }
-
-    return {
-      handleNoticeAll,
-      handleMsgAll,
-      handlePendingAll
-    }
-  }
-
-  // 组合所有逻辑
-  const { noticeList, msgList, pendingList, barList } = useNotificationData()
-  const { getNoticeStyle } = useNotificationStyles()
-  const { showNotice } = useNotificationAnimation()
-  const { handleNoticeAll, handleMsgAll, handlePendingAll } = useBusinessLogic()
-  const { changeBar, currentTabIsEmpty, handleViewAll } = useTabManagement(
-    noticeList,
-    msgList,
-    pendingList,
-    { handleNoticeAll, handleMsgAll, handlePendingAll }
+  import { ElMessageBox } from 'element-plus'
+  import { msgApi, msgChanged, type Msg } from '@/api/msg'
+  import { useUserStore } from '@/store/modules/user'
+  import { formatDateTime } from '@/utils/msg-date-time'
+  import { $t } from '@/locales'
+  const props = defineProps<{ anchor?: HTMLElement }>()
+  const userStore = useUserStore()
+  const timezone = ref(
+    localStorage.getItem('art-timezone') || new Intl.DateTimeFormat().resolvedOptions().timeZone
   )
-
-  // 监听属性变化
+  function updateTimezone(event: Event) {
+    timezone.value = (event as CustomEvent<string>).detail
+  }
+  const open = defineModel<boolean>('value', { default: false })
+  const { t: translate } = useI18n()
+  const route = useRoute()
+  const historyOpen = ref(false)
   watch(
-    () => props.value,
-    (newValue) => {
-      showNotice(newValue)
+    () => route.fullPath,
+    () => {
+      open.value = false
+      historyOpen.value = false
+      detail.value = false
     }
   )
+  const rows = ref<Msg[]>([]),
+    loading = ref(false),
+    error = ref(''),
+    busy = ref(false),
+    detail = ref(false),
+    selected = ref<Msg>()
+  function history() {
+    open.value = false
+    historyOpen.value = true
+  }
+  let generation = 0
+  async function load() {
+    if (!open.value || document.hidden) return
+    const current = ++generation
+    loading.value = true
+    error.value = ''
+    try {
+      const result = await msgApi.list(false, { p: 1, s: 10 })
+      if (current === generation) rows.value = result.items
+    } catch (e) {
+      if (current === generation) error.value = (e as Error).message
+    } finally {
+      if (current === generation) loading.value = false
+    }
+  }
+  async function ask(title: string) {
+    try {
+      await ElMessageBox.confirm(title, $t('msg.confirm'), {
+        confirmButtonText: $t('msg.confirm'),
+        cancelButtonText: $t('msg.cancel')
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+  async function mark(row: Msg) {
+    busy.value = true
+    try {
+      await msgApi.read(row.id)
+      msgChanged()
+      await load()
+    } finally {
+      busy.value = false
+    }
+  }
+  async function show(row: Msg) {
+    const value = await msgApi.get(row.id, false)
+    selected.value = value
+    open.value = false
+    detail.value = true
+    if (!value.read_at) await mark(value)
+  }
+  async function remove(row: Msg) {
+    if (!(await ask($t('msg.deleteConfirm')))) return
+    busy.value = true
+    try {
+      await msgApi.remove(row.id, false)
+      msgChanged()
+      await load()
+    } finally {
+      busy.value = false
+    }
+  }
+  async function clearPreview() {
+    const ids = rows.value.map((row) => row.id)
+    if (
+      busy.value ||
+      !ids.length ||
+      !(await ask(translate('msg.clearPreviewConfirm', { count: ids.length })))
+    )
+      return
+    busy.value = true
+    try {
+      for (const id of ids) await msgApi.remove(id, false)
+    } finally {
+      busy.value = false
+      msgChanged()
+      await load()
+    }
+  }
+  async function readAll() {
+    if (busy.value) return
+    busy.value = true
+    try {
+      await msgApi.readAll()
+      msgChanged()
+      await load()
+    } finally {
+      busy.value = false
+    }
+  }
+  watch(open, (v) => {
+    if (v) void load()
+    else generation++
+  })
+  let timer: ReturnType<typeof setInterval>
+  onMounted(() => {
+    window.addEventListener('art-timezone-change', updateTimezone)
+    timer = setInterval(load, 30000)
+    window.addEventListener('cinch-msg-changed', load)
+  })
+  onBeforeUnmount(() => {
+    generation++
+    window.removeEventListener('art-timezone-change', updateTimezone)
+    clearInterval(timer)
+    window.removeEventListener('cinch-msg-changed', load)
+  })
 </script>
-
+<template>
+  <ElPopover
+    :visible="open"
+    virtual-triggering
+    :virtual-ref="props.anchor"
+    placement="bottom-end"
+    :offset="8"
+    :show-arrow="false"
+    width="max-content"
+    :popper-style="{
+      padding: 0,
+      minWidth: 'min(18rem, calc(100vw - 1.5rem))',
+      maxWidth: 'min(25rem, calc(100vw - 1.5rem))'
+    }"
+  >
+    <section
+      class="art-notification-panel"
+      data-testid="notification-preview"
+      role="region"
+      :aria-label="$t('msg.notifications')"
+      @click.stop
+    >
+      <header class="notification-heading"
+        ><h2>{{ $t('msg.notifications') }}</h2
+        ><ElButton
+          text
+          circle
+          :disabled="busy || loading || !rows.length"
+          :aria-label="$t('msg.readAll')"
+          :title="$t('msg.readAll')"
+          @click="readAll"
+          ><ArtSvgIcon icon="ri:mail-check-line" /></ElButton
+      ></header>
+      <ElAlert v-if="error" :title="error" type="error" />
+      <div v-loading="loading" class="notification-scroll"
+        ><ul
+          ><li v-for="row in rows" :key="row.id" class="notification-row">
+            <div data-testid="notification-avatar"
+              ><ElAvatar :size="40" class="notification-avatar">{{
+                userStore.info.userName?.trim().slice(0, 2).toUpperCase()
+              }}</ElAvatar></div
+            >
+            <button
+              type="button"
+              class="notification-copy"
+              :aria-label="row.title"
+              :disabled="busy || loading"
+              @click="show(row)"
+              ><span class="notification-title" data-testid="notification-title">{{
+                row.title
+              }}</span
+              ><span class="notification-message" data-testid="notification-content">{{
+                row.content
+              }}</span
+              ><time class="notification-date">{{
+                formatDateTime(row.published_at, timezone)
+              }}</time></button
+            >
+            <ElButton
+              text
+              circle
+              :type="row.read_at ? 'danger' : undefined"
+              :disabled="busy || loading"
+              :aria-label="$t(row.read_at ? 'msg.delete' : 'msg.markRead')"
+              :title="$t(row.read_at ? 'msg.delete' : 'msg.markRead')"
+              @click="row.read_at ? remove(row) : mark(row)"
+              ><ArtSvgIcon :icon="row.read_at ? 'ri:close-circle-line' : 'ri:checkbox-circle-line'"
+            /></ElButton> </li></ul
+        ><div v-if="!rows.length" class="notification-empty">{{
+          $t(loading ? 'msg.loading' : 'msg.empty')
+        }}</div></div
+      >
+      <footer class="notification-footer"
+        ><ElButton text :disabled="busy || loading || !rows.length" @click="clearPreview">{{
+          $t('msg.clear')
+        }}</ElButton
+        ><ElButton type="primary" size="small" @click="history">{{
+          $t('msg.viewAll')
+        }}</ElButton></footer
+      >
+    </section>
+  </ElPopover>
+  <ElDialog v-model="detail" :title="$t('msg.detail')" width="560px"
+    ><template v-if="selected"
+      ><h2>{{ selected.title }}</h2
+      ><p class="notification-date">{{ formatDateTime(selected.published_at, timezone) }}</p
+      ><p class="msg-content">{{ selected.content }}</p></template
+    ></ElDialog
+  >
+  <ElDialog v-model="historyOpen" :title="$t('msg.history')" fullscreen :show-close="true"
+    ><MessageTable v-if="historyOpen" embedded @close="historyOpen = false"
+  /></ElDialog>
+</template>
 <style scoped>
-  @reference '@styles/core/tailwind.css';
-
   .art-notification-panel {
-    @apply absolute 
-    top-14.5 
-    right-5 
-    w-90 
-    h-125 
-    overflow-hidden 
-    transition-all 
-    duration-300
-    origin-top 
-    will-change-[top,left] 
-    max-[640px]:top-[65px]
-    max-[640px]:right-0
-    max-[640px]:w-full 
-    max-[640px]:h-[80vh];
+    color: var(--el-text-color-primary);
   }
-
-  .bar-active {
-    color: var(--theme-color) !important;
-    border-bottom: 2px solid var(--theme-color);
+  .notification-heading,
+  .notification-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
   }
-
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 5px !important;
+  .notification-heading h2 {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
   }
-
-  .dark .scrollbar-thin::-webkit-scrollbar-track {
-    background-color: var(--default-box-color);
+  .notification-footer {
+    border-top: 1px solid var(--el-border-color);
   }
-
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #222 !important;
+  .notification-scroll {
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  .notification-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-top: 1px solid var(--el-border-color);
+  }
+  .notification-row:hover {
+    background: var(--el-fill-color-light);
+  }
+  .notification-row > [data-testid='notification-avatar'] {
+    align-self: start;
+  }
+  .notification-avatar {
+    background: var(--el-fill-color);
+    color: var(--el-text-color-primary);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .notification-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    text-align: start;
+  }
+  .notification-title,
+  .notification-message,
+  .notification-date {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 20px;
+  }
+  .notification-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .notification-message,
+  .notification-date {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+  .notification-empty {
+    display: flex;
+    min-height: 144px;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    color: var(--el-text-color-secondary);
+  }
+  .msg-content {
+    max-height: 384px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import ResultToolbar from './ResultToolbar.vue'
   import type { FormInstance } from 'element-plus'
   import { ElMessageBox } from 'element-plus'
   import type { ResourceKind, SystemRecord, UserRecord } from '@/api/system-service'
@@ -843,46 +844,16 @@
               >{{ $t('system.common.deleteSelected') }}</ElButton
             ></div
           >
-          <div class="flex gap-2">
-            <ElButton :title="$t('system.common.refresh')" @click="load">
-              <ArtSvgIcon icon="ri:refresh-line" />
-            </ElButton>
-            <ElSelect v-model="tableSize" style="width: 115px"
-              ><ElOption value="small" :label="$t('system.table.compact')" /><ElOption
-                value="default"
-                :label="$t('system.table.default')" /><ElOption
-                value="large"
-                :label="$t('system.table.loose')"
-            /></ElSelect>
-            <ElButton :title="$t('system.table.fullscreen')" @click="toggleFullscreen"
-              ><ArtSvgIcon :icon="fullscreen ? 'ri:fullscreen-exit-line' : 'ri:fullscreen-line'"
-            /></ElButton>
-            <ElPopover trigger="click" :width="220"
-              ><template #reference
-                ><ElButton><ArtSvgIcon icon="ri:layout-column-line" /></ElButton></template
-              ><ElCheckboxGroup v-model="visibleColumns" class="column-picker"
-                ><ElCheckbox
-                  v-for="column in config.columns"
-                  :key="column.key"
-                  :value="column.key"
-                  >{{ $t(column.label) }}</ElCheckbox
-                ></ElCheckboxGroup
-              ></ElPopover
-            >
-            <ElPopover trigger="click" :width="200">
-              <template #reference>
-                <ElButton :title="$t('system.table.style')">
-                  <ArtSvgIcon icon="ri:table-2" />
-                </ElButton>
-              </template>
-              <div class="table-style-options">
-                <ElSwitch v-model="tableBordered" />
-                <span>{{ $t('system.table.bordered') }}</span>
-                <ElSwitch v-model="tableStriped" />
-                <span>{{ $t('system.table.striped') }}</span>
-              </div>
-            </ElPopover>
-          </div>
+          <ResultToolbar
+            v-model:size="tableSize"
+            v-model:visible="visibleColumns"
+            v-model:bordered="tableBordered"
+            v-model:striped="tableStriped"
+            :fullscreen="fullscreen"
+            :columns="config.columns.map((c) => ({ key: c.key, title: $t(c.label) }))"
+            @refresh="load"
+            @fullscreen="toggleFullscreen"
+          />
         </div>
         <ElTable
           v-loading="loading"

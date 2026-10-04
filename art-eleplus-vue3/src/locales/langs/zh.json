@@ -47,11 +47,20 @@
   "setting": {
     "menuType": {
       "title": "菜单布局",
-      "list": ["垂直", "水平", "混合", "双列"]
+      "list": [
+        "垂直",
+        "水平",
+        "混合",
+        "双列"
+      ]
     },
     "theme": {
       "title": "主题风格",
-      "list": ["浅色", "深色", "系统"]
+      "list": [
+        "浅色",
+        "深色",
+        "系统"
+      ]
     },
     "menu": {
       "title": "菜单风格"
@@ -61,11 +70,17 @@
     },
     "box": {
       "title": "盒子样式",
-      "list": ["边框", "阴影"]
+      "list": [
+        "边框",
+        "阴影"
+      ]
     },
     "container": {
       "title": "容器宽度",
-      "list": ["铺满", "定宽"]
+      "list": [
+        "铺满",
+        "定宽"
+      ]
     },
     "basics": {
       "title": "基础配置",
@@ -120,8 +135,14 @@
   "notice": {
     "title": "通知",
     "btnRead": "标为已读",
-    "bar": ["通知", "消息", "代办"],
-    "text": ["暂无"],
+    "bar": [
+      "通知",
+      "消息",
+      "代办"
+    ],
+    "text": [
+      "暂无"
+    ],
     "viewAll": "查看全部"
   },
   "worktab": {
@@ -209,6 +230,7 @@
     "500": "抱歉，服务器出错了"
   },
   "menus": {
+    "inbox": "我的消息",
     "login": {
       "title": "登录"
     },
@@ -303,7 +325,8 @@
       "menu3": "菜单3",
       "menu31": "菜单3-1",
       "menu32": "菜单3-2",
-      "menu321": "菜单3-2-1"
+      "menu321": "菜单3-2-1",
+      "msg": "消息"
     },
     "safeguard": {
       "title": "运维管理",
@@ -391,7 +414,10 @@
   "profile": {
     "title": "个人中心",
     "noRole": "未分配角色",
-    "fields": { "username": "用户名", "role": "角色" },
+    "fields": {
+      "username": "用户名",
+      "role": "角色"
+    },
     "tabs": {
       "basicInformation": "基本信息",
       "changePassword": "修改密码"
@@ -583,8 +609,12 @@
     }
   },
   "system": {
-    "action": { "title": "权限管理" },
-    "role": { "title": "角色管理" },
+    "action": {
+      "title": "权限管理"
+    },
+    "role": {
+      "title": "角色管理"
+    },
     "user": {
       "title": "用户管理",
       "keepPassword": "留空表示不修改密码",
@@ -595,9 +625,15 @@
       "unlockPassword": "解除改密锁定",
       "lockTip": "输入锁定小时数，0 表示永久锁定"
     },
-    "userGroup": { "title": "用户组管理" },
-    "dictionary": { "title": "字典管理" },
-    "whitelist": { "title": "白名单管理" },
+    "userGroup": {
+      "title": "用户组管理"
+    },
+    "dictionary": {
+      "title": "字典管理"
+    },
+    "whitelist": {
+      "title": "白名单管理"
+    },
     "fields": {
       "id": "ID",
       "name": "名称",
@@ -643,9 +679,19 @@
       "more": "展开",
       "less": "收起"
     },
-    "status": { "pending": "待审核", "active": "正常", "locked": "已锁定" },
-    "category": { "permission": "权限", "jwt": "JWT" },
-    "enabled": { "yes": "已启用", "no": "已停用" },
+    "status": {
+      "pending": "待审核",
+      "active": "正常",
+      "locked": "已锁定"
+    },
+    "category": {
+      "permission": "权限",
+      "jwt": "JWT"
+    },
+    "enabled": {
+      "yes": "已启用",
+      "no": "已停用"
+    },
     "table": {
       "compact": "紧凑",
       "default": "默认",
@@ -674,6 +720,85 @@
       "passwordUnlocked": "已解除改密锁定",
       "futureLock": "请输入有效的小时数"
     },
-    "confirm": { "deleteDescription": "确定删除选中的 {count} 条记录吗？" }
+    "confirm": {
+      "deleteDescription": "确定删除选中的 {count} 条记录吗？"
+    }
+  },
+  "msg": {
+    "select": "选择",
+    "selectAll": "全选",
+    "notifications": "通知",
+    "viewAll": "查看所有消息",
+    "account": "账户菜单",
+    "clear": "清空",
+    "inbox": "我的消息",
+    "manage": "消息",
+    "hint": "查看通知，管理你的已读和删除状态。",
+    "manageHint": "发布全员或定向通知，查看发送记录。",
+    "send": "发送消息",
+    "sent": "发送成功",
+    "title": "标题",
+    "content": "正文",
+    "type": "消息类型",
+    "system": "系统消息",
+    "notice": "通知公告",
+    "scope": "发送范围",
+    "all": "全员",
+    "targeted": "指定用户",
+    "recipients": "收件人",
+    "expiry": "过期时间",
+    "noExpiry": "永不过期",
+    "published": "发布时间",
+    "read": "已读",
+    "unread": "未读",
+    "allStatus": "全部状态",
+    "allTypes": "全部类型",
+    "markRead": "标记已读",
+    "readAll": "全部已读",
+    "delete": "删除",
+    "deleteConfirm": "从我的收件箱删除这条消息？",
+    "deleteGlobal": "全局删除",
+    "deleteGlobalConfirm": "删除后所有收件人均无法查看，且无法恢复。确认删除？",
+    "detail": "消息详情",
+    "view": "查看",
+    "refresh": "刷新",
+    "empty": "暂无消息",
+    "error": "加载失败，请重试",
+    "retry": "重试",
+    "cancel": "取消",
+    "confirm": "确认",
+    "actions": "操作",
+    "count": "未读 {count} 条",
+    "titleError": "请输入标题，最多 200 字",
+    "contentError": "请输入正文，最多 20000 字",
+    "recipientError": "请选择 1–1000 位收件人",
+    "expiryError": "请选择有效的未来时间",
+    "sender": "发送人 ID",
+    "recipientIDs": "收件人 ID",
+    "noPermission": "没有查看发送记录的权限",
+    "density": "密度",
+    "normal": "标准",
+    "compact": "紧凑",
+    "columns": "显示字段",
+    "style": "列表样式",
+    "striped": "斑马纹",
+    "plain": "简洁",
+    "fullscreen": "全屏",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "第 {page} 页，共 {total} 条",
+    "pageSize": "每页条数",
+    "searchUser": "搜索用户名",
+    "saved": "操作成功",
+    "close": "关闭",
+    "expired": "已过期",
+    "unsaved": "放弃未发送的消息？",
+    "clearPreviewConfirm": "从我的收件箱删除当前通知列表中的 {count} 条消息？",
+    "loading": "正在加载消息…",
+    "history": "历史消息",
+    "deleteSelected": "批量删除",
+    "readSelectedConfirm": "将选中的消息标为已读？",
+    "deleteSelectedConfirm": "删除选中的消息？仅从你的收件箱删除。",
+    "deleteSelectedGlobalConfirm": "为所有接收者删除选中的消息？"
   }
 }

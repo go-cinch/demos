@@ -14,7 +14,8 @@ export const systemRoutes: AppRouteRecord = {
       '/system/role',
       '/system/action',
       '/system/whitelist',
-      '/system/dictionary'
+      '/system/dictionary',
+      '/system/msg'
     ]
   },
   children: [
@@ -81,6 +82,17 @@ export const systemRoutes: AppRouteRecord = {
         title: 'menus.system.whitelist',
         icon: 'ri:list-check-3',
         roles: ['*', '/system/whitelist'],
+        keepAlive: true
+      }
+    },
+    {
+      path: 'msg',
+      name: 'SystemMsg',
+      component: '/system/msg',
+      meta: {
+        title: 'menus.system.msg',
+        icon: 'ri:notification-2-line',
+        roles: ['*', '/system/msg'],
         keepAlive: true
       }
     }

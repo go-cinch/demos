@@ -12,19 +12,22 @@
     popper-style="padding: 5px 16px;"
   >
     <template #reference>
-      <img
-        class="size-8.5 mr-5 c-p rounded-full max-sm:w-6.5 max-sm:h-6.5 max-sm:mr-[16px]"
-        src="@imgs/user/avatar.webp"
-        alt="avatar"
-      />
+      <button
+        type="button"
+        data-testid="user-avatar"
+        class="mr-5 rounded-full max-sm:mr-4"
+        :aria-label="$t('msg.account')"
+        ><ElAvatar :size="34" class="user-text-avatar">{{
+          userInfo.userName?.trim().slice(0, 2).toUpperCase()
+        }}</ElAvatar></button
+      >
     </template>
     <template #default>
       <div class="pt-3">
         <div class="flex-c pb-1 px-0">
-          <img
-            class="w-10 h-10 mr-3 ml-0 overflow-hidden rounded-full float-left"
-            src="@imgs/user/avatar.webp"
-          />
+          <ElAvatar :size="40" class="user-text-avatar mr-3 shrink-0">{{
+            userInfo.userName?.trim().slice(0, 2).toUpperCase()
+          }}</ElAvatar>
           <div class="w-[calc(100%-60px)] h-full">
             <span class="block text-sm font-medium text-g-800 truncate">{{
               userInfo.userName
@@ -131,5 +134,14 @@
     transition-all
     duration-200
     hover:shadow-xl;
+  }
+</style>
+
+<style scoped>
+  .user-text-avatar {
+    background: var(--el-fill-color);
+    color: var(--el-text-color-primary);
+    font-size: 14px;
+    font-weight: 500;
   }
 </style>

@@ -47,11 +47,20 @@
   "setting": {
     "menuType": {
       "title": "Menu Layout",
-      "list": ["Vertical", "Horizontal", "Mixed", "Dual"]
+      "list": [
+        "Vertical",
+        "Horizontal",
+        "Mixed",
+        "Dual"
+      ]
     },
     "theme": {
       "title": "Theme Style",
-      "list": ["Light", "Dark", "System"]
+      "list": [
+        "Light",
+        "Dark",
+        "System"
+      ]
     },
     "menu": {
       "title": "Menu Style"
@@ -61,11 +70,17 @@
     },
     "box": {
       "title": "Box Style",
-      "list": ["Border", "Shadow"]
+      "list": [
+        "Border",
+        "Shadow"
+      ]
     },
     "container": {
       "title": "Container Width",
-      "list": ["Full", "Boxed"]
+      "list": [
+        "Full",
+        "Boxed"
+      ]
     },
     "basics": {
       "title": "Basic Config",
@@ -120,8 +135,14 @@
   "notice": {
     "title": "Notice",
     "btnRead": "Mark as read",
-    "bar": ["Notice", "Message", "Todo"],
-    "text": ["No"],
+    "bar": [
+      "Notice",
+      "Message",
+      "Todo"
+    ],
+    "text": [
+      "No"
+    ],
     "viewAll": "View all"
   },
   "worktab": {
@@ -209,6 +230,7 @@
     "500": "Sorry, there was an error on the server"
   },
   "menus": {
+    "inbox": "My messages",
     "login": {
       "title": "Login"
     },
@@ -303,7 +325,8 @@
       "menu3": "Menu 3",
       "menu31": "Menu 3-1",
       "menu32": "Menu 3-2",
-      "menu321": "Menu 3-2-1"
+      "menu321": "Menu 3-2-1",
+      "msg": "Messages"
     },
     "safeguard": {
       "title": "Safeguard",
@@ -391,7 +414,10 @@
   "profile": {
     "title": "Profile",
     "noRole": "No role",
-    "fields": { "username": "Username", "role": "Role" },
+    "fields": {
+      "username": "Username",
+      "role": "Role"
+    },
     "tabs": {
       "basicInformation": "Basic Information",
       "changePassword": "Change Password"
@@ -583,8 +609,12 @@
     }
   },
   "system": {
-    "action": { "title": "Permission Management" },
-    "role": { "title": "Role Management" },
+    "action": {
+      "title": "Permission Management"
+    },
+    "role": {
+      "title": "Role Management"
+    },
     "user": {
       "title": "User Management",
       "keepPassword": "Leave blank to keep the current password",
@@ -595,9 +625,15 @@
       "unlockPassword": "Unlock password change",
       "lockTip": "Enter lock duration in hours; 0 means permanent"
     },
-    "userGroup": { "title": "User Group Management" },
-    "dictionary": { "title": "Dictionary Management" },
-    "whitelist": { "title": "Whitelist Management" },
+    "userGroup": {
+      "title": "User Group Management"
+    },
+    "dictionary": {
+      "title": "Dictionary Management"
+    },
+    "whitelist": {
+      "title": "Whitelist Management"
+    },
     "fields": {
       "id": "ID",
       "name": "Name",
@@ -643,9 +679,19 @@
       "more": "More",
       "less": "Less"
     },
-    "status": { "pending": "Pending", "active": "Active", "locked": "Locked" },
-    "category": { "permission": "Permission", "jwt": "JWT" },
-    "enabled": { "yes": "Enabled", "no": "Disabled" },
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "locked": "Locked"
+    },
+    "category": {
+      "permission": "Permission",
+      "jwt": "JWT"
+    },
+    "enabled": {
+      "yes": "Enabled",
+      "no": "Disabled"
+    },
     "table": {
       "compact": "Compact",
       "default": "Default",
@@ -674,6 +720,85 @@
       "passwordUnlocked": "Password change unlocked",
       "futureLock": "Enter a valid number of hours"
     },
-    "confirm": { "deleteDescription": "Delete the selected {count} record(s)?" }
+    "confirm": {
+      "deleteDescription": "Delete the selected {count} record(s)?"
+    }
+  },
+  "msg": {
+    "select": "Select",
+    "selectAll": "Select all",
+    "notifications": "Notifications",
+    "viewAll": "View All Messages",
+    "account": "Account menu",
+    "clear": "Clear",
+    "inbox": "My messages",
+    "manage": "Messages",
+    "hint": "Read notifications and manage your inbox.",
+    "manageHint": "Publish broadcasts or targeted messages and review sent messages.",
+    "send": "Send message",
+    "sent": "Message sent",
+    "title": "Title",
+    "content": "Content",
+    "type": "Message type",
+    "system": "System",
+    "notice": "Notice",
+    "scope": "Audience",
+    "all": "Everyone",
+    "targeted": "Selected users",
+    "recipients": "Recipients",
+    "expiry": "Expires at",
+    "noExpiry": "No expiry",
+    "published": "Published at",
+    "read": "Read",
+    "unread": "Unread",
+    "allStatus": "All statuses",
+    "allTypes": "All types",
+    "markRead": "Mark as read",
+    "readAll": "Mark all as read",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this message from your inbox?",
+    "deleteGlobal": "Delete for everyone",
+    "deleteGlobalConfirm": "This permanently removes the message for every recipient. Delete it?",
+    "detail": "Message details",
+    "view": "View",
+    "refresh": "Refresh",
+    "empty": "No messages",
+    "error": "Unable to load. Please retry.",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "actions": "Actions",
+    "count": "{count} unread",
+    "titleError": "Enter a title of up to 200 characters",
+    "contentError": "Enter content of up to 20000 characters",
+    "recipientError": "Choose 1–1000 recipients",
+    "expiryError": "Choose a valid future time",
+    "sender": "Sender ID",
+    "recipientIDs": "Recipient IDs",
+    "noPermission": "You do not have permission to view sent messages",
+    "density": "Density",
+    "normal": "Normal",
+    "compact": "Compact",
+    "columns": "Visible fields",
+    "style": "List style",
+    "striped": "Striped",
+    "plain": "Plain",
+    "fullscreen": "Fullscreen",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}, {total} messages",
+    "pageSize": "Page size",
+    "searchUser": "Search username",
+    "saved": "Done",
+    "close": "Close",
+    "expired": "Expired",
+    "unsaved": "Discard the unsent message?",
+    "clearPreviewConfirm": "Delete the {count} messages currently shown in notifications from your inbox?",
+    "loading": "Loading messages…",
+    "history": "Message history",
+    "deleteSelected": "Delete selected",
+    "readSelectedConfirm": "Mark selected messages as read?",
+    "deleteSelectedConfirm": "Delete selected messages from your inbox?",
+    "deleteSelectedGlobalConfirm": "Delete selected messages for every recipient?"
   }
 }
