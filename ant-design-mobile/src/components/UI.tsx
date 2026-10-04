@@ -62,6 +62,7 @@ const paths: Record<string, ReactNode> = {
       <path d="m12 13 8 8m-3-3 3-3m-6 0 3-3" />
     </>
   ),
+  broom: <path d="m15 3-6 9m-2-1 7 4-3 6H3l4-10Zm-1 4-2 6m5-4-2 4" />,
   book: (
     <>
       <path d="M4 4h14v16H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m0 12h14M7 8h7m-7 4h5" />

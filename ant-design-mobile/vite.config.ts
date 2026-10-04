@@ -5,7 +5,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react()],
+    cacheDir: 'node_modules/.vite-ant-design-mobile',
     server: {
+      headers: { 'Cache-Control': 'no-store' },
       allowedHosts: ['preview-local.go-cinch.top'],
       port: Number(env.VITE_PORT || 5671),
       strictPort: true,

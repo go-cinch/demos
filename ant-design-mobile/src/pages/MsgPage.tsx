@@ -19,8 +19,13 @@ import PageSkeleton from "../components/PageSkeleton";
 import ResultToolbar from "../components/ResultToolbar";
 import RecordPagination from "../components/RecordPagination";
 import ResultOptions from "../components/ResultOptions";
+import MsgInboxPage from "./MsgInboxPage";
 const tr = (key: string) => t(`app.msg.${key}`);
 export default function MsgPage() {
+  const sent = useLocation().pathname === "/system/msg";
+  return sent ? <MsgManagementPage /> : <MsgInboxPage />;
+}
+function MsgManagementPage() {
   const composeForm = useRef<HTMLFormElement>(null);
   const sent = useLocation().pathname === "/system/msg";
   const permitted = (action: string) =>
@@ -234,18 +239,36 @@ export default function MsgPage() {
                   >
                     <div className="record">
                       {selecting && (
-                        <Checkbox
+                        <span
+                          role="checkbox"
                           aria-label={`${t("select")} ${row.title}`}
-                          disabled={m.busy || m.loading}
-                          checked={checkedVisible.includes(row.id)}
-                          onChange={(checked) =>
+                          aria-checked={checkedVisible.includes(row.id)}
+                          aria-disabled={m.busy || m.loading}
+                          tabIndex={m.busy || m.loading ? -1 : 0}
+                          onKeyDown={(event) => {
+                            if (event.key !== " " && event.key !== "Enter")
+                              return;
+                            event.preventDefault();
+                            if (m.busy || m.loading) return;
                             setCheckedIDs((ids) =>
-                              checked
-                                ? [...ids, row.id]
-                                : ids.filter((id) => id !== row.id),
-                            )
-                          }
-                        />
+                              ids.includes(row.id)
+                                ? ids.filter((id) => id !== row.id)
+                                : [...ids, row.id],
+                            );
+                          }}
+                        >
+                          <Checkbox
+                            disabled={m.busy || m.loading}
+                            checked={checkedVisible.includes(row.id)}
+                            onChange={(checked) =>
+                              setCheckedIDs((ids) =>
+                                checked
+                                  ? [...ids, row.id]
+                                  : ids.filter((id) => id !== row.id),
+                              )
+                            }
+                          />
+                        </span>
                       )}
                       <button
                         className="record-open"
@@ -257,7 +280,7 @@ export default function MsgPage() {
                         </span>
                         <span className="record-main">
                           <strong>{row.title}</strong>
-                          <span className="record-summary">
+                          <span className="record-summary message-record-tags">
                             {columns.includes("type") && (
                               <Tag color="primary" fill="outline">
                                 {tr(row.type)}
@@ -460,7 +483,7 @@ export default function MsgPage() {
             void send();
           }}
         >
-          <fieldset disabled={m.busy}>
+          <fieldset className="message-compose-fields" disabled={m.busy}>
             <TextField
               name="msg-title"
               label={tr("title")}

@@ -1,0 +1,216 @@
+.ant-message-inbox .message-feed-footer-idle {
+  min-height: 1px;
+  padding: 0;
+}
+
+.ant-message-inbox > .page-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 44px;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.ant-message-inbox .back-link,
+.ant-message-inbox .message-read-all {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  color: var(--ink);
+  background: transparent;
+}
+.ant-message-inbox .page-heading h1 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.ant-message-inbox .message-list {
+  min-width: 0;
+}
+.ant-message-inbox .message-item + .message-item {
+  border-top: 1px solid var(--line);
+}
+
+.ant-message-inbox .message-body {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 94px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 6px;
+  text-align: left;
+}
+.ant-message-inbox .message-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  max-width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--selected-bg);
+}
+
+.ant-message-inbox .message-unread-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--canvas);
+  border-radius: 50%;
+  background: var(--adm-color-danger);
+}
+.ant-message-inbox .message-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.ant-message-inbox .message-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.ant-message-inbox .is-unread .message-title {
+  font-weight: 650;
+}
+.ant-message-inbox .message-time {
+  width: 94px;
+  min-width: 0;
+  align-self: center;
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.ant-message-inbox .message-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+@media (max-width: 360px) {
+  .ant-message-inbox .message-body {
+    grid-template-columns: 40px minmax(0, 1fr) 84px;
+    gap: 8px;
+    padding-inline: 4px;
+  }
+  .ant-message-inbox .message-avatar {
+    width: 40px;
+    max-width: 40px;
+    height: 40px;
+  }
+  .ant-message-inbox .message-time {
+    width: 84px;
+    font-size: 10px;
+  }
+}
+
+.ant-message-inbox .message-body {
+  min-height: 84px;
+  cursor: default;
+  touch-action: pan-y;
+}
+.ant-message-inbox .message-item {
+  min-width: 0;
+  overflow: hidden;
+}
+.ant-message-inbox .message-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+.ant-message-inbox .message-filters {
+  margin-bottom: 16px;
+}
+.ant-message-inbox .message-type-tabs {
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ant-message-inbox .message-type-tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+.ant-message-inbox .message-type-tabs button.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 600;
+}
+.ant-message-inbox .adm-swipe-action {
+  --background: transparent;
+}
+.ant-message-inbox .adm-swipe-action-actions {
+  visibility: hidden;
+}
+.ant-message-inbox .is-revealed .adm-swipe-action-actions-right {
+  visibility: visible;
+}
+.ant-message-inbox .message-item[aria-busy='true'] .adm-swipe-action {
+  pointer-events: none;
+}
+.ant-message-inbox .message-item[aria-busy='true'] .adm-swipe-action-action-button {
+  opacity: 0.45;
+}
+.ant-message-inbox .adm-swipe-action-action-button {
+  width: 80px;
+  min-width: 80px;
+  min-height: 84px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--adm-color-danger);
+  color: var(--canvas);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ant-message-inbox .message-delete-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.ant-message-inbox .adm-infinite-scroll {
+  overflow-anchor: none;
+  min-height: 48px;
+  padding: 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ant-message-inbox .message-infinite-idle {
+  min-height: 1px;
+  padding: 0;
+}
+.ant-message-inbox .message-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}

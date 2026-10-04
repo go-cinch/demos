@@ -34,7 +34,7 @@
   },
   "msg": {
     "inbox": "My messages",
-    "manage": "Message management",
+    "manage": "Messages",
     "hint": "Read notifications and manage your inbox.",
     "manageHint": "Publish broadcasts or targeted messages and review sent messages.",
     "send": "Send message",
@@ -95,6 +95,9 @@
     "close": "Close",
     "expired": "Expired",
     "unsaved": "Discard the unsent message?",
+    "loadingMore": "Loading more…",
+    "noMore": "No more messages",
+    "selectedCount": "{count} selected",
     "deleteSelected": "Delete selected",
     "readSelectedConfirm": "Mark selected messages as read?",
     "deleteSelectedConfirm": "Delete selected messages from your inbox?",
