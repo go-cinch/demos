@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MsgBell from './components/MsgBell.vue';
 import { message, type Feedback } from './lib/form-feedback';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import enUS from 'tdesign-mobile-vue/es/locale/en_US';
 import zhCN from 'tdesign-mobile-vue/es/locale/zh_CN';
@@ -19,6 +19,7 @@ import { routeLoading, routeSkeleton } from './router';
 const route = useRoute();
 const router = useRouter();
 const auth = computed(() => route.path.startsWith('/auth/'));
+const managementDetail = computed(() => route.path.startsWith('/system/'));
 const settings = ref(false);
 const authToolsOpen = ref(false);
 const authTools = ref<HTMLElement>();
@@ -61,10 +62,13 @@ const popup = computed({
   },
 });
 watch(
-  () => route.path,
+  () => route.fullPath,
   () => {
     toolsOpen.value = false;
     authToolsOpen.value = false;
+    void nextTick(() => {
+      document.querySelector<HTMLElement>('.device .main')?.scrollTo({ top: 0, left: 0 });
+    });
   },
 );
 const active = computed(() =>
@@ -232,10 +236,18 @@ async function signout() {
     <div v-else class="studio" :inert="locked" :aria-hidden="locked">
       <div class="device">
         <header class="topbar">
-          <RouterLink to="/dashboard/overview" class="workspace"
+          <RouterLink
+            v-if="managementDetail"
+            to="/dashboard/overview?tab=manage"
+            class="shell-back"
+            :aria-label="t('manage')"
+          >
+            <Icon name="chevron-left" :size="20" /><span>{{ t('applicationManagement') }}</span>
+          </RouterLink>
+          <RouterLink v-else to="/dashboard/overview" class="workspace"
             ><img :src="p.dark ? '/go-cinch-white.svg' : '/go-cinch.svg'" alt="" />
             <div>
-              <strong>Go Cinch</strong
+              <strong>Go Cinch Admin</strong
               ><small>{{ session.user?.role?.name || t('workspace') }}</small>
             </div></RouterLink
           >

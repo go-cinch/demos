@@ -69,14 +69,14 @@ const record = ref<RecordData | null>(null);
 const detail = ref(false);
 const editor = ref(false);
 const options = ref('');
-const density = ref('default');
+const density = ref<'compact' | 'default' | 'loose'>('default');
 const visibleColumns = ref<string[]>([...defaultColumns[props.resource]]);
 const fixedColumn = computed(() => identityColumn[props.resource]);
 const hasColumn = (key: string) => visibleColumns.value.includes(key);
 const summaryColumns = computed(() => [
   fixedColumn.value,
   ...{
-    user: ['role', 'status'],
+    user: ['role', 'status', 'code', 'created_at'],
     role: ['word', 'action_codes'],
     'user-group': ['word', 'users', 'action_codes'],
     action: ['word'],
@@ -261,26 +261,34 @@ onBeforeUnmount(() => {
 <template>
   <section
     class="page management"
+    :data-resource="resource"
     :class="[`density-${density}`, { bordered, striped, 'sticky-toolbar': sticky }]"
     :aria-busy="loading"
   >
     <header class="page-heading">
-      <RouterLink to="/dashboard/overview?tab=manage" class="back-link" :aria-label="t('manage')">
-        <Icon name="chevron-left" :size="22" />
-      </RouterLink>
       <div>
         <h1>{{ config.title }}</h1>
       </div>
     </header>
     <template v-if="can(resource, 'read')"
       ><section class="search-region">
-        <SearchField
-          :key="`${resource}-${primaryFilter.key}`"
-          v-model="filters[primaryFilter.key]"
-          :field="primaryFilter"
-          :resource="resource"
-          @search="search"
-        />
+        <div class="management-primary-search">
+          <SearchField
+            :key="`${resource}-${primaryFilter.key}`"
+            v-model="filters[primaryFilter.key]"
+            :field="primaryFilter"
+            :resource="resource"
+            @search="search"
+          />
+          <button
+            class="filter-toggle"
+            :aria-label="t(expanded ? 'system.common.less' : 'system.common.more')"
+            :aria-expanded="expanded"
+            @click="expanded = !expanded"
+          >
+            <Icon name="filter" :size="19" />
+          </button>
+        </div>
         <div v-if="resource === 'user'" class="segmented" role="group" :aria-label="t('status')">
           <button
             v-for="value in ['all', '1', '0', '2']"
@@ -315,15 +323,8 @@ onBeforeUnmount(() => {
             @search="search"
           />
         </div>
-        <div class="search-actions">
-          <button
-            class="action-chip action-chip-quiet"
-            :aria-expanded="expanded"
-            @click="expanded = !expanded"
-          >
-            <span>{{ t(expanded ? 'system.common.less' : 'system.common.more') }}</span>
-            <Icon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="13" /></button
-          ><button class="action-chip action-chip-quiet" @click="reset">
+        <div v-if="expanded" class="search-actions">
+          <button class="action-chip action-chip-quiet" @click="reset">
             <span>{{ t('system.common.reset') }}</span></button
           ><button class="action-chip action-chip-primary" @click="search">
             <span>{{ t('system.common.search') }}</span>
@@ -338,7 +339,9 @@ onBeforeUnmount(() => {
             :aria-label="t('system.common.create')"
             @click="openEditor(null)"
           >
-            <Icon name="add" :size="20" /><span>{{ t('system.common.create') }}</span>
+            <Icon name="add" :size="20" /><span>{{
+              t('createRecord', { entity: config.entity })
+            }}</span>
           </button>
         </ResultToolbar>
         <div class="selection-tools">
@@ -379,7 +382,7 @@ onBeforeUnmount(() => {
         <div v-if="error" class="form-error" role="alert">
           {{ error }}<button @click="load">{{ t('retry') }}</button>
         </div>
-        <PageSkeleton v-if="loading" variant="list" />
+        <PageSkeleton v-if="loading" variant="list" :density="density" />
         <div v-else-if="!error" class="card record-list">
           <article
             v-for="item in records"
@@ -398,53 +401,73 @@ onBeforeUnmount(() => {
                 :aria-label="`${t('view')} ${labelFor(item)}`"
                 @click="openDetail(item)"
               >
-                <span class="avatar"
-                  ><Icon
-                    v-if="resource !== 'user'"
-                    :name="
-                      resource === 'role'
-                        ? 'secured'
-                        : resource === 'action'
-                          ? 'key'
-                          : resource === 'dictionary'
-                            ? 'book'
-                            : resource === 'whitelist'
-                              ? 'check-rectangle'
-                              : 'app'
-                    "
-                  /><template v-else>{{
-                    initials(String(item.metadata?.display_name || item.username || ''))
-                  }}</template></span
-                >
-                <div class="record-main">
-                  <strong>{{ recordTitle(item) }}</strong>
-                  <small v-if="resource === 'user' && hasColumn('role')">{{
-                    item.role?.name || '—'
-                  }}</small>
-                  <small v-if="resource !== 'user' && hasColumn('word')">{{
-                    item.word || '—'
-                  }}</small>
-                  <small v-if="resource === 'dictionary' && hasColumn('key')">{{ item.key }}</small>
-                  <div v-if="['role', 'user-group'].includes(resource)" class="record-summary">
-                    <small v-if="resource === 'user-group' && hasColumn('users')">{{
-                      t('memberCount', { count: item.users?.length || 0 })
+                <div class="record-identity">
+                  <span class="avatar record-avatar">
+                    <template v-if="resource === 'user'">{{
+                      initials(String(item.metadata?.display_name || item.username || ''))
+                    }}</template>
+                    <Icon
+                      v-else
+                      :name="
+                        resource === 'role'
+                          ? 'secured'
+                          : resource === 'action'
+                            ? 'key'
+                            : resource === 'dictionary'
+                              ? 'book'
+                              : resource === 'whitelist'
+                                ? 'check-rectangle'
+                                : 'app'
+                      "
+                      :size="20"
+                    />
+                  </span>
+                  <div class="record-main">
+                    <strong>{{ recordTitle(item) }}</strong>
+                    <small v-if="resource === 'user' && hasColumn('code')">
+                      {{ t('system.fields.userCode') }}: {{ item.code || '—' }}
+                    </small>
+                    <div v-if="resource === 'user'" class="record-summary">
+                      <small v-if="hasColumn('role')">
+                        {{ t('system.fields.role') }}: {{ item.role?.name || '—' }}
+                      </small>
+                    </div>
+                    <small v-if="resource !== 'user' && hasColumn('word')">{{
+                      item.word || '—'
                     }}</small>
-                    <small v-if="hasColumn('action_codes')">{{
-                      t('permissionSummary', { count: item.action_codes?.length || 0 })
+                    <small v-if="resource === 'dictionary' && hasColumn('key')">{{
+                      item.key
                     }}</small>
+                    <div v-if="['role', 'user-group'].includes(resource)" class="record-summary">
+                      <small v-if="resource === 'user-group' && hasColumn('users')">{{
+                        t('memberCount', { count: item.users?.length || 0 })
+                      }}</small>
+                      <small v-if="hasColumn('action_codes')">{{
+                        t('permissionSummary', { count: item.action_codes?.length || 0 })
+                      }}</small>
+                    </div>
                   </div>
+                  <RecordValue
+                    v-if="resource === 'user' && hasColumn('status')"
+                    :record="item"
+                    :column="{ dataIndex: 'status', key: 'status', title: '', display: 'status' }"
+                  />
+                  <RecordValue
+                    v-if="resource === 'dictionary' && hasColumn('enabled')"
+                    :record="item"
+                    :column="{
+                      dataIndex: 'enabled',
+                      key: 'enabled',
+                      title: '',
+                      display: 'boolean',
+                    }"
+                  />
+                  <Icon name="chevron-right" :size="16" />
                 </div>
-                <RecordValue
-                  v-if="resource === 'user' && hasColumn('status')"
-                  :record="item"
-                  :column="{ dataIndex: 'status', key: 'status', title: '', display: 'status' }"
-                />
-                <RecordValue
-                  v-if="resource === 'dictionary' && hasColumn('enabled')"
-                  :record="item"
-                  :column="{ dataIndex: 'enabled', key: 'enabled', title: '', display: 'boolean' }"
-                />
-                <Icon name="chevron-right" :size="16" />
+                <div v-if="resource === 'user' && hasColumn('created_at')" class="record-created">
+                  <span>{{ t('system.fields.createdAt') }}</span>
+                  <time>{{ dateTime(item.created_at) }}</time>
+                </div>
               </button>
             </div>
             <div v-if="extraColumns.length" class="record-extra">

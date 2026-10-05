@@ -1,9 +1,18 @@
 import { reactive, watch } from 'vue';
 import { readStored, writeStored } from './storage';
+
+export type ThemePalette = 'graphite' | 'jade' | 'berry';
+
+function themePalette(value: unknown): ThemePalette {
+  if (value === 'jade' || value === 'green') return 'jade';
+  if (value === 'berry' || value === 'violet') return 'berry';
+  return 'graphite';
+}
+
 const defaults = {
   dark: false,
   reducedTransparency: false,
-  accent: 'moon',
+  accent: 'graphite' as ThemePalette,
   loginPosition: 'center',
   footer: true,
   timezone: 'Asia/Shanghai',
@@ -14,9 +23,11 @@ const defaults = {
   icp: '',
   icpLink: '',
 };
+const stored = readStored<Partial<typeof defaults>>('cinch-mobile-preferences', {});
 export const preferences = reactive({
   ...defaults,
-  ...readStored<Partial<typeof defaults>>('cinch-mobile-preferences', {}),
+  ...stored,
+  accent: themePalette(stored?.accent),
 });
 watch(
   preferences,

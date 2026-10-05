@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router';
 import { ApiError, loadUser, logout, session, submitCredentials } from '../lib/api';
 import type { CaptchaPoint, PointCaptcha as Challenge } from '../lib/types';
 import { initials } from '../lib/format';
+import { preferences } from '../lib/preferences';
 import { t } from '../locales';
 import { nonempty, trimCredential } from '../lib/validation';
 import Icon from '../components/Icon.vue';
@@ -16,6 +17,12 @@ import PointCaptcha from '../components/PointCaptcha.vue';
 const route = useRoute();
 const infoError = ref('');
 const infoLoading = ref(true);
+const avatarSkeleton = [{ type: 'rect' as const, width: '64px', height: '64px' }];
+const identitySkeleton = [
+  { type: 'text' as const, width: '136px', height: '28px' },
+  { type: 'text' as const, width: '80px', height: '17px' },
+  { type: 'text' as const, width: '112px', height: '17px' },
+];
 onMounted(async () => {
   try {
     await loadUser();
@@ -91,34 +98,47 @@ async function submit() {
 }
 </script>
 <template>
-  <div class="page">
+  <div class="page profile-page">
     <p v-if="infoError" class="form-error" role="alert">{{ infoError }}</p>
     <header class="page-heading">
       <div>
-        <p class="eyebrow">{{ t('workspace') }}</p>
         <h1>{{ t('mine') }}</h1>
+        <p class="lead">{{ t('profileHint') }}</p>
       </div>
     </header>
     <section class="profile-card card" :aria-busy="infoLoading">
-      <t-skeleton v-if="infoLoading" animation="gradient" theme="avatar" />
+      <template v-if="infoLoading">
+        <span class="avatar large profile-avatar" aria-hidden="true">
+          <t-skeleton animation="gradient" :row-col="avatarSkeleton" />
+        </span>
+        <div class="profile-identity" role="status" :aria-label="t('loading')">
+          <t-skeleton animation="gradient" :row-col="identitySkeleton" />
+        </div>
+      </template>
       <template v-else>
-        <span class="avatar large">{{ initials(session.user?.username || '') }}</span>
-        <h2>{{ session.user?.username }}</h2>
-        <p>{{ session.user?.role?.name || '—' }}</p>
-        <small class="muted">{{ session.user?.code }}</small>
+        <span class="avatar large profile-avatar">{{
+          initials(session.user?.username || '')
+        }}</span>
+        <div class="profile-identity">
+          <h2>{{ session.user?.username }}</h2>
+          <p>{{ session.user?.role?.name || '—' }}</p>
+          <small class="muted">{{ t('system.fields.userCode') }}: {{ session.user?.code }}</small>
+        </div>
       </template>
     </section>
     <h2 class="section-title">{{ t('page.auth.profile') }}</h2>
-    <section class="card">
+    <section class="card profile-menu">
       <button class="menu-row" @click="infoOpen = true">
-        <Icon name="user" /><span>{{ t('profile') }}</span
+        <span class="menu-icon"><Icon name="user" :size="18" /></span><span>{{ t('profile') }}</span
         ><Icon name="chevron-right" /></button
       ><button class="menu-row" @click="passwordOpen = true">
-        <Icon name="lock-on" /><span>{{ t('password') }}</span
+        <span class="menu-icon"><Icon name="lock-on" :size="18" /></span
+        ><span>{{ t('password') }}</span
         ><Icon name="chevron-right" />
       </button>
     </section>
     <div class="about">
+      <img :src="preferences.dark ? '/go-cinch-white.svg' : '/go-cinch.svg'" alt="" />
       <span>Cinch · TDesign Mobile Vue</span><small>{{ t('subtitle') }}</small>
     </div>
     <t-button block variant="outline" theme="danger" @click="confirmLogout = true">{{

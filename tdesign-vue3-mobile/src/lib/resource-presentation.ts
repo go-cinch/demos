@@ -9,7 +9,7 @@ export const identityColumn: Record<ResourceKind, string> = {
   whitelist: 'id',
 };
 export const defaultColumns: Record<ResourceKind, string[]> = {
-  user: ['username', 'role', 'status'],
+  user: ['username', 'role', 'status', 'created_at'],
   role: ['name', 'word', 'action_codes'],
   'user-group': ['name', 'word', 'users', 'action_codes'],
   action: ['name', 'word', 'group'],

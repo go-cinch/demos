@@ -1,4 +1,4 @@
-import type { Msg, MsgPage } from "./msg";
+import type { Msg, MsgPage } from './msg';
 
 type FeedState = {
   rows: Msg[];
@@ -19,8 +19,8 @@ export class MessageFeed {
     loading: true,
     loadingMore: false,
     refreshing: false,
-    error: "",
-    moreError: "",
+    error: '',
+    moreError: '',
     hasMore: false,
   };
   private listeners = new Set<() => void>();
@@ -60,27 +60,20 @@ export class MessageFeed {
       loading: !this.state.rows.length,
       loadingMore: false,
       refreshing: true,
-      error: "",
-      moreError: "",
+      error: '',
+      moreError: '',
     });
     try {
       const first = await this.fetchPage(1);
       if (!this.active || current !== this.generation) return;
-      const last = Math.max(
-        1,
-        Math.min(this.page, Math.ceil(first.t / this.size)),
-      );
+      const last = Math.max(1, Math.min(this.page, Math.ceil(first.t / this.size)));
       const rest = await Promise.all(
-        Array.from({ length: last - 1 }, (_, index) =>
-          this.fetchPage(index + 2),
-        ),
+        Array.from({ length: last - 1 }, (_, index) => this.fetchPage(index + 2)),
       );
       if (!this.active || current !== this.generation) return;
       const rows = [
         ...new Map(
-          [first, ...rest]
-            .flatMap((result) => result.items)
-            .map((row) => [row.id, row]),
+          [first, ...rest].flatMap((result) => result.items).map((row) => [row.id, row]),
         ).values(),
       ];
       this.page = last;
@@ -90,8 +83,7 @@ export class MessageFeed {
         hasMore: last * this.size < first.t,
       });
     } catch (error) {
-      if (this.active && current === this.generation)
-        this.setError((error as Error).message);
+      if (this.active && current === this.generation) this.setError((error as Error).message);
     } finally {
       if (this.active && current === this.generation) {
         this.refreshing = false;
@@ -100,23 +92,15 @@ export class MessageFeed {
     }
   };
   loadMore = async () => {
-    if (
-      !this.active ||
-      this.refreshing ||
-      this.state.loadingMore ||
-      !this.state.hasMore
-    )
-      return;
+    if (!this.active || this.refreshing || this.state.loadingMore || !this.state.hasMore) return;
     const current = this.generation,
       next = this.page + 1;
-    this.update({ loadingMore: true, moreError: "" });
+    this.update({ loadingMore: true, moreError: '' });
     try {
       const result = await this.fetchPage(next);
       if (!this.active || current !== this.generation) return;
       const rows = [
-        ...new Map(
-          [...this.state.rows, ...result.items].map((row) => [row.id, row]),
-        ).values(),
+        ...new Map([...this.state.rows, ...result.items].map((row) => [row.id, row])).values(),
       ];
       this.page = next;
       this.update({
@@ -128,8 +112,7 @@ export class MessageFeed {
       if (this.active && current === this.generation)
         this.update({ moreError: (error as Error).message });
     } finally {
-      if (this.active && current === this.generation)
-        this.update({ loadingMore: false });
+      if (this.active && current === this.generation) this.update({ loadingMore: false });
     }
   };
 }

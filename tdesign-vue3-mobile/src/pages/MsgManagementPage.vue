@@ -1,72 +1,71 @@
 <script setup lang="ts">
-import type { Msg, MsgInput } from "../lib/msg";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
-import { session } from "../lib/api";
-import { msgApi, msgChanged } from "../lib/msg";
-import { dateTime, parseDateTime } from "../lib/format";
-import { useUnsavedForm } from "../lib/unsaved-form";
-import { t } from "../locales";
-import Sheet from "../components/Sheet.vue";
-import Icon from "../components/Icon.vue";
-import EditorForm from "../components/EditorForm.vue";
-import RecordPagination from "../components/RecordPagination.vue";
-import ResultToolbar from "../components/ResultToolbar.vue";
-import ResultOptions from "../components/ResultOptions.vue";
-import Field from "../components/Field.vue";
-import RemoteSelect from "../components/RemoteSelect.vue";
-import DateTimeField from "../components/DateTimeField.vue";
-import DiscardSheet from "../components/DiscardSheet.vue";
-import PageSkeleton from "../components/PageSkeleton.vue";
+import type { Msg, MsgInput } from '../lib/msg';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { session } from '../lib/api';
+import { msgApi, msgChanged } from '../lib/msg';
+import { dateTime, parseDateTime } from '../lib/format';
+import { useUnsavedForm } from '../lib/unsaved-form';
+import { t } from '../locales';
+import Sheet from '../components/Sheet.vue';
+import Icon from '../components/Icon.vue';
+import EditorForm from '../components/EditorForm.vue';
+import RecordPagination from '../components/RecordPagination.vue';
+import ResultToolbar from '../components/ResultToolbar.vue';
+import ResultOptions from '../components/ResultOptions.vue';
+import Field from '../components/Field.vue';
+import RemoteSelect from '../components/RemoteSelect.vue';
+import DateTimeField from '../components/DateTimeField.vue';
+import DiscardSheet from '../components/DiscardSheet.vue';
+import PageSkeleton from '../components/PageSkeleton.vue';
 const route = useRoute();
-const tr = (key: string, params?: Record<string, string | number>) =>
-  t(`app.msg.${key}`, params);
-const sent = computed(() => route.path === "/system/msg");
+const tr = (key: string, params?: Record<string, string | number>) => t(`app.msg.${key}`, params);
+const sent = computed(() => route.path === '/system/msg');
 const permitted = (action: string) =>
   session.user?.permission.btns.some(
-    (code: string) => code === "*" || code === `system.msg.${action}`,
+    (code: string) => code === '*' || code === `system.msg.${action}`,
   ) ?? false;
-const canRead = computed(() => !sent.value || permitted("read"));
-const canSend = computed(() => sent.value && permitted("send"));
-const canDelete = computed(() => !sent.value || permitted("delete"));
+const canRead = computed(() => !sent.value || permitted('read'));
+const canSend = computed(() => sent.value && permitted('send'));
+const canDelete = computed(() => !sent.value || permitted('delete'));
 const rows = ref<Msg[]>([]),
   total = ref(0),
   page = ref(1),
   size = ref(20);
 const loading = ref(false),
-  error = ref(""),
+  error = ref(''),
   busy = ref(false),
-  status = ref(""),
-  type = ref("");
+  status = ref(''),
+  type = ref('');
 const selected = ref<Msg>(),
   detailOpen = ref(false),
   detailLoading = ref(false);
 const compose = ref(false),
   attempted = ref(false),
-  sendError = ref(""),
-  expiry = ref("");
+  sendError = ref(''),
+  expiry = ref('');
 const form = ref<MsgInput>({
-  title: "",
-  content: "",
-  type: "notice",
-  scope: "all",
+  title: '',
+  content: '',
+  type: 'notice',
+  scope: 'all',
   recipient_ids: [],
   expired_at: null,
 });
-const density = ref("default");
+const density = ref<'compact' | 'default' | 'loose'>('default');
 const bordered = ref(false),
   striped = ref(false),
   sticky = ref(true);
-const visible = ref(["type", "scope", "published_at"]);
+const visible = ref(['type', 'scope', 'published_at']);
 const columns = computed(() =>
-  ["title", "type", "scope", "published_at"].map((key) => ({
+  ['title', 'type', 'scope', 'published_at'].map((key) => ({
     key,
-    title: tr(key === "published_at" ? "published" : key),
+    title: tr(key === 'published_at' ? 'published' : key),
   })),
 );
 const composeForm = ref<InstanceType<typeof EditorForm>>();
 const composeSheet = ref<InstanceType<typeof Sheet>>();
-const settings = ref("");
+const settings = ref('');
 const selecting = ref(false);
 const checkedIDs = ref<number[]>([]);
 const checkedVisible = computed(() =>
@@ -80,55 +79,42 @@ function toggleChecked(id: number) {
 }
 const pendingIDs = ref<number[]>([]);
 function requestBulk(read = false) {
-  if (
-    busy.value ||
-    !checkedVisible.value.length ||
-    (read ? sent.value : !canDelete.value)
-  )
-    return;
+  if (busy.value || !checkedVisible.value.length || (read ? sent.value : !canDelete.value)) return;
   pendingIDs.value = [...checkedVisible.value];
-  confirmation.value = read ? "readSelected" : "deleteSelected";
+  confirmation.value = read ? 'readSelected' : 'deleteSelected';
 }
-const confirmation = ref<"delete" | "deleteSelected" | "readSelected" | "">("");
+const confirmation = ref<'delete' | 'deleteSelected' | 'readSelected' | ''>('');
 const confirmOpen = computed({
   get: () => !!confirmation.value,
   set: (v: boolean) => {
-    if (!v) confirmation.value = "";
+    if (!v) confirmation.value = '';
   },
 });
 let generation = 0,
   detailGeneration = 0,
-  sendKey = "",
-  lastPayload = "",
-  initialDraft = "";
+  sendKey = '',
+  lastPayload = '',
+  initialDraft = '';
 const dirty = () =>
-  compose.value &&
-  (JSON.stringify(form.value) !== initialDraft || !!expiry.value);
-const { discardOpen, decide, beforeClose } = useUnsavedForm(
-  dirty,
-  () => busy.value,
-);
+  compose.value && (JSON.stringify(form.value) !== initialDraft || !!expiry.value);
+const { discardOpen, decide, beforeClose } = useUnsavedForm(dirty, () => busy.value);
 const issues = computed(() => ({
   title:
-    !form.value.title.trim() || [...form.value.title.trim()].length > 200
-      ? tr("titleError")
-      : "",
+    !form.value.title.trim() || [...form.value.title.trim()].length > 200 ? tr('titleError') : '',
   content:
     !form.value.content.trim() || [...form.value.content.trim()].length > 20000
-      ? tr("contentError")
-      : "",
+      ? tr('contentError')
+      : '',
   recipients:
-    form.value.scope === "targeted" &&
-    (!form.value.recipient_ids?.length ||
-      form.value.recipient_ids.length > 1000)
-      ? tr("recipientError")
-      : "",
+    form.value.scope === 'targeted' &&
+    (!form.value.recipient_ids?.length || form.value.recipient_ids.length > 1000)
+      ? tr('recipientError')
+      : '',
   expiry:
     expiry.value &&
-    (!parseDateTime(expiry.value).isValid() ||
-      parseDateTime(expiry.value).valueOf() <= Date.now())
-      ? tr("expiryError")
-      : "",
+    (!parseDateTime(expiry.value).isValid() || parseDateTime(expiry.value).valueOf() <= Date.now())
+      ? tr('expiryError')
+      : '',
 }));
 async function load() {
   const current = ++generation;
@@ -138,20 +124,16 @@ async function load() {
     return;
   }
   loading.value = true;
-  error.value = "";
+  error.value = '';
   try {
     const result = await msgApi.list(sent.value, {
       p: page.value,
       s: size.value,
       ...(type.value ? { type: type.value } : {}),
-      ...(!sent.value && status.value ? { read: status.value === "read" } : {}),
+      ...(!sent.value && status.value ? { read: status.value === 'read' } : {}),
     });
     if (current !== generation) return;
-    if (
-      !result.items.length &&
-      page.value > 1 &&
-      result.t <= (page.value - 1) * size.value
-    ) {
+    if (!result.items.length && page.value > 1 && result.t <= (page.value - 1) * size.value) {
       page.value--;
       return;
     }
@@ -171,7 +153,7 @@ async function openDetail(row: Msg) {
   detailOpen.value = true;
   selected.value = undefined;
   detailLoading.value = true;
-  error.value = "";
+  error.value = '';
   try {
     const result = await msgApi.get(row.id, sent.value);
     if (current !== detailGeneration || !detailOpen.value) return;
@@ -204,7 +186,7 @@ async function mark(row: Msg) {
 async function readAll() {
   if (busy.value || sent.value) return;
   busy.value = true;
-  error.value = "";
+  error.value = '';
   try {
     await msgApi.readAll();
   } catch (e) {
@@ -218,22 +200,18 @@ async function readAll() {
 async function confirm() {
   if (busy.value) return;
   busy.value = true;
-  error.value = "";
+  error.value = '';
   try {
-    if (
-      confirmation.value === "deleteSelected" ||
-      confirmation.value === "readSelected"
-    ) {
+    if (confirmation.value === 'deleteSelected' || confirmation.value === 'readSelected') {
       for (const id of [...pendingIDs.value]) {
-        if (confirmation.value === "readSelected") await msgApi.read(id);
+        if (confirmation.value === 'readSelected') await msgApi.read(id);
         else await msgApi.remove(id, sent.value);
         pendingIDs.value = pendingIDs.value.filter((value) => value !== id);
         checkedIDs.value = checkedIDs.value.filter((value) => value !== id);
       }
-    } else if (selected.value)
-      await msgApi.remove(selected.value.id, sent.value);
+    } else if (selected.value) await msgApi.remove(selected.value.id, sent.value);
     checkedIDs.value = [];
-    confirmation.value = "";
+    confirmation.value = '';
     detailOpen.value = false;
   } catch (e) {
     error.value = (e as Error).message;
@@ -245,18 +223,18 @@ async function confirm() {
 }
 function newMessage() {
   form.value = {
-    title: "",
-    content: "",
-    type: "notice",
-    scope: "all",
+    title: '',
+    content: '',
+    type: 'notice',
+    scope: 'all',
     recipient_ids: [],
     expired_at: null,
   };
-  expiry.value = "";
+  expiry.value = '';
   attempted.value = false;
-  sendError.value = "";
+  sendError.value = '';
   sendKey = crypto.randomUUID();
-  lastPayload = "";
+  lastPayload = '';
   initialDraft = JSON.stringify(form.value);
   compose.value = true;
 }
@@ -268,12 +246,11 @@ async function send() {
     return;
   }
   busy.value = true;
-  sendError.value = "";
+  sendError.value = '';
   try {
     const payload = {
       ...form.value,
-      recipient_ids:
-        form.value.scope === "targeted" ? form.value.recipient_ids : [],
+      recipient_ids: form.value.scope === 'targeted' ? form.value.recipient_ids : [],
       expired_at: expiry.value ? parseDateTime(expiry.value).valueOf() : null,
     };
     const serialized = JSON.stringify(payload);
@@ -298,7 +275,7 @@ watch([sent, status, type, size], () => {
   void load();
 });
 watch(sent, () => {
-  confirmation.value = "";
+  confirmation.value = '';
 });
 watch([sent, page, size, status, type], () => {
   checkedIDs.value = [];
@@ -306,19 +283,18 @@ watch([sent, page, size, status, type], () => {
 watch(page, load);
 watch(canRead, load, { immediate: true });
 function refreshVisible() {
-  if (!document.hidden && !busy.value && !loading.value && canRead.value)
-    void load();
+  if (!document.hidden && !busy.value && !loading.value && canRead.value) void load();
 }
 let refreshTimer: ReturnType<typeof setInterval>;
 onMounted(() => {
   refreshTimer = setInterval(refreshVisible, 30000);
-  window.addEventListener("cinch-msg-changed", refreshVisible);
-  document.addEventListener("visibilitychange", refreshVisible);
+  window.addEventListener('cinch-msg-changed', refreshVisible);
+  document.addEventListener('visibilitychange', refreshVisible);
 });
 onBeforeUnmount(() => {
   clearInterval(refreshTimer);
-  window.removeEventListener("cinch-msg-changed", refreshVisible);
-  document.removeEventListener("visibilitychange", refreshVisible);
+  window.removeEventListener('cinch-msg-changed', refreshVisible);
+  document.removeEventListener('visibilitychange', refreshVisible);
   generation++;
   detailGeneration++;
 });
@@ -327,10 +303,7 @@ onBeforeUnmount(() => {
   <section
     class="page management"
     data-testid="message-management-page"
-    :class="[
-      `density-${density}`,
-      { bordered, striped, 'sticky-toolbar': sticky },
-    ]"
+    :class="[`density-${density}`, { bordered, striped, 'sticky-toolbar': sticky }]"
     :aria-busy="loading"
   >
     <header class="page-heading">
@@ -341,7 +314,7 @@ onBeforeUnmount(() => {
         ><Icon name="chevron-left" :size="22"
       /></RouterLink>
       <div>
-        <h1>{{ tr(sent ? "manage" : "inbox") }}</h1>
+        <h1>{{ tr(sent ? 'manage' : 'inbox') }}</h1>
       </div>
     </header>
     <section class="search-region">
@@ -356,12 +329,7 @@ onBeforeUnmount(() => {
             { value: 'notice', label: tr('notice') },
           ]"
       /></Field>
-      <div
-        v-if="!sent"
-        class="segmented msg-status-filter"
-        role="group"
-        :aria-label="tr('read')"
-      >
+      <div v-if="!sent" class="segmented msg-status-filter" role="group" :aria-label="tr('read')">
         <button
           v-for="value in ['', 'unread', 'read']"
           :key="value"
@@ -369,7 +337,7 @@ onBeforeUnmount(() => {
           :aria-pressed="status === value"
           @click="status = value"
         >
-          {{ tr(value || "allStatus") }}
+          {{ tr(value || 'allStatus') }}
         </button>
       </div>
       <div class="search-actions message-search-actions">
@@ -380,24 +348,16 @@ onBeforeUnmount(() => {
             status = '';
           "
         >
-          <span>{{ t("system.common.reset") }}</span></button
+          <span>{{ t('system.common.reset') }}</span></button
         ><button class="action-chip action-chip-primary" @click="load">
-          <span>{{ t("system.common.search") }}</span>
+          <span>{{ t('system.common.search') }}</span>
         </button>
       </div>
     </section>
     <div class="results-region">
-      <ResultToolbar
-        :can-read="canRead"
-        @refresh="load"
-        @options="settings = $event"
-      >
-        <button
-          v-if="canSend"
-          class="create-button create-labeled"
-          @click="newMessage"
-        >
-          <Icon name="add" :size="20" /><span>{{ tr("send") }}</span>
+      <ResultToolbar :can-read="canRead" @refresh="load" @options="settings = $event">
+        <button v-if="canSend" class="create-button create-labeled" @click="newMessage">
+          <Icon name="add" :size="20" /><span>{{ tr('send') }}</span>
         </button>
         <button
           v-if="!sent"
@@ -405,9 +365,7 @@ onBeforeUnmount(() => {
           :disabled="loading || busy"
           @click="readAll"
         >
-          <Icon name="check-double" :size="16" /><span>{{
-            tr("readAll")
-          }}</span>
+          <Icon name="check-double" :size="16" /><span>{{ tr('readAll') }}</span>
         </button>
       </ResultToolbar>
       <div class="selection-tools">
@@ -421,25 +379,19 @@ onBeforeUnmount(() => {
               checkedIDs = [];
             "
           >
-            <Icon
-              :name="selecting ? 'check' : 'check-rectangle'"
-              :size="16"
-            /><span>{{ t(selecting ? "done" : "select") }}</span>
+            <Icon :name="selecting ? 'check' : 'check-rectangle'" :size="16" /><span>{{
+              t(selecting ? 'done' : 'select')
+            }}</span>
           </button>
           <button
             v-if="selecting"
             class="action-chip action-chip-quiet"
             :disabled="busy || loading"
             @click="
-              checkedIDs =
-                checkedVisible.length === rows.length
-                  ? []
-                  : rows.map((row) => row.id)
+              checkedIDs = checkedVisible.length === rows.length ? [] : rows.map((row) => row.id)
             "
           >
-            <Icon name="check-double" :size="16" /><span>{{
-              t("system.common.selectAll")
-            }}</span>
+            <Icon name="check-double" :size="16" /><span>{{ t('system.common.selectAll') }}</span>
           </button>
 
           <button
@@ -449,9 +401,7 @@ onBeforeUnmount(() => {
             :disabled="busy || loading"
             @click="requestBulk()"
           >
-            <Icon name="delete" :size="16" /><span>{{
-              tr("deleteSelected")
-            }}</span>
+            <Icon name="delete" :size="16" /><span>{{ tr('deleteSelected') }}</span>
           </button>
           <button
             data-testid="message-bulk-read"
@@ -460,26 +410,19 @@ onBeforeUnmount(() => {
             :disabled="busy || loading"
             @click="requestBulk(true)"
           >
-            <Icon name="check" :size="16" /><span>{{ tr("markRead") }}</span>
+            <Icon name="check" :size="16" /><span>{{ tr('markRead') }}</span>
           </button>
         </div>
-        <span class="result-count">{{
-          t("system.table.total", { count: total })
-        }}</span>
+        <span class="result-count">{{ t('system.table.total', { count: total }) }}</span>
       </div>
-      <p v-if="!canRead" class="field-hint">{{ tr("noPermission") }}</p>
+      <p v-if="!canRead" class="field-hint">{{ tr('noPermission') }}</p>
       <div v-else-if="error" class="form-error" role="alert">
         <p>{{ error }}</p>
-        <button @click="load">{{ tr("retry") }}</button>
+        <button @click="load">{{ tr('retry') }}</button>
       </div>
-      <PageSkeleton v-else-if="loading" variant="list" />
+      <PageSkeleton v-else-if="loading" variant="list" :density="density" />
       <div v-else class="card record-list">
-        <article
-          v-for="row in rows"
-          :key="row.id"
-          class="record-wrap"
-          :data-record-id="row.id"
-        >
+        <article v-for="row in rows" :key="row.id" class="record-wrap" :data-record-id="row.id">
           <div class="record">
             <t-checkbox
               v-if="selecting"
@@ -503,41 +446,30 @@ onBeforeUnmount(() => {
               <div class="record-main">
                 <strong>{{ row.title }}</strong>
                 <div class="record-summary">
-                  <t-tag
-                    v-if="visible.includes('type')"
-                    theme="primary"
-                    variant="light"
-                    >{{ tr(row.type) }}</t-tag
+                  <t-tag v-if="visible.includes('type')" theme="primary" variant="light">{{
+                    tr(row.type)
+                  }}</t-tag
                   ><t-tag v-if="visible.includes('scope')" variant="light">{{
                     tr(row.scope)
                   }}</t-tag
-                  ><t-tag
-                    v-if="row.expired_at && row.expired_at <= Date.now()"
-                    >{{ tr("expired") }}</t-tag
-                  >
+                  ><t-tag v-if="row.expired_at && row.expired_at <= Date.now()">{{
+                    tr('expired')
+                  }}</t-tag>
                 </div>
               </div>
-              <t-tag
-                v-if="!sent"
-                :theme="row.read_at ? 'default' : 'primary'"
-                >{{ tr(row.read_at ? "read" : "unread") }}</t-tag
+              <t-tag v-if="!sent" :theme="row.read_at ? 'default' : 'primary'">{{
+                tr(row.read_at ? 'read' : 'unread')
+              }}</t-tag
               ><Icon name="chevron-right" :size="16" />
             </button>
           </div>
           <div v-if="visible.includes('published_at')" class="record-extra">
-            <span>{{ tr("published") }}</span
+            <span>{{ tr('published') }}</span
             ><span>{{ dateTime(row.published_at) }}</span>
           </div>
-          <div
-            v-if="!sent && !row.read_at"
-            class="selection-actions msg-read-action"
-          >
-            <button
-              class="action-chip action-chip-quiet"
-              :disabled="busy"
-              @click="mark(row)"
-            >
-              <Icon name="check" :size="16" /><span>{{ tr("markRead") }}</span>
+          <div v-if="!sent && !row.read_at" class="selection-actions msg-read-action">
+            <button class="action-chip action-chip-quiet" :disabled="busy" @click="mark(row)">
+              <Icon name="check" :size="16" /><span>{{ tr('markRead') }}</span>
             </button>
           </div>
         </article>
@@ -568,35 +500,27 @@ onBeforeUnmount(() => {
     <Sheet v-model="detailOpen" :title="tr('detail')"
       ><PageSkeleton v-if="detailLoading" /><template v-else-if="selected"
         ><div class="detail-identity">
-          <span class="avatar large"
-            ><Icon name="notification" :size="30"
-          /></span>
+          <span class="avatar large"><Icon name="notification" :size="30" /></span>
           <h2>{{ selected.title }}</h2>
         </div>
         <dl class="details">
-          <dt>{{ tr("type") }}</dt>
+          <dt>{{ tr('type') }}</dt>
           <dd>
-            <t-tag theme="primary" variant="light">{{
-              tr(selected.type)
-            }}</t-tag>
+            <t-tag theme="primary" variant="light">{{ tr(selected.type) }}</t-tag>
           </dd>
-          <dt>{{ tr("scope") }}</dt>
+          <dt>{{ tr('scope') }}</dt>
           <dd>{{ tr(selected.scope) }}</dd>
-          <dt>{{ tr("published") }}</dt>
+          <dt>{{ tr('published') }}</dt>
           <dd>{{ dateTime(selected.published_at) }}</dd>
-          <dt>{{ tr("content") }}</dt>
+          <dt>{{ tr('content') }}</dt>
           <dd class="msg-content">{{ selected.content }}</dd>
-          <dt>{{ tr("expiry") }}</dt>
+          <dt>{{ tr('expiry') }}</dt>
           <dd>
-            {{
-              selected.expired_at
-                ? dateTime(selected.expired_at)
-                : tr("noExpiry")
-            }}
+            {{ selected.expired_at ? dateTime(selected.expired_at) : tr('noExpiry') }}
           </dd>
         </dl>
         <p v-if="sent && selected.recipient_ids" class="msg-content">
-          {{ tr("recipientIDs") }}: {{ selected.recipient_ids.join(", ") }}
+          {{ tr('recipientIDs') }}: {{ selected.recipient_ids.join(', ') }}
         </p>
         <div class="detail-actions">
           <t-button
@@ -604,59 +528,43 @@ onBeforeUnmount(() => {
             theme="danger"
             variant="outline"
             @click="confirmation = 'delete'"
-            >{{ tr(sent ? "deleteGlobal" : "delete") }}</t-button
+            >{{ tr(sent ? 'deleteGlobal' : 'delete') }}</t-button
           >
         </div></template
       ></Sheet
     >
-    <Sheet
-      v-model="confirmOpen"
-      :title="tr('confirm')"
-      :before-close="() => !busy"
+    <Sheet v-model="confirmOpen" :title="tr('confirm')" :before-close="() => !busy"
       ><p>
         {{
           tr(
-            confirmation === "readSelected"
-              ? "readSelectedConfirm"
-              : confirmation === "deleteSelected"
+            confirmation === 'readSelected'
+              ? 'readSelectedConfirm'
+              : confirmation === 'deleteSelected'
                 ? sent
-                  ? "deleteSelectedGlobalConfirm"
-                  : "deleteSelectedConfirm"
+                  ? 'deleteSelectedGlobalConfirm'
+                  : 'deleteSelectedConfirm'
                 : sent
-                  ? "deleteGlobalConfirm"
-                  : "deleteConfirm",
+                  ? 'deleteGlobalConfirm'
+                  : 'deleteConfirm',
           )
         }}
       </p>
       <p v-if="error" role="alert">{{ error }}</p>
       <div class="sheet-actions">
-        <t-button :disabled="busy" @click="confirmation = ''">{{
-          tr("cancel")
-        }}</t-button
+        <t-button :disabled="busy" @click="confirmation = ''">{{ tr('cancel') }}</t-button
         ><t-button
           :theme="
-            confirmation === 'delete' || confirmation === 'deleteSelected'
-              ? 'danger'
-              : 'primary'
+            confirmation === 'delete' || confirmation === 'deleteSelected' ? 'danger' : 'primary'
           "
           :loading="busy"
           @click="confirm"
-          >{{ tr("confirm") }}</t-button
+          >{{ tr('confirm') }}</t-button
         >
       </div></Sheet
     >
-    <Sheet
-      ref="composeSheet"
-      v-model="compose"
-      :title="tr('send')"
-      :before-close="beforeClose"
-    >
+    <Sheet ref="composeSheet" v-model="compose" :title="tr('send')" :before-close="beforeClose">
       <EditorForm ref="composeForm" :busy="busy" @submit="send">
-        <Field
-          name="msg-title"
-          :label="tr('title')"
-          required
-          :error="attempted ? issues.title : ''"
+        <Field name="msg-title" :label="tr('title')" required :error="attempted ? issues.title : ''"
           ><t-input
             v-model="form.title"
             name="msg-title"
@@ -678,18 +586,14 @@ onBeforeUnmount(() => {
             v-model="form.type"
             name="msg-type"
             :label="tr('type')"
-            :options="
-              ['system', 'notice'].map((value) => ({ value, label: tr(value) }))
-            "
+            :options="['system', 'notice'].map((value) => ({ value, label: tr(value) }))"
         /></Field>
         <Field name="msg-scope" :label="tr('scope')"
           ><RemoteSelect
             v-model="form.scope"
             name="msg-scope"
             :label="tr('scope')"
-            :options="
-              ['all', 'targeted'].map((value) => ({ value, label: tr(value) }))
-            "
+            :options="['all', 'targeted'].map((value) => ({ value, label: tr(value) }))"
         /></Field>
         <Field
           v-if="form.scope === 'targeted'"
@@ -704,10 +608,7 @@ onBeforeUnmount(() => {
             name="msg-recipients"
             :label="tr('recipients')"
         /></Field>
-        <Field
-          name="msg-expiry"
-          :label="tr('expiry')"
-          :error="attempted ? issues.expiry : ''"
+        <Field name="msg-expiry" :label="tr('expiry')" :error="attempted ? issues.expiry : ''"
           ><DateTimeField id="msg-expiry" v-model="expiry" name="msg-expiry"
         /></Field>
         <template #feedback
@@ -717,11 +618,9 @@ onBeforeUnmount(() => {
         >
         <template #actions>
           <t-button :disabled="busy" @click="composeSheet?.requestClose()">{{
-            t("cancel")
+            t('cancel')
           }}</t-button>
-          <t-button :loading="busy" theme="primary" type="submit">{{
-            tr("send")
-          }}</t-button>
+          <t-button :loading="busy" theme="primary" type="submit">{{ tr('send') }}</t-button>
         </template>
       </EditorForm>
     </Sheet>

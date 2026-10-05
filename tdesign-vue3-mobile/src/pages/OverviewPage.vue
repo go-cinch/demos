@@ -8,7 +8,6 @@ import { dateTime, initials } from '../lib/format';
 import { preferences } from '../lib/preferences';
 import { locale, t } from '../locales';
 import Icon from '../components/Icon.vue';
-import PageSkeleton from '../components/PageSkeleton.vue';
 const route = useRoute();
 const tab = computed(() =>
   route.path === '/dashboard/workspace' ? 'workspace' : String(route.query.tab || 'home'),
@@ -74,9 +73,15 @@ const failures = reactive<Record<Region, string>>({
 });
 const generations: Record<Region, number> = { active: 0, locked: 0, pending: 0, recent: 0 };
 const error = computed(() => Object.values(failures).find(Boolean) || '');
-const numberSkeleton = [{ type: 'text' as const, width: '92px', height: '54px' }];
-const metricSkeleton = [{ type: 'text' as const, width: '38px', height: '25px' }];
-const bannerSkeleton = [{ type: 'rect' as const, width: '100%', height: '72px' }];
+const numberSkeleton = [{ type: 'text' as const, width: '116px', height: '46px' }];
+const metricSkeleton = [{ type: 'text' as const, width: '42px', height: '24px' }];
+const bannerSkeleton = [{ type: 'rect' as const, width: '100%', height: '44px' }];
+const recentAvatarSkeleton = [{ type: 'rect' as const, width: '35px', height: '35px' }];
+const recentIdentitySkeleton = [
+  { type: 'text' as const, width: '100px', height: '18px' },
+  { type: 'text' as const, width: '82px', height: '16px' },
+];
+const recentDateSkeleton = [{ type: 'text' as const, width: '116px', height: '14px' }];
 const date = computed(() =>
   new Date().toLocaleDateString(locale.value, {
     month: 'long',
@@ -136,10 +141,10 @@ function removeMockDevice(id: number) {
 }
 </script>
 <template>
-  <div class="page">
+  <div class="page overview-page">
     <header class="page-heading">
       <div>
-        <p class="eyebrow">{{ tab === 'home' ? date : t('workspace') }}</p>
+        <p v-if="tab !== 'home'" class="eyebrow">{{ t('workspace') }}</p>
         <h1>
           {{
             tab === 'home'
@@ -149,6 +154,7 @@ function removeMockDevice(id: number) {
                 : t(tab)
           }}
         </h1>
+        <p v-if="tab === 'home'" class="eyebrow">{{ date }}</p>
         <p v-if="tab !== 'home'" class="lead">
           {{
             t(
@@ -161,63 +167,100 @@ function removeMockDevice(id: number) {
           }}
         </p>
       </div>
-      <RouterLink v-if="tab === 'home'" to="/profile" class="avatar halo">{{
-        initials(session.user?.username || 'C')
-      }}</RouterLink>
+      <RouterLink
+        v-if="tab === 'home'"
+        to="/profile"
+        class="avatar overview-avatar"
+        :aria-label="t('mine')"
+        >{{ initials(session.user?.username || '') }}</RouterLink
+      >
     </header>
     <div v-if="route.query.denied" role="alert" class="notice">{{ t('noAccessHint') }}</div>
     <div v-if="error" class="form-error" role="alert">
       {{ error }}<button @click="load()">{{ t('retry') }}</button>
     </div>
-    <template v-if="tab === 'home'"
-      ><section class="summary-card card">
-        <p class="muted">{{ t('welcome') }}</p>
-        <div class="orb" aria-hidden="true">
-          <div class="orb-core"><Icon name="usergroup" :size="40" /></div>
-          <div class="orbit" />
-          <i />
+    <template v-if="tab === 'home'">
+      <section v-if="can('user', 'read')" class="summary-card overview-summary">
+        <div class="summary-label">
+          <span>{{ t('userOverview') }}</span>
+          <Icon name="usergroup" :size="22" />
         </div>
-        <div v-if="can('user', 'read')" class="summary-number" :aria-busy="loading.recent">
-          <t-skeleton
-            v-if="loading.recent"
-            class="summary-number-skeleton"
-            animation="gradient"
-            :row-col="numberSkeleton"
-          /><template v-else
-            >{{ total ?? '—' }} <small>{{ t('members') }}</small></template
+        <RouterLink
+          to="/system/user"
+          class="summary-stat summary-stat-total"
+          :aria-busy="loading.recent"
+          :aria-disabled="loading.recent"
+          :tabindex="loading.recent ? -1 : undefined"
+          @click="loading.recent && $event.preventDefault()"
+        >
+          <div class="summary-total-number">
+            <t-skeleton
+              v-if="loading.recent"
+              class="summary-number-skeleton"
+              animation="gradient"
+              :row-col="numberSkeleton"
+            />
+            <strong v-else>{{ failures.recent ? '—' : (total ?? '—') }}</strong>
+            <small>{{ t('members') }}</small>
+          </div>
+        </RouterLink>
+        <div class="summary-metrics">
+          <RouterLink
+            to="/system/user?status=1"
+            class="summary-stat"
+            :aria-busy="loading.active"
+            :aria-disabled="loading.active"
+            :tabindex="loading.active ? -1 : undefined"
+            @click="loading.active && $event.preventDefault()"
           >
-        </div>
-        <h2 v-else class="welcome-user">
-          {{ t('noUserAccess', { name: session.user?.username || '' }) }}
-        </h2>
-        <p class="summary-caption">{{ t('overviewHint') }}</p>
-        <div v-if="can('user', 'read')" class="summary-metrics">
-          <RouterLink to="/system/user?status=1" :aria-busy="loading.active"
-            ><t-skeleton
+            <t-skeleton
               v-if="loading.active"
               class="summary-metric-skeleton"
               animation="gradient"
               :row-col="metricSkeleton"
-            /><strong v-else>{{ active }}</strong
-            ><span>· {{ t('system.status.active') }}</span></RouterLink
-          ><RouterLink to="/system/user?status=0" :aria-busy="loading.pending"
-            ><t-skeleton
+            />
+            <strong v-else>{{ failures.active ? '—' : active }}</strong>
+            <span>{{ t('system.status.active') }}</span>
+          </RouterLink>
+          <RouterLink
+            to="/system/user?status=0"
+            class="summary-stat"
+            :aria-busy="loading.pending"
+            :aria-disabled="loading.pending"
+            :tabindex="loading.pending ? -1 : undefined"
+            @click="loading.pending && $event.preventDefault()"
+          >
+            <t-skeleton
               v-if="loading.pending"
               class="summary-metric-skeleton"
               animation="gradient"
               :row-col="metricSkeleton"
-            /><strong v-else>{{ pending }}</strong
-            ><span>· {{ t('system.status.pending') }}</span></RouterLink
-          ><RouterLink to="/system/user?status=2" :aria-busy="loading.locked"
-            ><t-skeleton
+            />
+            <strong v-else>{{ failures.pending ? '—' : pending }}</strong>
+            <span>{{ t('system.status.pending') }}</span>
+          </RouterLink>
+          <RouterLink
+            to="/system/user?status=2"
+            class="summary-stat"
+            :aria-busy="loading.locked"
+            :aria-disabled="loading.locked"
+            :tabindex="loading.locked ? -1 : undefined"
+            @click="loading.locked && $event.preventDefault()"
+          >
+            <t-skeleton
               v-if="loading.locked"
               class="summary-metric-skeleton"
               animation="gradient"
               :row-col="metricSkeleton"
-            /><strong v-else>{{ locked }}</strong
-            ><span>· {{ t('system.status.locked') }}</span></RouterLink
-          >
+            />
+            <strong v-else>{{ failures.locked ? '—' : locked }}</strong>
+            <span>{{ t('system.status.locked') }}</span>
+          </RouterLink>
         </div>
+      </section>
+      <section v-else class="overview-welcome">
+        <h2>{{ t('noUserAccess', { name: session.user?.username || '' }) }}</h2>
+        <p class="muted">{{ t('overviewHint') }}</p>
       </section>
       <div class="section-heading">
         <h2>{{ t('common') }}</h2>
@@ -225,14 +268,14 @@ function removeMockDevice(id: number) {
           >{{ t('allApps') }} <Icon name="chevron-right" :size="15"
         /></RouterLink>
       </div>
-      <div class="quick-grid">
+      <div class="quick-grid overview-apps">
         <RouterLink
           v-for="item in modules
             .filter((x) => ['user', 'role', 'user-group', 'dictionary'].includes(x.resource))
             .slice(0, 4)"
           :key="item.path"
           :to="item.path"
-          ><span class="quick-icon"><Icon :name="item.icon" :size="24" /></span
+          ><span class="quick-icon"><Icon :name="item.icon" :size="20" /></span
           ><span>{{ item.label }}</span></RouterLink
         >
       </div>
@@ -242,7 +285,7 @@ function removeMockDevice(id: number) {
       <RouterLink
         v-else-if="can('user', 'read') && !failures.pending && pending > 0"
         to="/system/user?status=0"
-        class="review-banner glass"
+        class="review-banner"
         ><Icon name="time" />
         <div>
           <strong>{{ t('pending', { count: pending }) }}</strong
@@ -260,19 +303,34 @@ function removeMockDevice(id: number) {
             >{{ t('all') }} <Icon name="chevron-right" :size="15"
           /></RouterLink>
         </div>
-        <section class="card record-list" :aria-busy="loading.recent">
-          <PageSkeleton v-if="loading.recent" variant="list" />
+        <section class="card record-list overview-recent" :aria-busy="loading.recent">
+          <div v-if="loading.recent" role="status" :aria-label="t('loading')">
+            <div
+              v-for="index in 5"
+              :key="index"
+              class="record recent-placeholder"
+              aria-hidden="true"
+            >
+              <span class="avatar recent-avatar">
+                <t-skeleton animation="gradient" :row-col="recentAvatarSkeleton" />
+              </span>
+              <div class="record-main">
+                <t-skeleton animation="gradient" :row-col="recentIdentitySkeleton" />
+              </div>
+              <t-skeleton class="recent-date" animation="gradient" :row-col="recentDateSkeleton" />
+            </div>
+          </div>
           <RouterLink
             v-for="user in loading.recent ? [] : users"
             :key="user.id"
             :to="`/system/user?username=${encodeURIComponent(user.username || '')}`"
             class="record"
-            ><span class="avatar">{{ initials(user.username || '') }}</span>
+            ><span class="avatar recent-avatar">{{ initials(user.username || '') }}</span>
             <div class="record-main">
               <strong>{{ user.username }}</strong
-              ><small>{{ dateTime(user.created_at) }}</small>
+              ><small>{{ t('system.fields.role') }}: {{ user.role?.name || '—' }}</small>
             </div>
-            <Icon name="chevron-right" :size="16" /></RouterLink
+            <small class="recent-date">{{ dateTime(user.created_at) }}</small> </RouterLink
           ><t-empty
             v-if="!users.length && !loading.recent && !failures.recent"
             :description="t('noData')"

@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { MessageFeed } from "./message-feed";
-import type { Msg, MsgPage } from "./msg";
+import { describe, expect, it, vi } from 'vitest';
+import { MessageFeed } from './message-feed';
+import type { Msg, MsgPage } from './msg';
 const row = (id: number, read_at: number | null = null): Msg => ({
   id,
   title: `Message ${id}`,
-  content: "Content",
-  type: "notice",
-  scope: "all",
+  content: 'Content',
+  type: 'notice',
+  scope: 'all',
   sender_id: null,
   published_at: id,
   expired_at: null,
@@ -25,8 +25,8 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-describe("message feed", () => {
-  it("appends the next page once, deduplicates overlapping rows, and stops at the end", async () => {
+describe('message feed', () => {
+  it('appends the next page once, deduplicates overlapping rows, and stops at the end', async () => {
     const pending = deferred<MsgPage>();
     const fetch = vi
       .fn()
@@ -46,24 +46,24 @@ describe("message feed", () => {
     expect(fetch.mock.calls.map((call) => call[0])).toEqual([1, 2, 3]);
     expect(feed.snapshot().hasMore).toBe(false);
   });
-  it("keeps existing rows on a next-page failure and retries the same page", async () => {
+  it('keeps existing rows on a next-page failure and retries the same page', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(page([4, 3], 4))
-      .mockRejectedValueOnce(new Error("Offline"))
+      .mockRejectedValueOnce(new Error('Offline'))
       .mockResolvedValueOnce(page([2, 1], 4));
     const feed = new MessageFeed(fetch, 2);
     await feed.load();
     await feed.loadMore();
     expect(feed.snapshot().rows.map((row) => row.id)).toEqual([4, 3]);
-    expect(feed.snapshot().moreError).toBe("Offline");
+    expect(feed.snapshot().moreError).toBe('Offline');
     expect(feed.snapshot().loadingMore).toBe(false);
     await feed.loadMore();
     expect(fetch.mock.calls.map((call) => call[0])).toEqual([1, 2, 2]);
     expect(feed.snapshot().rows).toHaveLength(4);
-    expect(feed.snapshot().moreError).toBe("");
+    expect(feed.snapshot().moreError).toBe('');
   });
-  it("refreshes all loaded pages without hiding messages or losing updated read states", async () => {
+  it('refreshes all loaded pages without hiding messages or losing updated read states', async () => {
     const refreshed = { ...page([4, 3], 4), items: [row(4, 100), row(3)] };
     const pending = deferred<MsgPage>();
     const fetch = vi
@@ -84,7 +84,7 @@ describe("message feed", () => {
     expect(feed.snapshot().rows[0].read_at).toBe(100);
     expect(feed.snapshot().rows).toHaveLength(4);
   });
-  it("ignores late next-page responses after a refresh or a filter change", async () => {
+  it('ignores late next-page responses after a refresh or a filter change', async () => {
     const pending = deferred<MsgPage>();
     const fetch = vi
       .fn()
@@ -106,18 +106,18 @@ describe("message feed", () => {
     await request;
     expect(old.snapshot().rows).toEqual([]);
   });
-  it("handles an empty inbox and initial-load errors without advancing a page", async () => {
+  it('handles an empty inbox and initial-load errors without advancing a page', async () => {
     const fetch = vi
       .fn()
-      .mockRejectedValueOnce(new Error("Offline"))
+      .mockRejectedValueOnce(new Error('Offline'))
       .mockResolvedValueOnce(page([], 0));
     const feed = new MessageFeed(fetch, 2);
     await feed.load();
-    expect(feed.snapshot().error).toBe("Offline");
+    expect(feed.snapshot().error).toBe('Offline');
     await feed.loadMore();
     expect(fetch).toHaveBeenCalledTimes(1);
     await feed.load();
-    expect(feed.snapshot().error).toBe("");
+    expect(feed.snapshot().error).toBe('');
     expect(feed.snapshot().hasMore).toBe(false);
     expect(feed.snapshot().loading).toBe(false);
   });

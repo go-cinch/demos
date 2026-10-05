@@ -4,7 +4,7 @@ import { t } from '../locales';
 import Sheet from './Sheet.vue';
 defineProps<{ columns: { key: string; title: string }[]; fixedColumn: string }>();
 const option = defineModel<string>('option', { default: '' });
-const density = defineModel<string>('density', { default: 'default' });
+const density = defineModel<'compact' | 'default' | 'loose'>('density', { default: 'default' });
 const size = defineModel<number>('size', { default: 20 });
 const visible = defineModel<string[]>('visible', { default: () => [] });
 const bordered = defineModel<boolean>('bordered', { default: false });

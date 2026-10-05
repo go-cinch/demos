@@ -6,18 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#f3f6fa" />
-    <meta name="description" content="Go Cinch · 月白移动管理端" />
+    <meta name="theme-color" content="#f5f5f5" />
+    <meta name="description" content="Go Cinch · Mobile Admin" />
     <title>Go Cinch · TDesign Mobile</title>
     <link rel="icon" type="image/svg+xml" sizes="any" href="%BASE_URL%go-cinch.svg" />
     <script>
       (() => {
         let dark = false;
-        let accent = 'moon';
+        let accent = 'graphite';
         try {
           const stored = JSON.parse(localStorage.getItem('cinch-mobile-preferences') || '{}');
           dark = stored.dark === true;
-          if (['moon', 'green', 'violet'].includes(stored.accent)) accent = stored.accent;
+          if (['jade', 'green'].includes(stored.accent)) accent = 'jade';
+          else if (['berry', 'violet'].includes(stored.accent)) accent = 'berry';
         } catch {
           /* Use application defaults when storage is unavailable or invalid. */
         }
@@ -25,7 +26,12 @@
         document.documentElement.dataset.theme = theme;
         document.documentElement.dataset.accent = accent;
         document.documentElement.setAttribute('theme-mode', theme);
-        document.querySelector('meta[name="theme-color"]').content = dark ? '#182330' : '#f3f6fa';
+        const colors = {
+          graphite: ['#f5f5f5', '#202226'],
+          jade: ['#f4f7f5', '#17231f'],
+          berry: ['#f5f5f7', '#211c25'],
+        };
+        document.querySelector('meta[name="theme-color"]').content = colors[accent][dark ? 1 : 0];
       })();
     </script>
   </head>
@@ -44,17 +50,19 @@
         z-index: 100000;
         display: grid;
         place-items: center;
-        background: #f3f6fa;
-        color: #45628b;
-        --bootstrap-orb-shadow: rgba(69, 98, 139, 0.3);
+        background: #f5f5f5;
+        color: #3366b8;
+        --bootstrap-shadow: rgba(51, 102, 184, 0.28);
       }
-      :root[data-accent='green'] #app-bootstrap-loading {
-        color: #49756a;
-        --bootstrap-orb-shadow: rgba(73, 117, 106, 0.3);
+      :root[data-accent='jade'] #app-bootstrap-loading {
+        background: #f4f7f5;
+        color: #087b69;
+        --bootstrap-shadow: rgba(8, 123, 105, 0.28);
       }
-      :root[data-accent='violet'] #app-bootstrap-loading {
-        color: #77658d;
-        --bootstrap-orb-shadow: rgba(119, 101, 141, 0.3);
+      :root[data-accent='berry'] #app-bootstrap-loading {
+        background: #f5f5f7;
+        color: #a62b56;
+        --bootstrap-shadow: rgba(166, 43, 86, 0.28);
       }
       .bootstrap-loading-orb {
         position: relative;
@@ -62,7 +70,6 @@
         height: 12px;
         background: currentColor;
         border-radius: 50%;
-        box-shadow: 0 0 0 0 var(--bootstrap-orb-shadow);
         animation: bootstrap-orb-breathe 1.6s ease-in-out infinite;
       }
       .bootstrap-loading-orb::after {
@@ -77,27 +84,29 @@
         0%,
         100% {
           transform: scale(0.88);
-          box-shadow: 0 0 0 0 var(--bootstrap-orb-shadow);
+          box-shadow: 0 0 0 0 var(--bootstrap-shadow);
           opacity: 0.72;
         }
         50% {
           transform: scale(1);
-          box-shadow: 0 0 0 12px rgba(69, 98, 139, 0);
+          box-shadow: 0 0 0 12px transparent;
           opacity: 1;
         }
       }
       :root[data-theme='dark'] #app-bootstrap-loading {
-        background: #182330;
-        color: #b3c9e9;
-        --bootstrap-orb-shadow: rgba(179, 201, 233, 0.3);
+        background: #202226;
+        color: #9cbbeb;
+        --bootstrap-shadow: rgba(156, 187, 235, 0.25);
       }
-      :root[data-theme='dark'][data-accent='green'] #app-bootstrap-loading {
-        color: #afd9c9;
-        --bootstrap-orb-shadow: rgba(175, 217, 201, 0.3);
+      :root[data-theme='dark'][data-accent='jade'] #app-bootstrap-loading {
+        background: #17231f;
+        color: #93d2bc;
+        --bootstrap-shadow: rgba(147, 210, 188, 0.25);
       }
-      :root[data-theme='dark'][data-accent='violet'] #app-bootstrap-loading {
-        color: #cdbbdf;
-        --bootstrap-orb-shadow: rgba(205, 187, 223, 0.3);
+      :root[data-theme='dark'][data-accent='berry'] #app-bootstrap-loading {
+        background: #211c25;
+        color: #f0a6c0;
+        --bootstrap-shadow: rgba(240, 166, 192, 0.25);
       }
       @media (prefers-reduced-motion: reduce) {
         .bootstrap-loading-orb {
