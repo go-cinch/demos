@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { InfiniteScroll, SwipeAction, type SwipeActionRef } from 'antd-mobile';
 import { useMessageFeed } from '../lib/use-message-feed';
@@ -13,59 +13,109 @@ const tr = (key: string) => t(`app.msg.${key}`);
 function MessageRow({
   row,
   busy,
+  reading,
   deleting,
   open,
   reveal,
   close,
   remove,
+  read,
 }: {
   row: Msg;
   busy: boolean;
+  reading: boolean;
   deleting: boolean;
   open: boolean;
   reveal: () => void;
   close: () => void;
   remove: () => void;
+  read: () => void;
 }) {
   const swipe = useRef<SwipeActionRef>(null);
-  const pointer = useRef<{ x: number; y: number }>();
+  const pointer = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    mouse: boolean;
+    moved: boolean;
+    open: boolean;
+  }>();
+  const suppressClick = useRef(false),
+    feedbackTimer = useRef<number>();
+  const [pressed, setPressed] = useState(false),
+    [tapped, setTapped] = useState(false);
   useEffect(() => {
     if (!open) swipe.current?.close();
   }, [open]);
-  function pointerDown(event: PointerEvent<HTMLElement>) {
-    if (
-      busy ||
-      event.pointerType !== 'mouse' ||
-      event.button !== 0 ||
-      !(event.target as Element).closest('.message-body')
-    )
+  useEffect(() => () => window.clearTimeout(feedbackTimer.current), []);
+  useEffect(() => {
+    const cancelOnScroll = () => {
+      if (!pointer.current) return;
+      pointer.current = undefined;
+      suppressClick.current = true;
+      setPressed(false);
+    };
+    window.addEventListener('scroll', cancelOnScroll, true);
+    return () => window.removeEventListener('scroll', cancelOnScroll, true);
+  }, []);
+  function pointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (busy) return;
+    if (!event.isPrimary || event.button !== 0) {
+      pointer.current = undefined;
+      suppressClick.current = true;
+      setPressed(false);
       return;
-    event.preventDefault();
-    pointer.current = { x: event.clientX, y: event.clientY };
+    }
+    suppressClick.current = false;
+    pointer.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      mouse: event.pointerType === 'mouse',
+      moved: false,
+      open,
+    };
+    if (event.pointerType === 'mouse') event.currentTarget.setPointerCapture(event.pointerId);
+    setTapped(false);
+    setPressed(!open);
   }
-  function pointerUp(event: PointerEvent<HTMLElement>) {
+  function pointerMove(event: PointerEvent<HTMLButtonElement>) {
     const start = pointer.current;
+    if (!start || start.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) {
+      start.moved = true;
+      setPressed(false);
+    }
+  }
+  function pointerUp(event: PointerEvent<HTMLButtonElement>) {
+    const start = pointer.current;
+    if (!start || start.id !== event.pointerId) return;
     pointer.current = undefined;
-    if (!start || busy) return;
+    setPressed(false);
     const dx = event.clientX - start.x,
       dy = event.clientY - start.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+    suppressClick.current = start.moved || Math.hypot(dx, dy) > 8 || start.open;
+    if (!busy && start.mouse && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
       if (dx < 0) swipe.current?.show('right');
       else swipe.current?.close();
     }
+  }
+  function tap(event: MouseEvent<HTMLButtonElement>) {
+    if (busy || (event.detail > 0 && suppressClick.current)) return;
+    if (open) {
+      swipe.current?.close();
+      return;
+    }
+    setTapped(true);
+    window.clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = window.setTimeout(() => setTapped(false), 640);
+    if (!row.read_at) read();
   }
   return (
     <article
       className={`message-item ${!row.read_at ? 'is-unread' : ''} ${open ? 'is-revealed' : ''}`}
       data-record-id={row.id}
-      tabIndex={0}
-      aria-label={`${row.title}, ${tr(row.read_at ? 'read' : 'unread')}`}
       aria-busy={busy}
-      onPointerDown={pointerDown}
-      onPointerUp={pointerUp}
-      onPointerCancel={() => {
-        pointer.current = undefined;
-      }}
       onKeyDown={(event) => {
         if (busy) return;
         if (event.key === 'ArrowLeft') {
@@ -100,7 +150,30 @@ function MessageRow({
         ]}
         aria-busy={deleting}
       >
-        <div className="message-body">
+        <button
+          type="button"
+          className={`message-body ${pressed ? 'is-pressed' : ''} ${tapped ? 'is-tapped' : ''}`}
+          aria-label={`${row.title}, ${tr(row.read_at ? 'read' : 'unread')}`}
+          aria-disabled={busy}
+          aria-busy={reading}
+          onClick={tap}
+          onPointerDown={pointerDown}
+          onPointerMove={pointerMove}
+          onPointerUp={pointerUp}
+          onPointerCancel={() => {
+            pointer.current = undefined;
+            suppressClick.current = true;
+            setPressed(false);
+          }}
+          onKeyDown={(event) => {
+            if (!busy && !open && (event.key === 'Enter' || event.key === ' ')) {
+              setTapped(false);
+              setPressed(true);
+            }
+          }}
+          onKeyUp={() => setPressed(false)}
+          onBlur={() => setPressed(false)}
+        >
           <span className="message-avatar" aria-hidden="true">
             <Icon name={row.type === 'system' ? 'secured' : 'notification'} size={24} />
             {!row.read_at && <span className="message-unread-dot" />}
@@ -112,7 +185,7 @@ function MessageRow({
           <time className="message-time" aria-label={tr('published')}>
             {dateTime(row.published_at)}
           </time>
-        </div>
+        </button>
       </SwipeAction>
     </article>
   );
@@ -122,6 +195,7 @@ export default function MsgInboxPage() {
   const [type, setType] = useState('');
   const feed = useMessageFeed(true, type, 20);
   const [busy, setBusy] = useState(false),
+    [readingID, setReadingID] = useState<number | null>(null),
     [deletingID, setDeletingID] = useState<number | null>(null),
     [openID, setOpenID] = useState<number | null>(null);
   const sending = useRef(false),
@@ -191,6 +265,26 @@ export default function MsgInboxPage() {
       }
     }
   }
+  async function read(row: Msg) {
+    if (sending.current || row.read_at) return;
+    sending.current = true;
+    setBusy(true);
+    setReadingID(row.id);
+    feed.setError('');
+    try {
+      await msgApi.read(row.id);
+      msgChanged();
+      await feed.load();
+    } catch (error) {
+      if (mounted.current) feed.setError((error as Error).message);
+    } finally {
+      sending.current = false;
+      if (mounted.current) {
+        setBusy(false);
+        setReadingID(null);
+      }
+    }
+  }
   return (
     <section
       className="page message-page ant-message-inbox"
@@ -207,7 +301,7 @@ export default function MsgInboxPage() {
           aria-label={tr('readAll')}
           title={tr('readAll')}
           disabled={feed.loading || busy}
-          aria-busy={busy && deletingID === null}
+          aria-busy={busy && deletingID === null && readingID === null}
           onClick={() => void readAll()}
         >
           <Icon name="broom" size={23} />
@@ -239,11 +333,13 @@ export default function MsgInboxPage() {
                 key={row.id}
                 row={row}
                 busy={busy}
+                reading={readingID === row.id}
                 deleting={deletingID === row.id}
                 open={openID === row.id}
                 reveal={() => setOpenID(row.id)}
                 close={() => setOpenID((current) => (current === row.id ? null : current))}
                 remove={() => void remove(row)}
+                read={() => void read(row)}
               />
             ))}
             {!feed.rows.length && !feed.error && <NoData text={tr('empty')} />}
