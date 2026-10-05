@@ -26,9 +26,39 @@ const rows = computed(() => state.value.rows);
 const loading = computed(() => state.value.loading);
 const error = computed(() => state.value.error);
 const busy = ref(false);
+const readingID = ref<number | null>(null);
 const deletingID = ref<number | null>(null);
 const swipeID = ref<number | null>(null);
+const pressedID = ref<number | null>(null);
+const tappedID = ref<number | null>(null);
+let tapTimer: ReturnType<typeof setTimeout>;
 let disposed = false;
+async function read(row: Msg) {
+  if (busy.value || row.read_at) return;
+  busy.value = true;
+  readingID.value = row.id;
+  feed.setError('');
+  try {
+    await msgApi.read(row.id);
+    msgChanged();
+    await feed.load();
+  } catch (error) {
+    if (!disposed) feed.setError((error as Error).message);
+  } finally {
+    if (!disposed) {
+      busy.value = false;
+      readingID.value = null;
+    }
+  }
+}
+async function showTapFeedback(id: number) {
+  clearTimeout(tapTimer);
+  tappedID.value = null;
+  await nextTick();
+  if (disposed) return;
+  tappedID.value = id;
+  tapTimer = setTimeout(() => (tappedID.value = null), 640);
+}
 async function readAll() {
   if (busy.value || loading.value) return;
   busy.value = true;
@@ -73,26 +103,69 @@ function swipeChanged(id: number, side?: string) {
   if (side === 'right') swipeID.value = id;
   else if (swipeID.value === id) swipeID.value = null;
 }
-// The native component handles touch; pointer input also supports desktop previews.
-let pointerStart: { id: number; x: number; y: number } | undefined;
+// Touch swiping belongs to SwipeCell; pointer tracking distinguishes a tap from a gesture.
+let pointerStart:
+  | { id: number; pointerID: number; x: number; y: number; moved: boolean; opened: boolean }
+  | undefined;
+let pointerClick: { id: number; closeOnly: boolean } | undefined;
 function startPointer(event: PointerEvent, id: number) {
+  cancelPointer();
   if (
-    event.pointerType === 'mouse' &&
+    event.isPrimary &&
     event.button === 0 &&
     !busy.value &&
     (event.target as Element)?.closest('.message-body')
   ) {
-    event.preventDefault();
-    pointerStart = { id, x: event.clientX, y: event.clientY };
+    pointerStart = {
+      id,
+      pointerID: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      opened: swipeID.value === id,
+    };
+    pressedID.value = id;
+  }
+}
+function movePointer(event: PointerEvent) {
+  const start = pointerStart;
+  if (!start || start.pointerID !== event.pointerId) return;
+  if (Math.abs(event.clientX - start.x) > 8 || Math.abs(event.clientY - start.y) > 8) {
+    start.moved = true;
+    pressedID.value = null;
   }
 }
 function endPointer(event: PointerEvent, id: number) {
   const start = pointerStart;
   pointerStart = undefined;
-  if (!start || start.id !== id || busy.value) return;
+  pressedID.value = null;
+  if (!start || start.id !== id || start.pointerID !== event.pointerId || busy.value) return;
   const dx = event.clientX - start.x,
     dy = event.clientY - start.y;
-  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) swipeID.value = dx < 0 ? id : null;
+  if (event.pointerType === 'mouse' && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+    event.preventDefault();
+    swipeID.value = dx < 0 ? id : null;
+  } else if (!start.moved && Math.abs(dx) <= 8 && Math.abs(dy) <= 8) {
+    pointerClick = { id, closeOnly: start.opened };
+  }
+}
+function cancelPointer() {
+  pointerStart = undefined;
+  pointerClick = undefined;
+  pressedID.value = null;
+}
+function leavePointer() {
+  if (pointerStart) cancelPointer();
+}
+function clickRow(event: MouseEvent, row: Msg) {
+  const click = pointerClick;
+  pointerClick = undefined;
+  pressedID.value = null;
+  if (busy.value || (event.detail > 0 && click?.id !== row.id)) return;
+  void showTapFeedback(row.id);
+  const closeOnly = swipeID.value === row.id || (click?.id === row.id && click.closeOnly);
+  swipeID.value = null;
+  if (!closeOnly) void read(row);
 }
 watch(type, () => {
   feed.dispose();
@@ -103,6 +176,7 @@ watch(type, () => {
     state.value = feed.snapshot();
   });
   swipeID.value = null;
+  cancelPointer();
   void feed.load();
 });
 const sentinel = ref<HTMLElement>();
@@ -110,7 +184,7 @@ let scrollRoot: HTMLElement | null = null;
 let observer: IntersectionObserver;
 function observeScrollRoot() {
   observer?.disconnect();
-  scrollRoot?.removeEventListener('scroll', checkLoadMore);
+  scrollRoot?.removeEventListener('scroll', scrolled);
   scrollRoot = null;
   for (
     let parent = sentinel.value?.parentElement;
@@ -129,8 +203,12 @@ function observeScrollRoot() {
     { root: scrollRoot, rootMargin: '0px 0px 250px 0px' },
   );
   if (sentinel.value) observer.observe(sentinel.value);
-  scrollRoot?.addEventListener('scroll', checkLoadMore, { passive: true });
-  window.addEventListener('scroll', checkLoadMore, { passive: true });
+  scrollRoot?.addEventListener('scroll', scrolled, { passive: true });
+  window.addEventListener('scroll', scrolled, { passive: true });
+  void checkLoadMore();
+}
+function scrolled() {
+  cancelPointer();
   void checkLoadMore();
 }
 let checkScheduled = false;
@@ -173,11 +251,12 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   disposed = true;
+  clearTimeout(tapTimer);
   feed.dispose();
   unsubscribe();
   observer?.disconnect();
-  scrollRoot?.removeEventListener('scroll', checkLoadMore);
-  window.removeEventListener('scroll', checkLoadMore);
+  scrollRoot?.removeEventListener('scroll', scrolled);
+  window.removeEventListener('scroll', scrolled);
   window.removeEventListener('resize', observeScrollRoot);
   clearInterval(timer);
   window.removeEventListener('cinch-msg-changed', refreshVisible);
@@ -196,7 +275,7 @@ onBeforeUnmount(() => {
         :aria-label="tr('readAll')"
         :title="tr('readAll')"
         :disabled="loading || busy"
-        :aria-busy="busy && deletingID === null"
+        :aria-busy="busy && deletingID === null && readingID === null"
         @click="readAll"
       >
         <Icon name="broom" :size="23" />
@@ -231,8 +310,6 @@ onBeforeUnmount(() => {
           class="message-item"
           :class="{ 'is-unread': !row.read_at }"
           :data-record-id="row.id"
-          tabindex="0"
-          :aria-label="`${row.title}, ${tr(row.read_at ? 'read' : 'unread')}`"
           @keydown.left.prevent="!busy && (swipeID = row.id)"
           @keydown.right.prevent="swipeID = null"
           @keydown.esc.prevent="swipeID = null"
@@ -242,10 +319,23 @@ onBeforeUnmount(() => {
             :disabled="busy"
             @change="(side) => swipeChanged(row.id, side)"
             @pointerdown="startPointer($event, row.id)"
+            @pointermove="movePointer"
             @pointerup="endPointer($event, row.id)"
-            @pointercancel="pointerStart = undefined"
+            @pointercancel="cancelPointer"
+            @pointerleave="leavePointer"
           >
-            <div class="message-body">
+            <button
+              type="button"
+              class="message-body"
+              :class="{ 'is-pressed': pressedID === row.id, 'is-tapped': tappedID === row.id }"
+              :aria-label="`${row.title}, ${tr(row.read_at ? 'read' : 'unread')}`"
+              :aria-busy="readingID === row.id"
+              :disabled="busy"
+              @click="clickRow($event, row)"
+              @keydown="($event.key === 'Enter' || $event.key === ' ') && (pressedID = row.id)"
+              @keyup="pressedID = null"
+              @blur="pressedID = null"
+            >
               <span class="message-avatar" aria-hidden="true"
                 ><Icon :name="row.type === 'system' ? 'secured' : 'notification'" :size="24" /><span
                   v-if="!row.read_at"
@@ -258,7 +348,7 @@ onBeforeUnmount(() => {
               <time class="message-time" :aria-label="tr('published')">{{
                 dateTime(row.published_at)
               }}</time>
-            </div>
+            </button>
             <template #right
               ><button
                 class="message-delete"
@@ -426,15 +516,56 @@ onBeforeUnmount(() => {
 }
 
 .message-body {
+  position: relative;
+  isolation: isolate;
   min-height: 84px;
-  cursor: default;
+  border-radius: 0;
+  background: var(--surface);
   touch-action: pan-y;
+}
+.message-body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease-out;
+}
+.message-body:disabled {
+  opacity: 1;
+}
+.message-body.is-pressed::before {
+  opacity: 1;
+}
+.message-body.is-tapped::before {
+  animation: message-tap 640ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes message-tap {
+  0%,
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-body::before {
+    transition: none;
+  }
+  .message-body.is-tapped::before {
+    animation: none;
+    opacity: 1;
+  }
 }
 .message-item {
   min-width: 0;
   overflow: hidden;
 }
-.message-item:focus-visible {
+.message-body:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: 12px;
