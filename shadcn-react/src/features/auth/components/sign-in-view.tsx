@@ -2,20 +2,14 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AppFooter } from '@/components/layout/app-footer';
 import { ThemeModeToggle } from '@/components/themes/theme-mode-toggle';
 import { ThemeSelector } from '@/components/themes/theme-selector';
-import {
-  login,
-  rememberedAccount,
-  request,
-  type CaptchaPoint,
-  type PointCaptcha
-} from '@/features/auth/api';
+import { login, request, type CaptchaPoint, type PointCaptcha } from '@/features/auth/api';
 import { resolveHomePath, useAuth } from '@/features/auth/auth-context';
+import { consumeRegistrationLogin } from '@/features/auth/registration-login';
 import { isValidPassword, isValidUsername } from '@/features/auth/validation';
 import { useLocale } from '@/features/i18n/locale-context';
 import { IconLayoutSidebarLeftExpand, IconLayoutSidebarRightExpand } from '@tabler/icons-react';
@@ -26,6 +20,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { PointCaptchaView } from './point-captcha';
 import { SliderCaptcha } from './slider-captcha';
+import { LoginAccountInput } from './login-account-input';
 
 export default function SignInViewPage() {
   const router = useRouter();
@@ -33,7 +28,6 @@ export default function SignInViewPage() {
   const { pick } = useLocale();
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [remember, setRemember] = React.useState(false);
   const [sliderProof, setSliderProof] = React.useState('');
   const [sliderAttempt, setSliderAttempt] = React.useState(0);
   const [captcha, setCaptcha] = React.useState<PointCaptcha>();
@@ -42,13 +36,15 @@ export default function SignInViewPage() {
   const [captchaVerified, setCaptchaVerified] = React.useState(false);
   const [captchaVerifying, setCaptchaVerifying] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const registrationApplied = React.useRef(false);
   React.useEffect(() => {
-    const saved = rememberedAccount();
-    if (saved) {
-      // oxlint-disable-next-line react/set-state-in-effect -- hydrate browser-only remembered account after mount
-      setUsername(saved.username);
-      setPassword(saved.password);
-      setRemember(true);
+    if (registrationApplied.current) return;
+    registrationApplied.current = true;
+    const credentials = consumeRegistrationLogin();
+    if (credentials) {
+      // oxlint-disable-next-line react/set-state-in-effect -- consume the in-memory registration redirect once after mount
+      setUsername(credentials.username);
+      setPassword(credentials.password);
     }
   }, []);
   React.useEffect(() => {
@@ -133,7 +129,6 @@ export default function SignInViewPage() {
       const result = await login({
         username: username.trim(),
         password,
-        remember_me: remember,
         slider_proof: sliderProof,
         captcha_id: captcha?.captcha_id,
         captcha_points: points
@@ -174,14 +169,12 @@ export default function SignInViewPage() {
             {pick('Username', '用户名')}
             <span className='ml-1 text-destructive'>*</span>
           </Label>
-          <Input
-            id='username'
-            name='username'
+          <LoginAccountInput
             value={username}
-            aria-invalid={Boolean(errors.username)}
-            aria-describedby={errors.username ? 'username-error' : undefined}
-            onChange={(e) => {
-              setUsername(e.target.value);
+            error={errors.username}
+            onChange={(value) => {
+              setUsername(value);
+              setPassword('');
               setErrors((old) => ({ ...old, username: '' }));
               setSliderProof('');
               setSliderAttempt((value) => value + 1);
@@ -189,7 +182,6 @@ export default function SignInViewPage() {
               setPoints([]);
               setCaptchaVerified(false);
             }}
-            autoComplete='username'
           />
           {errors.username && (
             <p id='username-error' role='alert' className='text-xs text-destructive'>
@@ -213,21 +205,13 @@ export default function SignInViewPage() {
               setPassword(e.target.value);
               setErrors((old) => ({ ...old, password: '' }));
             }}
-            autoComplete='current-password'
+            autoComplete='new-password'
           />
           {errors.password && (
             <p id='password-error' role='alert' className='text-xs text-destructive'>
               {errors.password}
             </p>
           )}
-        </div>
-        <div className='flex items-center gap-2'>
-          <Checkbox
-            id='remember'
-            checked={remember}
-            onCheckedChange={(value) => setRemember(value === true)}
-          />
-          <Label htmlFor='remember'>{pick('Remember account', '记住账号')}</Label>
         </div>
         <SliderCaptcha
           key={sliderAttempt}
@@ -306,7 +290,7 @@ export function AuthShell({
 
   return (
     <main
-      className={`relative flex min-h-screen flex-col overflow-hidden bg-muted/40 px-4 pt-20 ${panelSide === 'left' ? 'items-start' : 'items-end'}`}
+      className={`auth-surface relative flex min-h-screen flex-col overflow-hidden bg-muted/40 px-4 pt-20 ${panelSide === 'left' ? 'items-start' : 'items-end'}`}
     >
       <div className='absolute inset-0 bg-[radial-gradient(circle_at_top_left,var(--primary)_0,transparent_42%)] opacity-10' />
       <div className='absolute top-4 right-4 z-20 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-lg border bg-background/85 p-1.5 shadow-sm backdrop-blur'>

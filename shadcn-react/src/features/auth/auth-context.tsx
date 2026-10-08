@@ -8,6 +8,7 @@ import {
   restoreSession,
   type UserInfo
 } from './api';
+import { clearLegacyLoginCredentials } from './account-history';
 
 interface AuthValue {
   loading: boolean;
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return next;
   }, []);
   React.useEffect(() => {
+    clearLegacyLoginCredentials();
     restoreSession()
       .then((session) => {
         setPasswordResetRequired(session.password_reset_required);
