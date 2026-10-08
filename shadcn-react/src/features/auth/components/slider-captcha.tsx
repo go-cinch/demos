@@ -235,7 +235,6 @@ export function SliderCaptcha({
         tabIndex={verified ? -1 : 0}
         className={cn(
           'relative h-11 w-full touch-none select-none overflow-hidden rounded-md border bg-muted/50 outline-none',
-          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           !busy && !verified && 'cursor-grab active:cursor-grabbing',
           verified && 'border-emerald-500/50 bg-emerald-500/10'
         )}

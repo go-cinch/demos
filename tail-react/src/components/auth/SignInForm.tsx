@@ -7,55 +7,42 @@ import {
 } from "@/api/auth";
 import { ApiError } from "@/api/client";
 import Label from "@/components/form/Label";
-import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Button from "@/components/ui/button/Button";
 import { useAuth } from "@/context/AuthContext";
 import { isValidUsername, isValidUserPassword } from "@/utils/userValidation";
-import { useEffect, useState } from "react";
+import { consumeRegistrationLogin } from "@/utils/registrationLogin";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 import PointCaptcha from "./PointCaptcha";
 import SliderCaptcha from "./SliderCaptcha";
-
-const rememberKey = `REMEMBER_ME_ACCOUNT_${location.hostname}`;
-const legacyRememberKey = `REMEMBER_ME_CREDENTIALS_${location.hostname}`;
-
-function rememberedAccount() {
-  try {
-    const current = JSON.parse(localStorage.getItem(rememberKey) || "null") as {
-      username?: string;
-      password?: string;
-    } | null;
-    const legacy = JSON.parse(
-      localStorage.getItem(legacyRememberKey) || "null",
-    ) as { username?: string } | null;
-    localStorage.removeItem(legacyRememberKey);
-    return {
-      username: current?.username || legacy?.username || "",
-      password: current?.password || "",
-    };
-  } catch {
-    localStorage.removeItem(legacyRememberKey);
-    return { username: "", password: "" };
-  }
-}
+import LoginAccountInput from "./LoginAccountInput";
 
 export default function SignInForm() {
   const { t } = useTranslation();
   const auth = useAuth();
   const navigate = useNavigate();
   const route = useLocation();
-  const remembered = rememberedAccount();
-  const [username, setUsername] = useState(remembered.username);
-  const [password, setPassword] = useState(remembered.password);
-  const [remember, setRemember] = useState(Boolean(remembered.username));
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [sliderProof, setSliderProof] = useState("");
   const [captcha, setCaptcha] = useState<PointCaptchaChallenge>();
   const [captchaPoints, setCaptchaPoints] = useState<CaptchaPoint[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const registrationApplied = useRef(false);
+
+  useEffect(() => {
+    if (registrationApplied.current) return;
+    registrationApplied.current = true;
+    const credentials = consumeRegistrationLogin();
+    if (credentials) {
+      setUsername(credentials.username);
+      setPassword(credentials.password);
+    }
+  }, []);
 
   useEffect(() => {
     const normalized = username.trim();
@@ -63,15 +50,20 @@ export default function SignInForm() {
       setCaptcha(undefined);
       return;
     }
+    let active = true;
     const timer = window.setTimeout(() => {
       void loginVerification(normalized)
         .then((result) => {
+          if (!active) return;
           setCaptcha(result.captcha_required ? result.captcha : undefined);
           setCaptchaPoints([]);
         })
-        .catch(() => setCaptcha(undefined));
+        .catch(() => active && setCaptcha(undefined));
     }, 350);
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [username]);
 
   const validate = () => {
@@ -96,17 +88,10 @@ export default function SignInForm() {
       const result = await auth.login({
         username: username.trim(),
         password,
-        remember_me: remember,
         slider_proof: captcha ? "" : sliderProof,
         captcha_id: captcha?.captcha_id,
         captcha_points: captcha ? captchaPoints : undefined,
       });
-      if (remember)
-        localStorage.setItem(
-          rememberKey,
-          JSON.stringify({ username: username.trim(), password }),
-        );
-      else localStorage.removeItem(rememberKey);
       navigate(
         result.password_reset_required
           ? "/auth/reset-password"
@@ -146,12 +131,8 @@ export default function SignInForm() {
             <Label htmlFor="signin-username">
               {t("auth.username")} <span className="text-error-500">*</span>
             </Label>
-            <Input
-              autoComplete="username"
-              error={Boolean(fieldErrors.username)}
-              hint={fieldErrors.username}
-              id="signin-username"
-              name="username"
+            <LoginAccountInput
+              error={fieldErrors.username}
               onBlur={() =>
                 setFieldErrors((value) => ({
                   ...value,
@@ -160,8 +141,11 @@ export default function SignInForm() {
                     : t("validation.username"),
                 }))
               }
-              onChange={(event) => {
-                setUsername(event.target.value);
+              onChange={(value) => {
+                setUsername(value);
+                setPassword("");
+                setCaptcha(undefined);
+                setCaptchaPoints([]);
                 setSliderProof("");
                 setFieldErrors((value) => ({
                   ...value,
@@ -177,7 +161,7 @@ export default function SignInForm() {
               {t("auth.password")} <span className="text-error-500">*</span>
             </Label>
             <Input
-              autoComplete="current-password"
+              autoComplete="new-password"
               error={Boolean(fieldErrors.password)}
               hint={fieldErrors.password}
               id="signin-password"
@@ -235,12 +219,6 @@ export default function SignInForm() {
               {fieldErrors.verification}
             </p>
           )}
-          <div className="flex items-center gap-3">
-            <Checkbox checked={remember} onChange={setRemember} />
-            <span className="text-sm text-gray-700 dark:text-gray-400">
-              {t("auth.rememberMe")}
-            </span>
-          </div>
           {error && (
             <p
               className="rounded-lg bg-error-50 p-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400"

@@ -49,7 +49,6 @@
     "pointPassed": "验证已通过",
     "pointProgress": "请按提示顺序点选 {count} 个目标",
     "pointRequired": "请完成点选验证",
-    "rememberMe": "记住我",
     "resetDescription": "首次登录必须设置新密码，完成后才能进入管理后台。",
     "resetPassword": "设置新密码",
     "signIn": "登录",
@@ -62,7 +61,12 @@
     "sliderPassed": "验证已通过",
     "sliderRequired": "请完成滑块验证",
     "username": "用户名",
-    "usernameExists": "该用户名已被使用"
+    "usernameExists": "该用户名已被使用",
+    "accountHistory": "历史登录账号",
+    "clearAccountHistory": "清空历史",
+    "noMatchingAccounts": "没有匹配的账号",
+    "noAccountHistory": "成功登录的账号会显示在这里",
+    "removeAccountHistory": "从登录历史中移除“{value}”"
   },
   "category": {
     "jwt": "JWT",

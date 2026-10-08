@@ -2584,3 +2584,134 @@ h1 {
   color: var(--muted);
   font-size: 12px;
 }
+
+.login-account-field {
+  margin-bottom: 0;
+}
+.account-suggestions {
+  max-height: min(250px, 36dvh);
+  overscroll-behavior: contain;
+}
+.account-suggestions .suggestion-row > button:first-child {
+  min-height: 44px;
+  padding: 8px;
+}
+.account-suggestions .account-active {
+  background: var(--accent-light, var(--selected-bg));
+  border-radius: 8px;
+}
+.account-history-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px;
+}
+
+.account-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.account-history-heading button {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* Auth focus follows each rounded control; nested icons do not draw a second ring. */
+.auth-panel,
+.auth-topbar {
+  --auth-focus: var(--accent);
+  --auth-focus-halo: color-mix(in srgb, var(--auth-focus) 16%, transparent);
+}
+.auth-panel .has-error {
+  --auth-focus: var(--danger);
+}
+.auth-panel .has-warning {
+  --auth-focus: var(--warning);
+}
+.auth-panel :is(button, a),
+.auth-topbar :is(button, a) {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.auth-panel :is(button, a):focus-visible,
+.auth-topbar :is(button, a):focus-visible {
+  outline: 1px solid var(--auth-focus);
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px var(--auth-focus-halo);
+}
+.auth-panel .auth-link {
+  border-radius: 10px;
+}
+.auth-panel .t-input {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.auth-panel .t-input:focus-within {
+  outline: none;
+  border-color: var(--auth-focus);
+  box-shadow: 0 0 0 2px var(--auth-focus-halo);
+}
+.auth-panel .password-toggle {
+  border-radius: 9px;
+}
+.auth-panel .password-toggle:focus-visible {
+  outline: none;
+  color: var(--auth-focus);
+  background: var(--accent-light);
+  box-shadow: none;
+}
+.auth-panel .account-suggestions button {
+  border-radius: 8px;
+}
+.auth-panel .account-history-heading button {
+  padding-inline: 10px;
+}
+.auth-panel .account-suggestions .suggestion-row > button:last-child:not(:first-child) {
+  width: 44px;
+  min-width: 44px;
+}
+.auth-panel .account-suggestions button:focus-visible {
+  outline: 1px solid var(--auth-focus);
+  outline-offset: -1px;
+  color: var(--auth-focus);
+  background: var(--accent-light);
+  box-shadow: none;
+}
+.auth-panel .slider-track {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.auth-panel .slider-track:has(.slider-handle:focus-visible) {
+  border-color: var(--auth-focus);
+  box-shadow: 0 0 0 2px var(--auth-focus-halo);
+}
+.auth-panel .slider-handle:focus-visible {
+  outline: none;
+  background: var(--accent-light);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-panel :is(button, a, .t-input, .slider-track),
+  .auth-topbar :is(button, a) {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .auth-panel .t-input:focus-within,
+  .auth-panel .slider-track:has(.slider-handle:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+  .auth-panel .password-toggle:focus-visible {
+    outline: 1px solid Highlight;
+    outline-offset: -2px;
+  }
+}

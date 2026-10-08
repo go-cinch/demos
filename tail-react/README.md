@@ -75,6 +75,10 @@ git clone https://github.com/TailAdmin/free-react-tailwind-admin-dashboard.git
 
 ## Components
 
+Go Cinch login history stores only the ten most recent unique account names for the current hostname. Passwords normally start empty and are never persisted. Immediately after successful registration, the new username and password fill the login form once through memory only. Refreshing or reopening login clears the password, and selecting a historical account clears it. Registration alone does not add an account to login history. Legacy remembered credentials are deleted at startup.
+
+Run the focused registration handoff checks with Node.js 24 or later: `node --test scripts/registration-login.test.mjs`.
+
 TailAdmin is a pre-designed starting point for building a web-based dashboard using React.js and Tailwind CSS. The
 template includes:
 
