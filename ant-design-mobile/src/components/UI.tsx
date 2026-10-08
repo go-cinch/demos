@@ -461,6 +461,7 @@ export function TextField({
   required = false,
   onBlur,
   autoComplete,
+  loading,
 }: {
   name: string;
   label: string;
@@ -473,6 +474,7 @@ export function TextField({
   required?: boolean;
   onBlur?: () => void;
   autoComplete?: string;
+  loading?: boolean;
 }) {
   const props = {
     id: name,
@@ -490,13 +492,28 @@ export function TextField({
       ) : type === 'password' ? (
         <PasswordInput {...props} autoComplete={autoComplete || 'new-password'} />
       ) : (
-        <Input
-          {...props}
-          type={type}
-          autoComplete={autoComplete || (name.includes('username') ? 'username' : 'off')}
-        />
+        <InputLoading loading={loading}>
+          <Input
+            {...props}
+            type={type}
+            autoComplete={autoComplete || (name.includes('username') ? 'username' : 'off')}
+          />
+        </InputLoading>
       )}
     </Field>
+  );
+}
+export function InputLoading({ loading, children }: { loading?: boolean; children: ReactNode }) {
+  if (loading === undefined) return children;
+  return (
+    <div className="input-with-loading" aria-busy={loading}>
+      {children}
+      {loading && (
+        <span className="username-check-loading" role="status" aria-label={t('loading')}>
+          <SpinLoading color="primary" style={{ '--size': '18px' }} />
+        </span>
+      )}
+    </div>
   );
 }
 export function PasswordInput(props: {

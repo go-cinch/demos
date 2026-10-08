@@ -4246,6 +4246,35 @@ a:focus-visible,
 .login-account-field {
   position: relative;
 }
+.input-with-loading {
+  position: relative;
+}
+.input-with-loading .adm-input {
+  padding-right: 44px;
+}
+.input-with-loading .adm-input-clear {
+  position: absolute;
+  top: 50%;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin-left: 0;
+  transform: translateY(-50%);
+}
+.username-check-loading {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 .account-suggestions {
   max-height: min(250px, 36dvh);
   overscroll-behavior: contain;
