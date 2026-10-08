@@ -66,7 +66,6 @@ declare namespace Api {
     interface LoginParams {
       userName: string
       password: string
-      rememberMe?: boolean
       sliderProof?: string
       captchaId?: string
       captchaPoints?: Array<{ x: number; y: number }>

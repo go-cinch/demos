@@ -49,7 +49,6 @@
     "pointPassed": "Verification passed",
     "pointProgress": "Select {count} targets in the requested order",
     "pointRequired": "Complete the point-selection verification",
-    "rememberMe": "Remember me",
     "resetDescription": "You must set a new password before accessing the administration console.",
     "resetPassword": "Set a new password",
     "signIn": "Sign in",
@@ -62,7 +61,12 @@
     "sliderPassed": "Verification passed",
     "sliderRequired": "Complete the slider verification",
     "username": "Username",
-    "usernameExists": "This username is already in use"
+    "usernameExists": "This username is already in use",
+    "accountHistory": "Login account history",
+    "clearAccountHistory": "Clear history",
+    "noMatchingAccounts": "No matching accounts",
+    "noAccountHistory": "Successful logins will appear here",
+    "removeAccountHistory": "Remove {value} from login history"
   },
   "category": {
     "jwt": "JWT",

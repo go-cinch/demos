@@ -1,7 +1,7 @@
+import { clearLegacyLoginCredentials, recordLoginAccount } from './account-history';
+
 const API_BASE = '/api/auth';
 const REFRESH_KEY = 'go-cinch-refresh-token';
-const rememberKey = () =>
-  `go-cinch-remembered-credentials:${typeof location === 'undefined' ? 'server' : location.hostname}`;
 
 let accessToken = '';
 let refreshing: Promise<LoginResult> | null = null;
@@ -194,65 +194,26 @@ export async function restoreSession() {
 export async function login(data: {
   username: string;
   password: string;
-  remember_me: boolean;
   slider_proof: string;
   captcha_id?: string;
   captcha_points?: CaptchaPoint[];
 }) {
-  const encrypted = await encryptCredential('login', data);
+  clearLegacyLoginCredentials();
+  const encrypted = await encryptCredential('login', { ...data, remember_me: false });
   const result = await request<LoginResult>(
     '/auth/pub/login',
     { method: 'POST', body: JSON.stringify(encrypted) },
     false
   );
   acceptSession(result);
-  if (data.remember_me)
-    localStorage.setItem(
-      rememberKey(),
-      JSON.stringify({ username: data.username, password: data.password })
-    );
-  else localStorage.removeItem(rememberKey());
+  recordLoginAccount(data.username);
   return result;
 }
 
 export async function register(data: { username: string; password: string; slider_proof: string }) {
+  clearLegacyLoginCredentials();
   const encrypted = await encryptCredential('register', data);
   await request('/auth/pub/register', { method: 'POST', body: JSON.stringify(encrypted) }, false);
-  localStorage.setItem(
-    rememberKey(),
-    JSON.stringify({ username: data.username, password: data.password })
-  );
-}
-
-export function rememberedAccount() {
-  const current = localStorage.getItem(rememberKey());
-  if (current) {
-    try {
-      const parsed = JSON.parse(current) as { username?: unknown; password?: unknown };
-      if (typeof parsed.username === 'string')
-        return {
-          username: parsed.username,
-          password: typeof parsed.password === 'string' ? parsed.password : ''
-        };
-    } catch {
-      localStorage.removeItem(rememberKey());
-    }
-  }
-
-  // Migrate the old format without ever retaining its plaintext password.
-  const legacy = localStorage.getItem('go-cinch-remembered-credentials');
-  localStorage.removeItem('go-cinch-remembered-credentials');
-  try {
-    const username = (JSON.parse(legacy || 'null') as { username?: unknown } | null)?.username;
-    if (typeof username === 'string' && username) {
-      const migrated = { username, password: '' };
-      localStorage.setItem(rememberKey(), JSON.stringify(migrated));
-      return migrated;
-    }
-  } catch {
-    // Invalid legacy data is intentionally discarded.
-  }
-  return null;
 }
 
 export async function logout() {
@@ -288,6 +249,7 @@ export async function changePassword(
 }
 
 export async function resetRequiredPassword(newPassword: string) {
+  clearLegacyLoginCredentials();
   const encrypted = await encryptCredential('password_reset', { new_password: newPassword });
   const result = await request<LoginResult>(
     '/auth/reset/pwd',
@@ -296,9 +258,6 @@ export async function resetRequiredPassword(newPassword: string) {
     false
   );
   acceptSession(result);
-  const remembered = rememberedAccount();
-  if (remembered)
-    localStorage.setItem(rememberKey(), JSON.stringify({ ...remembered, password: newPassword }));
   return result;
 }
 

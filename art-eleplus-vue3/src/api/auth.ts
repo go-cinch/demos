@@ -4,7 +4,6 @@ export function fetchLogin(params: Api.Auth.LoginParams) {
   return login({
     username: params.userName,
     password: params.password,
-    remember_me: params.rememberMe === true,
     slider_proof: params.sliderProof,
     captcha_id: params.captchaId,
     captcha_points: params.captchaPoints

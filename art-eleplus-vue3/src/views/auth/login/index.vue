@@ -8,11 +8,8 @@
   import { $t } from '@/locales'
   import { useUserStore } from '@/store/modules/user'
   import { isValidUsername, isValidUserPassword } from '@/utils/auth-validation'
-  import {
-    clearRememberedCredentials,
-    readRememberedCredentials,
-    saveRememberedCredentials
-  } from '@/utils/remembered-credentials'
+  import LoginAccountInput from '@/components/business/auth/LoginAccountInput.vue'
+  import { consumeRegistrationLogin } from '@/utils/registration-login'
 
   defineOptions({ name: 'Login' })
 
@@ -28,10 +25,10 @@
   const form = reactive({
     username: '',
     password: '',
-    rememberMe: true,
     sliderProof: '',
     captchaPoints: [] as Array<{ x: number; y: number }>
   })
+  Object.assign(form, consumeRegistrationLogin())
   const loginRules = computed<FormRules>(() => ({
     username: [
       { required: true, message: $t('auth.usernameRequired'), trigger: 'blur' },
@@ -51,21 +48,24 @@
     ]
   }))
 
-  onMounted(() => {
-    try {
-      const remembered = readRememberedCredentials()
-      form.username = remembered?.username || ''
-      form.password = remembered?.password || ''
-      form.rememberMe = Boolean(remembered)
-    } catch {
-      /* ignore corrupt local state */
-    }
-    if (form.username) checkVerification()
+  onActivated(() => {
+    Object.assign(form, consumeRegistrationLogin())
   })
+
+  function clearLoginForm() {
+    form.password = ''
+    form.sliderProof = ''
+    form.captchaPoints = []
+    clearTimeout(checkTimer.value)
+  }
+
+  onDeactivated(clearLoginForm)
+  onBeforeUnmount(clearLoginForm)
 
   watch(
     () => form.username,
-    () => {
+    (_username, previousUsername) => {
+      if (previousUsername !== undefined) form.password = ''
       captcha.value = undefined
       form.captchaPoints = []
       form.sliderProof = ''
@@ -73,7 +73,8 @@
       slider.value?.reset()
       clearTimeout(checkTimer.value)
       checkTimer.value = setTimeout(checkVerification, 300)
-    }
+    },
+    { immediate: true, flush: 'sync' }
   )
 
   watch(
@@ -114,17 +115,12 @@
       const session = await fetchLogin({
         userName: form.username.trim(),
         password: form.password,
-        rememberMe: form.rememberMe,
         sliderProof: form.sliderProof || undefined,
         captchaId: captcha.value?.captcha_id,
         captchaPoints: captcha.value ? form.captchaPoints : undefined
       })
       store.acceptSession(session)
-      if (form.rememberMe) {
-        saveRememberedCredentials({ username: form.username.trim(), password: form.password })
-      } else {
-        clearRememberedCredentials()
-      }
+      form.password = ''
       ElMessage.success($t('auth.loginSuccess'))
       await router.replace(
         session.password_reset_required
@@ -157,9 +153,15 @@
         <div class="form">
           <h3 class="title">{{ $t('auth.loginTitle') }}</h3>
           <p class="sub-title">{{ $t('auth.loginSubtitle') }}</p>
-          <ElForm ref="formRef" :model="form" label-position="top" @keyup.enter="submit">
+          <ElForm
+            ref="formRef"
+            :model="form"
+            label-position="top"
+            autocomplete="off"
+            @keyup.enter="submit"
+          >
             <ElFormItem :label="$t('auth.username')" prop="username" :rules="loginRules.username">
-              <ElInput v-model.trim="form.username" size="large" autocomplete="username" />
+              <LoginAccountInput v-model="form.username" @select="form.password = ''" />
             </ElFormItem>
             <ElFormItem :label="$t('auth.password')" prop="password" :rules="loginRules.password">
               <ElInput
@@ -167,7 +169,7 @@
                 size="large"
                 type="password"
                 show-password
-                autocomplete="current-password"
+                autocomplete="new-password"
               />
             </ElFormItem>
             <ElFormItem v-if="captcha" :error="verificationError">
@@ -190,9 +192,6 @@
                 :username="form.username"
               />
             </ElFormItem>
-            <div class="flex-cb mb-5 text-sm">
-              <ElCheckbox v-model="form.rememberMe">{{ $t('auth.remember') }}</ElCheckbox>
-            </div>
             <ElButton
               class="w-full"
               size="large"

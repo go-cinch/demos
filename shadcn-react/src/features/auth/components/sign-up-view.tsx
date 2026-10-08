@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { register, request } from '@/features/auth/api';
+import { stageRegistrationLogin } from '@/features/auth/registration-login';
 import { useLocale } from '@/features/i18n/locale-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -77,6 +78,7 @@ export default function SignUpViewPage() {
         return;
       }
       await register({ username: username.trim(), password, slider_proof: proof });
+      stageRegistrationLogin({ username, password });
       toast.success(pick('Registration submitted', '注册申请已提交'));
       router.push('/auth/login');
     } catch (error) {

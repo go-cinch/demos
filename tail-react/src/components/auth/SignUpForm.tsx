@@ -4,6 +4,7 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Button from "@/components/ui/button/Button";
 import { isValidUsername, isValidUserPassword } from "@/utils/userValidation";
+import { stageRegistrationLogin } from "@/utils/registrationLogin";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
@@ -58,11 +59,7 @@ export default function SignUpForm() {
     try {
       if (!(await checkUsername())) return;
       await register(username.trim(), password, sliderProof);
-      localStorage.setItem(
-        `REMEMBER_ME_ACCOUNT_${location.hostname}`,
-        JSON.stringify({ username: username.trim(), password }),
-      );
-      localStorage.removeItem(`REMEMBER_ME_CREDENTIALS_${location.hostname}`);
+      stageRegistrationLogin({ username, password });
       navigate("/auth/login", { replace: true, state: { registered: true } });
     } catch (caught) {
       setError(

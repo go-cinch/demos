@@ -21,7 +21,7 @@ See `env.example.txt` for the remaining optional variables.
 
 ## Features
 
-- Login, registration, remembered credentials, logout and rotating refresh sessions.
+- Login, registration, local account history, logout and rotating refresh sessions.
 - Native Web Crypto compact JWE using `RSA-OAEP-256` and `A256GCM`; password fields are never sent in plaintext.
 - Server-issued slider proof and point-selection captcha with immediate verification.
 - Required first-login password reset and self-service password change.
@@ -37,6 +37,7 @@ See `env.example.txt` for the remaining optional variables.
 npm run typecheck
 npm run lint
 NEXT_PUBLIC_SENTRY_DISABLED=true npm run build
+node --test scripts/registration-login.test.mjs # Node.js 24 or later
 ```
 
-The access token remains in memory. Only the rotating refresh token is persisted. “Remember me” intentionally stores the username and password so the login form can restore them, matching the backend workflow.
+The access token remains in memory and the rotating refresh token is persisted separately. Login history stores only the ten most recent unique account names for the current hostname. Passwords normally start empty and are never persisted. Immediately after successful registration, the new username and password fill the login form once through memory only. Refreshing or reopening login clears the password, and selecting a historical account clears it. Registration alone does not add an account to login history. Legacy remembered credentials are deleted at startup.

@@ -34,7 +34,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     "flex size-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-theme-xs transition hover:border-brand-300 hover:text-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300";
 
   return (
-    <div className="relative z-1 min-h-screen bg-white p-6 sm:p-0 dark:bg-gray-900">
+    <div className="auth-surface relative z-1 min-h-screen bg-white p-6 sm:p-0 dark:bg-gray-900">
       <Link
         className="fixed start-4 top-4 z-50 flex min-w-0 max-w-[calc(100vw-12rem)] items-center gap-2 text-gray-900 sm:start-6 sm:top-6 sm:max-w-[calc(100vw-22rem)] dark:text-white"
         to="/auth/login"

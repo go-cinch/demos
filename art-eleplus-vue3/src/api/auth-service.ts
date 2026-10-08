@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 
 import { i18n } from '@/locales/instance'
 import { useUserStore } from '@/store/modules/user'
+import { recordLoginAccount } from '@/utils/login-account-history'
 
 export interface CaptchaPoint {
   x: number
@@ -48,7 +49,6 @@ export interface LoginParams {
   captcha_id?: string
   captcha_points?: CaptchaPoint[]
   password: string
-  remember_me: boolean
   slider_proof?: string
   username: string
 }
@@ -151,11 +151,13 @@ export async function login(data: LoginParams) {
     captcha_id: data.captcha_id,
     captcha_points: data.captcha_points,
     password: data.password,
-    remember_me: data.remember_me,
+    remember_me: false,
     slider_proof: data.slider_proof,
-    username: data.username
+    username: data.username.trim()
   })
-  return (await publicClient.post<SessionResult>('/auth/pub/login', encrypted)).data
+  const session = (await publicClient.post<SessionResult>('/auth/pub/login', encrypted)).data
+  if (session.access_token) recordLoginAccount(data.username)
+  return session
 }
 
 export async function register(username: string, password: string, sliderProof: string) {

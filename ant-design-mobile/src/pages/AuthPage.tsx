@@ -1,22 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button, Skeleton } from 'antd-mobile';
-import {
-  ApiError,
-  acceptSession,
-  loadUser,
-  logout,
-  request,
-  session,
-  submitCredentials,
-} from '../lib/api';
-import { rememberCredentials, rememberedCredentials } from '../lib/storage';
+import { ApiError, acceptSession, loadUser, logout, request, submitCredentials } from '../lib/api';
+import { recordLoginAccount } from '../lib/storage';
+import { consumeRegistrationLogin, setRegistrationLogin } from '../lib/registration-login';
+import LoginAccountInput from '../components/LoginAccountInput';
 import { focusFirstError } from '../lib/form-focus';
 import { nonempty } from '../lib/validation';
 import { message, type Feedback } from '../lib/form-feedback';
 import type { PointCaptcha as Challenge, CaptchaPoint } from '../lib/types';
 import { t } from '../locales';
-import { Copyright, Field, TextField, Toggle, ErrorBox, Icon } from '../components/UI';
+import { Copyright, Field, TextField, ErrorBox } from '../components/UI';
 import { ServerSlider, PointCaptcha } from '../components/Captcha';
 export default function AuthPage() {
   const location = useLocation(),
@@ -26,11 +20,9 @@ export default function AuthPage() {
     : location.pathname.endsWith('reset-password')
       ? 'password_reset'
       : 'login';
-  const saved = rememberedCredentials();
-  const [username, setUsername] = useState(saved?.username || ''),
-    [password, setPassword] = useState(mode === 'login' ? saved?.password || '' : ''),
+  const [username, setUsername] = useState(''),
+    [password, setPassword] = useState(''),
     [confirmation, setConfirmation] = useState(''),
-    [remember, setRemember] = useState(!!saved),
     [proof, setProof] = useState(''),
     [resetKey, setResetKey] = useState(0),
     [captcha, setCaptcha] = useState<Challenge>(),
@@ -44,15 +36,36 @@ export default function AuthPage() {
     );
   const verification = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
+  const initializedMode = useRef<typeof mode>();
+  useEffect(() => {
+    if (initializedMode.current === mode) return;
+    initializedMode.current = mode;
+    verification.current++;
+    setPassword('');
+    setConfirmation('');
+    setProof('');
+    setCaptcha(undefined);
+    setPoints([]);
+    setErrors({});
+    setError('');
+    setVerificationBusy(false);
+    if (mode === 'login') {
+      const registered = consumeRegistrationLogin();
+      if (registered) {
+        setUsername(registered.username);
+        setPassword(registered.password);
+      }
+    }
+  }, [mode]);
   useEffect(() => {
     if (!registeredNotice) return;
     navigate(location.pathname, { replace: true, state: null });
     const timer = window.setTimeout(() => setRegisteredNotice(false), 5000);
     return () => window.clearTimeout(timer);
   }, []);
-  async function verifyUsername() {
+  async function verifyUsername(account = username) {
     const current = ++verification.current;
-    const value = username.trim();
+    const value = account.trim();
     if (!value || mode === 'password_reset') return;
     setVerificationBusy(true);
     try {
@@ -119,22 +132,20 @@ export default function AuthPage() {
             : {
                 username: trimmedUsername,
                 password: trimmedPassword,
-                remember_me: remember,
+                remember_me: false,
                 slider_proof: captcha ? undefined : proof,
                 captcha_id: captcha?.captcha_id,
                 captcha_points: points.length ? points : undefined,
               };
       const result = await submitCredentials(mode, payload);
       if (mode === 'register') {
-        rememberCredentials(trimmedUsername, trimmedPassword);
+        setRegistrationLogin(trimmedUsername, trimmedPassword);
+        setPassword('');
+        setConfirmation('');
         navigate('/auth/login', { state: { registered: true } });
         return;
       }
-      if (mode === 'password_reset') {
-        const entry = rememberedCredentials();
-        if (entry && (entry.username === username || entry.username === session.user?.username))
-          rememberCredentials(entry.username, trimmedPassword);
-      } else rememberCredentials(trimmedUsername, trimmedPassword, remember);
+      if (mode === 'login' && result.access_token) recordLoginAccount(trimmedUsername);
       acceptSession(result);
       if (result.password_reset_required) navigate('/auth/reset-password', { replace: true });
       else {
@@ -190,22 +201,46 @@ export default function AuthPage() {
         >
           {mode !== 'password_reset' && (
             <>
-              <TextField
-                name="username"
-                label={t('system.fields.username')}
-                value={username}
-                onChange={(v) => {
-                  verification.current++;
-                  setVerificationBusy(false);
-                  setUsername(v);
-                  setCaptcha(undefined);
-                  setPoints([]);
-                  setErrors((e) => ({ ...e, username: '' }));
-                }}
-                error={errors.username}
-                onBlur={() => void verifyUsername()}
-                required
-              />
+              {mode === 'login' ? (
+                <Field
+                  name="username"
+                  label={t('system.fields.username')}
+                  error={errors.username}
+                  required
+                >
+                  <LoginAccountInput
+                    value={username}
+                    invalid={!!errors.username}
+                    onChange={(v) => {
+                      verification.current++;
+                      setVerificationBusy(false);
+                      setUsername(v);
+                      setCaptcha(undefined);
+                      setPoints([]);
+                      setErrors((e) => ({ ...e, username: '' }));
+                    }}
+                    onBlur={(value) => void verifyUsername(value)}
+                    onSelect={() => setPassword('')}
+                  />
+                </Field>
+              ) : (
+                <TextField
+                  name="username"
+                  label={t('system.fields.username')}
+                  value={username}
+                  onChange={(v) => {
+                    verification.current++;
+                    setVerificationBusy(false);
+                    setUsername(v);
+                    setCaptcha(undefined);
+                    setPoints([]);
+                    setErrors((e) => ({ ...e, username: '' }));
+                  }}
+                  error={errors.username}
+                  onBlur={() => void verifyUsername()}
+                  required
+                />
+              )}
               {verificationBusy && <Skeleton.Title animated className="field-check-skeleton" />}
             </>
           )}
@@ -217,7 +252,7 @@ export default function AuthPage() {
             value={password}
             onChange={setPassword}
             type="password"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            autoComplete="new-password"
             error={errors.password}
             required
           />
@@ -257,16 +292,6 @@ export default function AuthPage() {
                 username={username}
               />
             </Field>
-          )}
-          {mode === 'login' && (
-            <Toggle
-              label={t('remember')}
-              checked={remember}
-              onChange={(v) => {
-                setRemember(v);
-                if (!v) rememberCredentials('', '', false);
-              }}
-            />
           )}
           <ErrorBox error={error} />
           {registeredNotice && (
