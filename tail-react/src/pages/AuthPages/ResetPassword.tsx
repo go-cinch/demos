@@ -34,19 +34,6 @@ export default function ResetPassword() {
     setError("");
     try {
       await resetPassword(password);
-      const rememberKey = `REMEMBER_ME_ACCOUNT_${location.hostname}`;
-      try {
-        const remembered = JSON.parse(localStorage.getItem(rememberKey) || "null") as
-          | { username?: string; password?: string }
-          | null;
-        if (remembered?.username)
-          localStorage.setItem(
-            rememberKey,
-            JSON.stringify({ ...remembered, password }),
-          );
-      } catch {
-        localStorage.removeItem(rememberKey);
-      }
       await auth.completeReset();
       navigate("/dashboard/overview", { replace: true });
     } catch (caught) {
