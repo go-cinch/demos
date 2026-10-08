@@ -4,7 +4,6 @@
   import { $t } from '@/locales'
   import { useUserStore } from '@/store/modules/user'
   import { isValidUserPassword } from '@/utils/auth-validation'
-  import { updateRememberedPassword } from '@/utils/remembered-credentials'
 
   defineOptions({ name: 'ResetPassword' })
   const formRef = ref<FormInstance>()
@@ -34,7 +33,6 @@
     loading.value = true
     try {
       store.acceptSession(await resetPassword(form.password))
-      updateRememberedPassword(form.password)
       ElMessage.success($t('auth.resetSuccess'))
       await router.replace('/')
     } catch (error) {

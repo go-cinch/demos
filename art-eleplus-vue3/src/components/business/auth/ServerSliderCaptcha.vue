@@ -114,6 +114,14 @@
     background: var(--el-fill-color-light);
     border: 1px solid var(--el-border-color);
     border-radius: 8px;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .server-slider:has(.handle:focus-visible) {
+    border-color: var(--el-color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
   }
 
   .progress {
@@ -146,6 +154,11 @@
     border-right: 1px solid var(--el-border-color);
   }
 
+  .handle:focus-visible {
+    background: var(--el-color-primary-light-9);
+    outline: none;
+  }
+
   .passed {
     border-color: var(--el-color-success);
   }
@@ -157,5 +170,11 @@
 
   .passed .handle {
     color: var(--el-color-success);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .server-slider {
+      transition: none;
+    }
   }
 </style>

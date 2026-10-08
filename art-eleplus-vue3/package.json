@@ -11,6 +11,8 @@
     "build": "vite build && vue-tsc --noEmit",
     "serve": "vite preview",
     "lint": "eslint",
+    "test:login-history": "tsx --test scripts/login-account-history.test.ts",
+    "test:registration-login": "tsx --test scripts/registration-login.test.ts",
     "fix": "eslint --fix",
     "lint:prettier": "prettier --write \"**/*.{js,cjs,ts,json,tsx,css,less,scss,vue,html,md}\"",
     "lint:stylelint": "stylelint  \"**/*.{css,scss,vue}\" --fix",

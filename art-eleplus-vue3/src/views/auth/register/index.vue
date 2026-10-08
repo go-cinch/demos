@@ -3,7 +3,7 @@
   import { register, usernameAvailable } from '@/api/auth-service'
   import { $t } from '@/locales'
   import { isValidUsername, isValidUserPassword } from '@/utils/auth-validation'
-  import { saveRememberedCredentials } from '@/utils/remembered-credentials'
+  import { clearRegistrationLogin, stageRegistrationLogin } from '@/utils/registration-login'
 
   defineOptions({ name: 'Register' })
   const router = useRouter()
@@ -55,11 +55,16 @@
     try {
       const availability = await usernameAvailable(form.username.trim())
       if (!availability.available) throw new Error($t('auth.usernameUnavailable'))
-      await register(form.username.trim(), form.password, form.sliderProof)
-      saveRememberedCredentials({ username: form.username.trim(), password: form.password })
+      const username = form.username.trim()
+      const password = form.password
+      await register(username, password, form.sliderProof)
+      stageRegistrationLogin({ username, password })
+      form.password = ''
+      form.confirmPassword = ''
       ElMessage.success($t('auth.registerSuccess'))
       await router.replace('/auth/login')
     } catch (error) {
+      clearRegistrationLogin()
       ElMessage.error(error instanceof Error ? error.message : $t('auth.registerFailed'))
       form.sliderProof = ''
       slider.value?.reset()
