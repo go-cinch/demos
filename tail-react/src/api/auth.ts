@@ -7,6 +7,10 @@ import {
   type LoginResult,
 } from "./client";
 import { compactEncrypt, type CredentialChallenge } from "./jwe";
+import {
+  clearLegacyLoginCredentials,
+  recordLoginAccount,
+} from "@/utils/loginAccountHistory";
 
 export interface CaptchaPoint {
   x: number;
@@ -35,7 +39,8 @@ async function encryptedCredential(
   purpose: "login" | "register" | "password_change" | "password_reset",
   payload: Record<string, unknown>,
 ) {
-  const authenticated = purpose === "password_change" || purpose === "password_reset";
+  const authenticated =
+    purpose === "password_change" || purpose === "password_reset";
   const challenge = await jsonRequest<CredentialChallenge>(
     authenticated ? "/auth/challenge" : "/auth/pub/challenge",
     "POST",
@@ -52,11 +57,14 @@ export async function login(data: {
   captcha_id?: string;
   captcha_points?: CaptchaPoint[];
   password: string;
-  remember_me: boolean;
   slider_proof: string;
   username: string;
 }) {
-  const credential = await encryptedCredential("login", data);
+  clearLegacyLoginCredentials();
+  const credential = await encryptedCredential("login", {
+    ...data,
+    remember_me: false,
+  });
   const result = await jsonRequest<LoginResult>(
     "/auth/pub/login",
     "POST",
@@ -64,10 +72,16 @@ export async function login(data: {
     { auth: false },
   );
   acceptSession(result);
+  recordLoginAccount(data.username);
   return result;
 }
 
-export async function register(username: string, password: string, sliderProof: string) {
+export async function register(
+  username: string,
+  password: string,
+  sliderProof: string,
+) {
+  clearLegacyLoginCredentials();
   const credential = await encryptedCredential("register", {
     username,
     password,
@@ -108,7 +122,10 @@ export const verifyLoginCaptcha = (
     { auth: false },
   );
 
-export const createSliderChallenge = (purpose: "login" | "register", username: string) =>
+export const createSliderChallenge = (
+  purpose: "login" | "register",
+  username: string,
+) =>
   jsonRequest<{ captcha_id: string; expired_at: number }>(
     "/auth/pub/slider/challenge",
     "POST",
@@ -127,7 +144,12 @@ export async function logout() {
   const refreshToken = getRefreshToken();
   try {
     if (refreshToken) {
-      await jsonRequest("/auth/pub/logout", "POST", { refresh_token: refreshToken }, { auth: false });
+      await jsonRequest(
+        "/auth/pub/logout",
+        "POST",
+        { refresh_token: refreshToken },
+        { auth: false },
+      );
     }
   } finally {
     clearSession();
@@ -135,10 +157,15 @@ export async function logout() {
 }
 
 export async function resetPassword(newPassword: string) {
+  clearLegacyLoginCredentials();
   const credential = await encryptedCredential("password_reset", {
     new_password: newPassword,
   });
-  const result = await jsonRequest<LoginResult>("/auth/reset/pwd", "PATCH", credential);
+  const result = await jsonRequest<LoginResult>(
+    "/auth/reset/pwd",
+    "PATCH",
+    credential,
+  );
   acceptSession(result);
   return result;
 }
@@ -162,7 +189,10 @@ export const refreshPasswordCaptcha = (captchaId: string) =>
     captcha_id: captchaId,
   });
 
-export const verifyPasswordCaptcha = (captchaId: string, points: CaptchaPoint[]) =>
+export const verifyPasswordCaptcha = (
+  captchaId: string,
+  points: CaptchaPoint[],
+) =>
   jsonRequest<{ captcha?: PointCaptchaChallenge; verified: boolean }>(
     "/auth/captcha/verify",
     "POST",
@@ -172,4 +202,3 @@ export const verifyPasswordCaptcha = (captchaId: string, points: CaptchaPoint[])
 export async function userPasswordCredential(password: string) {
   return encryptedCredential("register", { password });
 }
-

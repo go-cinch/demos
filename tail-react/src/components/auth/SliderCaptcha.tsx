@@ -10,6 +10,8 @@ interface Props {
   resetKey?: string;
 }
 
+const HANDLE_INSET = 4;
+
 export default function SliderCaptcha({
   purpose,
   username,
@@ -34,6 +36,8 @@ export default function SliderCaptcha({
   useEffect(() => {
     setValue(0);
     setStatus("idle");
+    challenge.current = undefined;
+    startedAt.current = 0;
     onVerified("");
   }, [purpose, resetKey, username]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -45,7 +49,7 @@ export default function SliderCaptcha({
       0,
       (rootRef.current?.clientWidth || 0) -
         (handleRef.current?.offsetWidth || 0) -
-        6,
+        HANDLE_INSET * 2,
     );
     tracks.current = [{ t: 0, x: 0 }];
     challenge.current = createSliderChallenge(purpose, username);
@@ -70,7 +74,13 @@ export default function SliderCaptcha({
       100,
       Math.max(
         0,
-        ((clientX - bounds.left - handleWidth / 2) / width.current) * 100,
+        ((clientX -
+          bounds.left -
+          (rootRef.current?.clientLeft || 0) -
+          HANDLE_INSET -
+          handleWidth / 2) /
+          width.current) *
+          100,
       ),
     );
   };
@@ -116,7 +126,8 @@ export default function SliderCaptcha({
   return (
     <div>
       <div
-        className={`relative h-12 overflow-hidden rounded-lg border transition-colors ${status === "passed" ? "border-success-500 bg-success-50 dark:bg-success-500/10" : status === "error" ? "border-error-500 bg-error-50 dark:bg-error-500/10" : "border-gray-300 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"}`}
+        data-testid="slider-track"
+        className={`auth-slider relative h-12 overflow-hidden rounded-lg border transition-colors ${status === "passed" ? "border-success-500 bg-success-50 dark:bg-success-500/10" : status === "error" ? "border-error-500 bg-error-50 dark:bg-error-500/10" : "border-gray-300 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"}`}
         ref={rootRef}
       >
         <span
@@ -133,11 +144,11 @@ export default function SliderCaptcha({
               : t("auth.sliderHint")}
         </p>
         <span
-          className={`pointer-events-none absolute top-1 flex size-10 items-center justify-center rounded-md text-white shadow-theme-sm transition-colors ${status === "passed" ? "bg-success-500" : status === "error" ? "bg-error-500" : "bg-brand-500"}`}
+          className={`pointer-events-none absolute top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-white shadow-theme-sm transition-colors ${status === "passed" ? "bg-success-500" : status === "error" ? "bg-error-500" : "bg-brand-500"}`}
           ref={handleRef}
+          data-testid="slider-handle"
           style={{
-            insetInlineStart: `${value}%`,
-            transform: `translateX(-${value}%)`,
+            insetInlineStart: `calc(${HANDLE_INSET}px + (100% - ${HANDLE_INSET * 2}px - 2.5rem) * ${value / 100})`,
           }}
         >
           {status === "passed" ? (
@@ -148,7 +159,7 @@ export default function SliderCaptcha({
         </span>
         <input
           aria-label={t("auth.slider")}
-          className="absolute inset-0 z-10 size-full cursor-grab opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 z-10 size-full cursor-grab opacity-0 outline-none disabled:cursor-not-allowed"
           disabled={
             status === "pending" || status === "passed" || !username.trim()
           }
@@ -156,6 +167,30 @@ export default function SliderCaptcha({
           min="0"
           name="captcha-action"
           onChange={(event) => move(Number(event.target.value))}
+          onKeyDown={(event) => {
+            if (
+              ["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)
+            ) {
+              event.preventDefault();
+              if (!challenge.current) start();
+              move(
+                event.key === "End"
+                  ? 100
+                  : event.key === "Home"
+                    ? 0
+                    : Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          value + (event.key === "ArrowRight" ? 10 : -10),
+                        ),
+                      ),
+              );
+            } else if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              void finish();
+            }
+          }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
             dragging.current = true;
