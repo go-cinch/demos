@@ -38,16 +38,30 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 const unavailableUsername = ref('');
 const verificationBusy = ref(false);
 let verificationGeneration = 0;
-watch(username, () => {
-  unavailableUsername.value = '';
-  verificationBusy.value = false;
-  captcha.value = undefined;
-  points.value = [];
+let verificationTimer: ReturnType<typeof setTimeout> | undefined;
+let verificationController: AbortController | undefined;
+function cancelUsernameVerification() {
   verificationGeneration++;
-});
+  clearTimeout(verificationTimer);
+  verificationTimer = undefined;
+  verificationController?.abort();
+  verificationController = undefined;
+  verificationBusy.value = false;
+}
+watch(
+  username,
+  () => {
+    cancelUsernameVerification();
+    unavailableUsername.value = '';
+    captcha.value = undefined;
+    points.value = [];
+  },
+  { flush: 'sync' },
+);
 watch(
   mode,
   () => {
+    cancelUsernameVerification();
     clearTimeout(noticeTimer);
     errors.value = {};
     error.value = '';
@@ -69,19 +83,30 @@ watch(
       }
     }
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 );
-onBeforeUnmount(() => clearTimeout(noticeTimer));
+onBeforeUnmount(() => {
+  clearTimeout(noticeTimer);
+  cancelUsernameVerification();
+});
 async function verifyUsername(account = username.value) {
-  const current = ++verificationGeneration;
+  cancelUsernameVerification();
+  const current = verificationGeneration;
   const value = account.trim();
   if (!value || mode.value === 'password_reset') return;
+  const controller = new AbortController();
+  verificationController = controller;
   verificationBusy.value = true;
+  verificationTimer = setTimeout(() => {
+    if (current !== verificationGeneration) return;
+    verificationBusy.value = false;
+    verificationTimer = undefined;
+  }, 5000);
   try {
     if (mode.value === 'register') {
       const result = await request<{ available: boolean }>(
         `/auth/pub/register/username?username=${encodeURIComponent(value)}`,
-        { public: true },
+        { public: true, signal: controller.signal },
       );
       if (current === verificationGeneration) {
         unavailableUsername.value = result.available ? '' : value;
@@ -90,14 +115,19 @@ async function verifyUsername(account = username.value) {
     } else {
       const result = await request<{ captcha?: Challenge; captcha_required: boolean }>(
         `/auth/pub/login/verification?username=${encodeURIComponent(value)}`,
-        { public: true },
+        { public: true, signal: controller.signal },
       );
       if (current === verificationGeneration) captcha.value = result.captcha;
     }
   } catch (e) {
     if (current === verificationGeneration) error.value = (e as Error).message;
   } finally {
-    if (current === verificationGeneration) verificationBusy.value = false;
+    if (current === verificationGeneration) {
+      clearTimeout(verificationTimer);
+      verificationTimer = undefined;
+      verificationController = undefined;
+      verificationBusy.value = false;
+    }
   }
 }
 async function submit() {
@@ -219,22 +249,18 @@ async function submit() {
           ><LoginAccountInput
             v-if="mode === 'login'"
             v-model="username"
+            :loading="verificationBusy"
             @blur="verifyUsername"
             @select="password = ''"
           /><t-input
             v-else
             id="username"
             v-model="username"
+            :loading="verificationBusy"
             name="username"
             autocomplete="username"
             :placeholder="t('app.validation.username')"
             @blur="verifyUsername()"
-          />
-          <t-skeleton
-            v-if="verificationBusy"
-            class="field-check-skeleton"
-            animation="gradient"
-            theme="text"
           /> </Field
         ><Field
           name="password"

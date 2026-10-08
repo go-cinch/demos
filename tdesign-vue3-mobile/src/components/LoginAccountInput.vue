@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUpdated, ref, useId, watch } from 'vue
 import { clearLoginAccountHistory, loginAccountHistory, removeLoginAccount } from '../lib/storage';
 import { t } from '../locales';
 const model = defineModel<string>({ required: true });
+defineProps<{ loading?: boolean }>();
 const emit = defineEmits<{ blur: [value: string]; select: [] }>();
 const root = ref<HTMLElement>();
 const identity = useId();
@@ -114,6 +115,7 @@ function segments(value: string) {
       name="username"
       autocomplete="off"
       :placeholder="t('app.validation.username')"
+      :loading="loading"
       clearable
       @update:model-value="
         focused = true;

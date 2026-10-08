@@ -1078,6 +1078,37 @@ svg {
   width: 100%;
   font: inherit;
 }
+.input-loading-slot {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px -12px 0;
+  flex: none;
+}
+.input-clear {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 1.25rem;
+}
+.input-clear:active {
+  background: var(--accent-light);
+}
+.username-check-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--accent);
+  pointer-events: none;
+}
 /* Replace the library's password glyph with the shared, labelled icon button. */
 .password-control .t-input__wrap--suffix-icon {
   display: none;
@@ -1576,10 +1607,6 @@ svg {
 }
 .auth-panel .field {
   margin-bottom: 18px;
-}
-.field-check-skeleton {
-  width: 42%;
-  margin-top: 8px;
 }
 .auth-link {
   display: block;
