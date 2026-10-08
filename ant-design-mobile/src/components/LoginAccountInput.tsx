@@ -2,19 +2,21 @@ import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 're
 import { Input, type InputRef } from 'antd-mobile';
 import { clearLoginAccountHistory, loginAccountHistory, removeLoginAccount } from '../lib/storage';
 import { t } from '../locales';
-import { Icon } from './UI';
+import { Icon, InputLoading } from './UI';
 export default function LoginAccountInput({
   value,
   onChange,
   onBlur,
   onSelect,
   invalid,
+  loading = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onBlur: (value: string) => void;
   onSelect: () => void;
   invalid: boolean;
+  loading?: boolean;
 }) {
   const identity = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -100,32 +102,37 @@ export default function LoginAccountInput({
         onBlur(value);
       }}
     >
-      <Input
-        ref={control}
-        id="username"
-        name="username"
-        value={value}
-        autoComplete="off"
-        autoCapitalize="none"
-        clearable
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={focused && history.length > 0}
-        aria-controls={`${identity}-accounts`}
-        aria-activedescendant={focused && active >= 0 ? `${identity}-account-${active}` : undefined}
-        aria-invalid={invalid}
-        aria-describedby={invalid ? 'username-error' : undefined}
-        placeholder={t('app.validation.username')}
-        onChange={(account) => {
-          onChange(account);
-          setFocused(true);
-          setActive(-1);
-        }}
-        onFocus={() => {
-          setHistory(loginAccountHistory());
-          setFocused(true);
-        }}
-      />
+      <InputLoading loading={loading}>
+        <Input
+          ref={control}
+          id="username"
+          name="username"
+          value={value}
+          autoComplete="off"
+          autoCapitalize="none"
+          clearable={!loading}
+          clearIcon={<Icon name="close" size={14} />}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={focused && history.length > 0}
+          aria-controls={`${identity}-accounts`}
+          aria-activedescendant={
+            focused && active >= 0 ? `${identity}-account-${active}` : undefined
+          }
+          aria-invalid={invalid}
+          aria-describedby={invalid ? 'username-error' : undefined}
+          placeholder={t('app.validation.username')}
+          onChange={(account) => {
+            onChange(account);
+            setFocused(true);
+            setActive(-1);
+          }}
+          onFocus={() => {
+            setHistory(loginAccountHistory());
+            setFocused(true);
+          }}
+        />
+      </InputLoading>
       {focused && history.length > 0 && (
         <div
           className="suggestions card account-suggestions"

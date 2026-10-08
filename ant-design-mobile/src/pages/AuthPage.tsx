@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Button, Skeleton } from 'antd-mobile';
+import { Button } from 'antd-mobile';
 import { ApiError, acceptSession, loadUser, logout, request, submitCredentials } from '../lib/api';
 import { recordLoginAccount } from '../lib/storage';
 import { consumeRegistrationLogin, setRegistrationLogin } from '../lib/registration-login';
@@ -35,12 +35,22 @@ export default function AuthPage() {
       Boolean((location.state as { registered?: boolean } | null)?.registered),
     );
   const verification = useRef(0);
+  const verificationTimer = useRef<number>();
+  const verificationController = useRef<AbortController>();
   const formRef = useRef<HTMLFormElement>(null);
   const initializedMode = useRef<typeof mode>();
-  useEffect(() => {
+  function cancelVerification() {
+    verification.current++;
+    verificationController.current?.abort();
+    verificationController.current = undefined;
+    window.clearTimeout(verificationTimer.current);
+    verificationTimer.current = undefined;
+  }
+  useLayoutEffect(() => () => cancelVerification(), []);
+  useLayoutEffect(() => {
     if (initializedMode.current === mode) return;
     initializedMode.current = mode;
-    verification.current++;
+    cancelVerification();
     setPassword('');
     setConfirmation('');
     setProof('');
@@ -64,15 +74,24 @@ export default function AuthPage() {
     return () => window.clearTimeout(timer);
   }, []);
   async function verifyUsername(account = username) {
-    const current = ++verification.current;
+    cancelVerification();
+    const current = verification.current;
     const value = account.trim();
+    setVerificationBusy(false);
     if (!value || mode === 'password_reset') return;
+    const controller = new AbortController();
+    verificationController.current = controller;
     setVerificationBusy(true);
+    verificationTimer.current = window.setTimeout(() => {
+      if (current !== verification.current) return;
+      verificationTimer.current = undefined;
+      setVerificationBusy(false);
+    }, 5000);
     try {
       if (mode === 'register') {
         const result = await request<{ available: boolean }>(
           `/auth/pub/register/username?username=${encodeURIComponent(value)}`,
-          { public: true },
+          { public: true, signal: controller.signal },
         );
         if (current === verification.current)
           setErrors((e) => ({
@@ -82,14 +101,20 @@ export default function AuthPage() {
       } else {
         const result = await request<{ captcha?: Challenge }>(
           `/auth/pub/login/verification?username=${encodeURIComponent(value)}`,
-          { public: true },
+          { public: true, signal: controller.signal },
         );
         if (current === verification.current) setCaptcha(result.captcha);
       }
     } catch (e) {
-      if (current === verification.current) setError((e as Error).message);
+      if (current === verification.current && !controller.signal.aborted)
+        setError((e as Error).message);
     } finally {
-      if (current === verification.current) setVerificationBusy(false);
+      if (current === verification.current) {
+        window.clearTimeout(verificationTimer.current);
+        verificationTimer.current = undefined;
+        verificationController.current = undefined;
+        setVerificationBusy(false);
+      }
     }
   }
   async function submit() {
@@ -211,8 +236,9 @@ export default function AuthPage() {
                   <LoginAccountInput
                     value={username}
                     invalid={!!errors.username}
+                    loading={verificationBusy}
                     onChange={(v) => {
-                      verification.current++;
+                      cancelVerification();
                       setVerificationBusy(false);
                       setUsername(v);
                       setCaptcha(undefined);
@@ -228,8 +254,9 @@ export default function AuthPage() {
                   name="username"
                   label={t('system.fields.username')}
                   value={username}
+                  loading={verificationBusy}
                   onChange={(v) => {
-                    verification.current++;
+                    cancelVerification();
                     setVerificationBusy(false);
                     setUsername(v);
                     setCaptcha(undefined);
@@ -241,7 +268,6 @@ export default function AuthPage() {
                   required
                 />
               )}
-              {verificationBusy && <Skeleton.Title animated className="field-check-skeleton" />}
             </>
           )}
           <TextField
