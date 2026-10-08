@@ -15,8 +15,10 @@ import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
+import { clearLegacyLoginCredentials } from './store/login-account-history';
 
 async function bootstrap(namespace: string) {
+  clearLegacyLoginCredentials();
   // 初始化组件适配器
   await initComponentAdapter();
 

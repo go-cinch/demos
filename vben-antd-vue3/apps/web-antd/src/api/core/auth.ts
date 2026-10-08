@@ -17,7 +17,6 @@ export namespace AuthApi {
     captcha_id?: string;
     captcha_points?: CaptchaPoint[];
     password?: string;
-    remember_me?: boolean;
     username?: string;
     slider_proof?: string;
   }
@@ -171,7 +170,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
     captcha_id: data.captcha_id,
     captcha_points: data.captcha_points,
     password,
-    remember_me: data.remember_me === true,
+    remember_me: false,
     username,
     slider_proof: data.slider_proof,
   });

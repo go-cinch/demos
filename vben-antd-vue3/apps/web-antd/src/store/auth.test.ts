@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   access: {
@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   reset: vi.fn(),
   info: vi.fn(),
   logout: vi.fn(),
+  recordAccount: vi.fn(),
 }));
 vi.mock('vue-router', () => ({ useRouter: () => mocks.router }));
 vi.mock('@vben/preferences', () => ({
@@ -46,7 +47,14 @@ vi.mock('#/api', () => ({
   refreshLoginCaptchaApi: vi.fn(),
   verifyLoginCaptchaApi: vi.fn(),
 }));
-import { useAuthStore } from './auth';
+vi.mock('./login-account-history', () => ({
+  recordLoginAccount: mocks.recordAccount,
+}));
+import {
+  consumeRegistrationLogin,
+  stageRegistrationLogin,
+  useAuthStore,
+} from './auth';
 
 const pending = {
   access_token: 'pending-access',
@@ -64,10 +72,12 @@ const complete = {
 describe('first-login password reset', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    consumeRegistrationLogin();
     setActivePinia(createPinia());
     localStorage.clear();
     mocks.access.accessToken = null;
     mocks.access.refreshToken = null;
+    mocks.access.loginExpired = false;
     mocks.access.setAccessToken.mockImplementation((value) => {
       mocks.access.accessToken = value;
     });
@@ -80,6 +90,46 @@ describe('first-login password reset', () => {
       permission: { btns: [] },
     });
   });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('hands registration credentials to the login page once, in memory only', () => {
+    const write = vi.spyOn(localStorage, 'setItem');
+    const sessionWrite = vi.spyOn(sessionStorage, 'setItem');
+    const credentials = {
+      password: 'registered-password',
+      username: 'new-user',
+    };
+    stageRegistrationLogin(credentials);
+    credentials.username = 'changed-by-caller';
+    credentials.password = 'changed-by-caller';
+
+    expect(consumeRegistrationLogin()).toEqual({
+      password: 'registered-password',
+      username: 'new-user',
+    });
+    expect(consumeRegistrationLogin()).toBeNull();
+    expect(write).not.toHaveBeenCalled();
+    expect(sessionWrite).not.toHaveBeenCalled();
+  });
+
+  it('clears unconsumed registration credentials when auth state is reset', () => {
+    stageRegistrationLogin({
+      password: 'registered-password',
+      username: 'new-user',
+    });
+    useAuthStore().$reset();
+    expect(consumeRegistrationLogin()).toBeNull();
+  });
+
+  it('does not read or write remembered credentials after a password reset', async () => {
+    const read = vi.spyOn(localStorage, 'getItem');
+    const write = vi.spyOn(localStorage, 'setItem');
+    mocks.reset.mockResolvedValue(complete);
+    await useAuthStore().completePasswordReset('new-password');
+    expect(read).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it('enters reset before fetching profile or menus', async () => {
     mocks.login.mockResolvedValue(pending);
     const auth = useAuthStore();
@@ -130,5 +180,55 @@ describe('first-login password reset', () => {
     expect(auth.passwordResetRequired).toBe(true);
     expect(mocks.access.accessToken).toBe('pending-access');
     expect(mocks.info).not.toHaveBeenCalled();
+  });
+
+  it('records only the account after a successful login', async () => {
+    mocks.login.mockResolvedValue(complete);
+    const result = await useAuthStore().authLogin({
+      password: 'current-password',
+      username: 'tester',
+    });
+    expect(result.userInfo?.username).toBe('tester');
+    expect(mocks.recordAccount).toHaveBeenCalledExactlyOnceWith('tester');
+    expect(mocks.router.push).toHaveBeenCalledWith('/profile');
+  });
+
+  it('does not add rejected logins to account history', async () => {
+    mocks.login.mockRejectedValue(new Error('invalid credentials'));
+    const result = await useAuthStore().authLogin({
+      password: 'incorrect-password',
+      username: 'tester',
+    });
+    expect(result.userInfo).toBeNull();
+    expect(mocks.recordAccount).not.toHaveBeenCalled();
+  });
+
+  it('records a successful login requiring reset without saving either password', async () => {
+    const write = vi.spyOn(localStorage, 'setItem');
+    mocks.login.mockResolvedValue(pending);
+    mocks.reset.mockResolvedValue(complete);
+    const auth = useAuthStore();
+    await auth.authLogin({ password: 'initial-password', username: 'tester' });
+    expect(mocks.recordAccount).toHaveBeenCalledExactlyOnceWith('tester');
+    await auth.completePasswordReset('new-password');
+    expect(write).not.toHaveBeenCalled();
+    expect(mocks.recordAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents concurrent login submissions from recording history twice', async () => {
+    let resolveLogin!: (value: typeof complete) => void;
+    mocks.login.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLogin = resolve;
+      }),
+    );
+    const auth = useAuthStore();
+    const params = { password: 'current-password', username: 'tester' };
+    const first = auth.authLogin(params);
+    expect((await auth.authLogin(params)).userInfo).toBeNull();
+    resolveLogin(complete);
+    await first;
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAccount).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,7 +12,6 @@
   "passwordErrorTip": "Password is incorrect",
   "passwordTip": "Please enter password",
   "verifyRequiredTip": "Please complete the verification first",
-  "rememberMe": "Remember Me",
   "createAnAccount": "Create an Account",
   "createAccount": "Create Account",
   "alreadyHaveAccount": "Already have an account?",
@@ -58,5 +57,8 @@
     "center": "Align Center",
     "alignLeft": "Align Left",
     "alignRight": "Align Right"
-  }
+  },
+  "accountHistory": "Recent accounts",
+  "removeAccountHistory": "Remove account {account} from history",
+  "clearAccountHistory": "Clear account history"
 }

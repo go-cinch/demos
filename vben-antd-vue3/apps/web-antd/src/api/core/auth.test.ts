@@ -96,6 +96,7 @@ describe('changePasswordApi', () => {
         challenge_id: 'challenge-id',
         password: '  password  ',
         slider_proof: 'slider-proof',
+        remember_me: false,
         username: 'readonly',
       }),
     );

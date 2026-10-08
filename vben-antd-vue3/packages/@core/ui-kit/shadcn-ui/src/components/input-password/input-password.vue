@@ -33,7 +33,7 @@ const show = ref(false);
     <Input
       v-bind="$attrs"
       v-model="modelValue"
-      :class="cn(props.class)"
+      :class="cn('pr-10', props.class)"
       :type="show ? 'text' : 'password'"
     />
     <template v-if="passwordStrength">

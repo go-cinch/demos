@@ -5,13 +5,13 @@ import type { VbenFormSchema } from '@vben-core/form-ui';
 
 import type { AuthenticationProps } from './types';
 
-import { computed, onActivated, reactive, ref } from 'vue';
+import { computed, onDeactivated, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { $t } from '@vben/locales';
 
 import { useVbenForm } from '@vben-core/form-ui';
-import { VbenButton, VbenCheckbox } from '@vben-core/shadcn-ui';
+import { VbenButton } from '@vben-core/shadcn-ui';
 
 import Title from './auth-title.vue';
 import ThirdPartyLogin from './third-party-login.vue';
@@ -33,7 +33,6 @@ const props = withDefaults(defineProps<Props>(), {
   showCodeLogin: true,
   showQrcodeLogin: true,
   showRegister: true,
-  showRememberMe: true,
   showThirdPartyLogin: true,
   submitButtonText: '',
   subTitle: '',
@@ -60,54 +59,11 @@ const [Form, formApi] = useVbenForm(
 );
 const router = useRouter();
 
-interface RememberedCredentials {
-  password: string;
-  username: string;
-}
-
-const REMEMBER_ME_KEY = `REMEMBER_ME_CREDENTIALS_${location.hostname}`;
-const LEGACY_REMEMBER_ME_KEY = `REMEMBER_ME_USERNAME_${location.hostname}`;
-
-function getRememberedCredentials(): null | RememberedCredentials {
-  const savedCredentials = localStorage.getItem(REMEMBER_ME_KEY);
-  if (savedCredentials) {
-    try {
-      const credentials = JSON.parse(savedCredentials);
-      if (
-        typeof credentials?.username === 'string' &&
-        typeof credentials?.password === 'string'
-      ) {
-        return credentials;
-      }
-    } catch {
-      localStorage.removeItem(REMEMBER_ME_KEY);
-    }
-  }
-
-  const legacyUsername = localStorage.getItem(LEGACY_REMEMBER_ME_KEY);
-  return legacyUsername ? { password: '', username: legacyUsername } : null;
-}
-
-const rememberMe = ref(false);
-
 async function handleSubmit() {
   const { valid } = await formApi.validate();
   const values = await formApi.getValues();
   if (valid) {
-    if (rememberMe.value) {
-      localStorage.setItem(
-        REMEMBER_ME_KEY,
-        JSON.stringify({
-          password: values?.password ?? '',
-          username: values?.username ?? '',
-        }),
-      );
-      localStorage.removeItem(LEGACY_REMEMBER_ME_KEY);
-    } else {
-      localStorage.removeItem(REMEMBER_ME_KEY);
-      localStorage.removeItem(LEGACY_REMEMBER_ME_KEY);
-    }
-    emit('submit', { ...values, rememberMe: rememberMe.value });
+    emit('submit', { ...values });
   }
 }
 
@@ -115,17 +71,11 @@ function handleGo(path: string) {
   router.push(path);
 }
 
-async function restoreRememberedCredentials() {
-  const rememberedCredentials = getRememberedCredentials();
-  rememberMe.value = rememberedCredentials !== null;
-  await formApi.setValues(
-    rememberedCredentials ?? { password: '', username: '' },
-  );
-  const values = await formApi.getValues();
-  emit('valuesChange', values, ['username']);
-}
-
-onActivated(restoreRememberedCredentials);
+onDeactivated(() => {
+  if (formApi.isMounted) {
+    void formApi.setValues({ password: '', username: '' });
+  }
+});
 
 defineExpose({
   getFormApi: () => formApi,
@@ -133,7 +83,7 @@ defineExpose({
 </script>
 
 <template>
-  <div @keydown.enter.prevent="handleSubmit">
+  <div>
     <slot name="title">
       <Title>
         <slot name="title">
@@ -149,30 +99,19 @@ defineExpose({
       </Title>
     </slot>
 
-    <Form />
-
-    <div v-if="showRememberMe" class="mb-6 flex justify-between">
-      <div class="flex-center">
-        <VbenCheckbox
-          v-if="showRememberMe"
-          v-model="rememberMe"
-          name="rememberMe"
+    <Form @submit="handleSubmit">
+      <div class="col-span-full">
+        <VbenButton
+          :class="{ 'cursor-wait': loading }"
+          :loading="loading"
+          aria-label="login"
+          class="w-full"
+          type="submit"
         >
-          {{ $t('authentication.rememberMe') }}
-        </VbenCheckbox>
+          {{ submitButtonText || $t('common.login') }}
+        </VbenButton>
       </div>
-    </div>
-    <VbenButton
-      :class="{
-        'cursor-wait': loading,
-      }"
-      :loading="loading"
-      aria-label="login"
-      class="w-full"
-      @click="handleSubmit"
-    >
-      {{ submitButtonText || $t('common.login') }}
-    </VbenButton>
+    </Form>
 
     <div
       v-if="showCodeLogin || showQrcodeLogin"

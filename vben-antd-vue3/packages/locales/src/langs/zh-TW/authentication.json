@@ -12,7 +12,6 @@
   "passwordTip": "請輸入密碼",
   "verifyRequiredTip": "請先完成驗證",
   "passwordErrorTip": "密碼錯誤",
-  "rememberMe": "記住賬號",
   "createAnAccount": "建立一個賬號",
   "createAccount": "建立賬號",
   "alreadyHaveAccount": "已經有賬號了?",
@@ -58,5 +57,8 @@
     "center": "居中",
     "alignLeft": "居左",
     "alignRight": "居右"
-  }
+  },
+  "accountHistory": "最近登入帳號",
+  "removeAccountHistory": "移除歷史帳號 {account}",
+  "clearAccountHistory": "清空登入歷史"
 }

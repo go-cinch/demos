@@ -2,16 +2,17 @@
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
-import { computed, markRaw, ref } from 'vue';
+import { computed, markRaw, nextTick, onActivated, ref } from 'vue';
 
 import { AuthenticationLogin, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
 import { useDebounceFn } from '@vueuse/core';
 
-import { useAuthStore } from '#/store';
+import { consumeRegistrationLogin, useAuthStore } from '#/store';
 import { isValidUsername, isValidUserPassword } from '#/user-validation';
 
+import LoginAccountInput from './login-account-input.vue';
 import LoginPointCaptcha from './login-point-captcha.vue';
 import ServerSliderCaptcha from './server-slider-captcha.vue';
 
@@ -23,6 +24,7 @@ const loginFormRef = ref<{
     clearValidation: (fieldName: string) => Promise<void>;
     getFieldComponentRef: <T>(fieldName: string) => T | undefined;
     setFieldValue: (fieldName: string, value: unknown) => Promise<void>;
+    setValues: (values: Recordable<any>) => Promise<void>;
   };
 }>();
 
@@ -30,11 +32,30 @@ interface SliderCaptchaExpose {
   resume: () => void;
 }
 
+let applyingRegistrationLogin = false;
+
+onActivated(async () => {
+  const credentials = consumeRegistrationLogin();
+  const formApi = loginFormRef.value?.getFormApi();
+  if (!credentials || !formApi) return;
+  applyingRegistrationLogin = true;
+  try {
+    await formApi.setValues(credentials);
+    await nextTick();
+    await formApi.clearValidation('username');
+    await formApi.clearValidation('password');
+  } finally {
+    applyingRegistrationLogin = false;
+  }
+});
+
 const formSchema = computed((): VbenFormSchema[] => {
   const schema: VbenFormSchema[] = [
     {
-      component: 'VbenInput',
+      component: markRaw(LoginAccountInput),
       componentProps: {
+        onSelect: () =>
+          loginFormRef.value?.getFormApi().setFieldValue('password', ''),
         placeholder: $t('authentication.usernameTip'),
       },
       fieldName: 'username',
@@ -46,6 +67,7 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: 'VbenInputPassword',
       componentProps: {
+        autocomplete: 'new-password',
         placeholder: $t('authentication.password'),
       },
       fieldName: 'password',
@@ -121,6 +143,9 @@ async function handleValuesChange(
 ) {
   if (!changedFields.includes('username')) return;
   authStore.resetLoginVerification();
+  if (!applyingRegistrationLogin) {
+    await loginFormRef.value?.getFormApi().setFieldValue('password', '');
+  }
   await resetSliderCaptcha();
   const username = typeof values.username === 'string' ? values.username : '';
   await checkLoginVerification(username);

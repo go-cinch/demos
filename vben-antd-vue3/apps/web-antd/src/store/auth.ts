@@ -25,19 +25,28 @@ import {
 } from '#/api';
 import { $t } from '#/locales';
 
+import { recordLoginAccount } from './login-account-history';
+
 interface RegistrationLoginCredentials {
   password: string;
   username: string;
 }
 
-const REMEMBER_ME_KEY = `REMEMBER_ME_CREDENTIALS_${location.hostname}`;
-const LEGACY_REMEMBER_ME_KEY = `REMEMBER_ME_USERNAME_${location.hostname}`;
+let pendingRegistrationLogin: null | RegistrationLoginCredentials = null;
 
 export function stageRegistrationLogin(
   credentials: RegistrationLoginCredentials,
 ) {
-  localStorage.setItem(REMEMBER_ME_KEY, JSON.stringify(credentials));
-  localStorage.removeItem(LEGACY_REMEMBER_ME_KEY);
+  pendingRegistrationLogin = {
+    password: credentials.password,
+    username: credentials.username,
+  };
+}
+
+export function consumeRegistrationLogin() {
+  const credentials = pendingRegistrationLogin;
+  pendingRegistrationLogin = null;
+  return credentials;
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -92,6 +101,7 @@ export const useAuthStore = defineStore('auth', () => {
   ) {
     // 异步处理用户登录操作并获取 accessToken
     let userInfo: null | UserInfo = null;
+    if (loginLoading.value) return { userInfo };
     try {
       loginVerificationRequest += 1;
       loginLoading.value = true;
@@ -100,13 +110,13 @@ export const useAuthStore = defineStore('auth', () => {
         ...params,
         captcha_id: captcha?.captcha_id,
         captcha_points: captcha ? params.captchaPoints : undefined,
-        remember_me: params.rememberMe === true,
         slider_proof: params.sliderProof,
       });
 
       // 如果成功获取到 accessToken
       if (result.access_token) {
         acceptSession(result);
+        recordLoginAccount(String(params.username ?? ''));
         if (passwordResetRequired.value) {
           resetLoginVerification();
           accessStore.setLoginExpired(false);
@@ -268,25 +278,12 @@ export const useAuthStore = defineStore('auth', () => {
     acceptSession(await resetPasswordApi(newPassword));
     accessStore.setIsAccessChecked(false);
     const info = await fetchUserInfo();
-    // Keep an existing remembered credential in sync; do not enable remembering.
-    try {
-      const remembered = JSON.parse(
-        localStorage.getItem(REMEMBER_ME_KEY) || 'null',
-      );
-      if (remembered?.username === info.username) {
-        stageRegistrationLogin({
-          username: info.username,
-          password: newPassword,
-        });
-      }
-    } catch {
-      /* Remembered credentials are optional. */
-    }
     notification.success({ message: $t('app.resetPassword.success') });
     await router.replace(info.homePath || preferences.app.defaultHomePath);
   }
 
   function $reset() {
+    pendingRegistrationLogin = null;
     passwordResetRequired.value = false;
     loginLoading.value = false;
     resetLoginVerification();
