@@ -20,12 +20,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { clearLegacyLoginCredentials } from "@/utils/loginAccountHistory";
 
 interface LoginValues {
   captcha_id?: string;
   captcha_points?: CaptchaPoint[];
   password: string;
-  remember_me: boolean;
   slider_proof: string;
   username: string;
 }
@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    clearLegacyLoginCredentials();
     let active = true;
     (async () => {
       if (!getRefreshToken()) return;
