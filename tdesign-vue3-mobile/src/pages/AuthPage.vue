@@ -2,17 +2,11 @@
 import { focusFirstInvalid, message, type Feedback } from '../lib/form-feedback';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import {
-  ApiError,
-  acceptSession,
-  loadUser,
-  logout,
-  request,
-  session,
-  submitCredentials,
-} from '../lib/api';
+import { ApiError, acceptSession, loadUser, logout, request, submitCredentials } from '../lib/api';
 import type { PointCaptcha as Challenge, CaptchaPoint } from '../lib/types';
-import { rememberCredentials, rememberedCredentials } from '../lib/storage';
+import { recordLoginAccount } from '../lib/storage';
+import { consumeRegistrationLogin, setRegistrationLogin } from '../lib/registration-login';
+import LoginAccountInput from '../components/LoginAccountInput.vue';
 import { nonempty, trimCredential } from '../lib/validation';
 import { t } from '../locales';
 import Field from '../components/Field.vue';
@@ -28,11 +22,9 @@ const mode = computed(() =>
       ? 'password_reset'
       : 'login',
 );
-const saved = rememberedCredentials();
-const username = ref(saved?.username || '');
-const password = ref(saved?.password || '');
+const username = ref('');
+const password = ref('');
 const confirmation = ref('');
-const remember = ref(!!saved);
 const proof = ref('');
 const slider = ref<InstanceType<typeof ServerSlider>>();
 const captcha = ref<Challenge>();
@@ -46,9 +38,6 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 const unavailableUsername = ref('');
 const verificationBusy = ref(false);
 let verificationGeneration = 0;
-watch(remember, (value) => {
-  if (!value) rememberCredentials('', '', false);
-});
 watch(username, () => {
   unavailableUsername.value = '';
   verificationBusy.value = false;
@@ -59,6 +48,7 @@ watch(username, () => {
 watch(
   mode,
   () => {
+    clearTimeout(noticeTimer);
     errors.value = {};
     error.value = '';
     notice.value = '';
@@ -66,34 +56,25 @@ watch(
     captcha.value = undefined;
     points.value = [];
     confirmation.value = '';
-    if (mode.value === 'password_reset') password.value = '';
-    else if (mode.value === 'login') {
-      const remembered = rememberedCredentials();
-      username.value = remembered?.username || '';
-      password.value = remembered?.password || '';
-      remember.value = !!remembered;
-    } else password.value = '';
-  },
-  { immediate: true },
-);
-watch(
-  () => route.query.registered,
-  (registered) => {
-    clearTimeout(noticeTimer);
-    if (!registered) return;
-    notice.value = 'app.register.success';
-    noticeTimer = setTimeout(() => {
-      notice.value = '';
-      const { registered: _registered, ...query } = route.query;
-      void router.replace({ path: route.path, query });
-    }, 5000);
+    password.value = '';
+    if (mode.value === 'login') {
+      const registered = consumeRegistrationLogin();
+      if (registered) {
+        username.value = registered.username;
+        password.value = registered.password;
+        notice.value = 'app.register.success';
+        noticeTimer = setTimeout(() => {
+          notice.value = '';
+        }, 5000);
+      }
+    }
   },
   { immediate: true },
 );
 onBeforeUnmount(() => clearTimeout(noticeTimer));
-async function verifyUsername() {
+async function verifyUsername(account = username.value) {
   const current = ++verificationGeneration;
-  const value = username.value.trim();
+  const value = account.trim();
   if (!value || mode.value === 'password_reset') return;
   verificationBusy.value = true;
   try {
@@ -169,24 +150,19 @@ async function submit() {
           : {
               username: normalizedUsername,
               password: normalizedPassword,
-              remember_me: remember.value,
+              remember_me: false,
               slider_proof: captcha.value ? undefined : proof.value,
               captcha_id: captcha.value?.captcha_id,
               captcha_points: points.value.length ? points.value : undefined,
             };
     const result = await submitCredentials(mode.value, payload);
     if (mode.value === 'register') {
-      rememberCredentials(normalizedUsername, normalizedPassword);
-      await router.push({ path: '/auth/login', query: { registered: '1' } });
+      setRegistrationLogin(normalizedUsername, normalizedPassword);
+      password.value = '';
+      confirmation.value = '';
+      await router.push('/auth/login');
     } else {
-      if (mode.value === 'password_reset') {
-        const entry = rememberedCredentials();
-        if (
-          entry &&
-          (entry.username === normalizedUsername || entry.username === session.user?.username)
-        )
-          rememberCredentials(entry.username, normalizedPassword);
-      } else rememberCredentials(normalizedUsername, normalizedPassword, remember.value);
+      if (mode.value === 'login' && result.access_token) recordLoginAccount(normalizedUsername);
       acceptSession(result);
       if (result.password_reset_required) {
         await router.replace('/auth/reset-password');
@@ -240,13 +216,19 @@ async function submit() {
           :label="t('system.fields.username')"
           :error="errors.username"
           required
-          ><t-input
+          ><LoginAccountInput
+            v-if="mode === 'login'"
+            v-model="username"
+            @blur="verifyUsername"
+            @select="password = ''"
+          /><t-input
+            v-else
             id="username"
             v-model="username"
             name="username"
             autocomplete="username"
             :placeholder="t('app.validation.username')"
-            @blur="verifyUsername"
+            @blur="verifyUsername()"
           />
           <t-skeleton
             v-if="verificationBusy"
@@ -266,7 +248,7 @@ async function submit() {
             v-model="password"
             name="password"
             type="password"
-            :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+            autocomplete="new-password"
             :placeholder="t('app.validation.password')" /></Field
         ><Field
           v-if="mode !== 'login'"
@@ -303,10 +285,6 @@ async function submit() {
             :username="username"
             @update="captcha = $event"
         /></Field>
-        <div v-if="mode === 'login'" class="switch-row">
-          <label for="remember">{{ t('remember') }}</label
-          ><t-switch id="remember" v-model="remember" :aria-label="t('remember')" />
-        </div>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <p v-if="notice" class="notice" role="status">{{ t(notice) }}</p>
         <t-button block theme="primary" type="submit" size="large" :loading="busy">{{
