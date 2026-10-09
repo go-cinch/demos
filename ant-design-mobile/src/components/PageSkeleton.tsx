@@ -1,23 +1,87 @@
 import { Skeleton } from 'antd-mobile';
+import RecordListSkeleton from './RecordListSkeleton';
+import type { ResourceKind } from '../lib/types';
+import { t } from '../locales';
 
 export default function PageSkeleton({
   variant = 'page',
+  resource,
+  rows,
+  listKind,
+  selecting,
+  columns,
+  optionDetail,
 }: {
-  variant?: 'list' | 'management' | 'overview' | 'page';
+  variant?: 'list' | 'management' | 'overview' | 'page' | 'message-detail' | 'options';
+  resource?: ResourceKind;
+  rows?: number;
+  listKind?: 'resource' | 'message' | 'sent' | 'recent' | 'queue';
+  selecting?: boolean;
+  columns?: string[];
+  optionDetail?: boolean;
 }) {
   if (variant === 'list') {
     return (
-      <div className="page-skeleton page-skeleton-list" role="status" aria-busy="true">
-        {Array.from({ length: 5 }, (_, index) => (
-          <div className="skeleton-list-row" key={index}>
-            <Skeleton.Title animated className="skeleton-avatar" />
-            <div className="skeleton-lines">
-              <Skeleton.Title animated />
-              <Skeleton.Title animated />
-            </div>
-            <Skeleton.Title animated className="skeleton-tail" />
+      <RecordListSkeleton
+        resource={resource}
+        rows={rows}
+        kind={listKind}
+        selecting={selecting}
+        columns={columns}
+      />
+    );
+  }
+  if (variant === 'options') {
+    return (
+      <div
+        className="page-skeleton-options"
+        role="status"
+        aria-busy="true"
+        aria-label={t('loading')}
+      >
+        {Array.from({ length: rows || 4 }, (_, index) => (
+          <div className="option-row" aria-hidden="true" key={index}>
+            <span className="option-copy" style={{ width: '70%' }}>
+              {optionDetail ? (
+                <>
+                  <strong>
+                    <span className="skeleton-text" style={{ width: '80%' }} />
+                  </strong>
+                  <small>
+                    <span className="skeleton-text" style={{ width: '50%' }} />
+                  </small>
+                </>
+              ) : (
+                <span className="skeleton-text" style={{ width: '80%' }} />
+              )}
+            </span>
+            <span className="option-indicator skeleton-fill" />
           </div>
         ))}
+      </div>
+    );
+  }
+  if (variant === 'message-detail') {
+    return (
+      <div className="page-skeleton-message-detail" role="status" aria-busy="true">
+        <h3>
+          <Skeleton.Title animated />
+        </h3>
+        <dl className="details">
+          {['type', 'scope', 'published', 'content', 'expiry', 'sender', 'recipientIDs'].map(
+            (key) => (
+              <div key={key}>
+                <dt>{t(`app.msg.${key}`)}</dt>
+                <dd>
+                  <Skeleton
+                    animated
+                    style={{ width: '75%', height: key === 'content' ? 66 : 18 }}
+                  />
+                </dd>
+              </div>
+            ),
+          )}
+        </dl>
       </div>
     );
   }

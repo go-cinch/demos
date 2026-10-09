@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { t } from '../locales';
+import RecordListSkeleton from './RecordListSkeleton.vue';
+import type { ResourceKind } from '../lib/types';
 
 const props = withDefaults(
   defineProps<{
-    variant?: 'list' | 'options' | 'overview' | 'management' | 'profile' | 'page';
+    variant?:
+      'list' | 'options' | 'overview' | 'management' | 'profile' | 'page' | 'message-detail';
     density?: 'compact' | 'default' | 'loose';
+    resource?: ResourceKind;
+    columns?: string[];
+    rows?: number;
+    selecting?: boolean;
+    listKind?: 'resource' | 'message' | 'sent' | 'recent';
   }>(),
   { variant: 'page', density: 'default' },
 );
@@ -43,12 +51,24 @@ const fallbackRows = computed(() => {
   ];
 });
 const structured = computed(() =>
-  ['list', 'overview', 'management', 'profile'].includes(props.variant),
+  ['list', 'options', 'overview', 'management', 'profile', 'message-detail'].includes(
+    props.variant,
+  ),
 );
 </script>
 
 <template>
+  <RecordListSkeleton
+    v-if="variant === 'list'"
+    class="page-skeleton-list"
+    :resource="resource"
+    :columns="columns"
+    :rows="rows"
+    :selecting="selecting"
+    :kind="listKind"
+  />
   <div
+    v-else
     class="page-skeleton"
     :class="[
       `page-skeleton-${variant}`,
@@ -59,7 +79,40 @@ const structured = computed(() =>
     aria-busy="true"
     :aria-label="t('loading')"
   >
-    <div v-if="variant === 'overview'" aria-hidden="true">
+    <div v-if="variant === 'options'" aria-hidden="true">
+      <div v-for="index in rows || 4" :key="index" class="option-row">
+        <t-skeleton animation="gradient" :row-col="textRow('70%', '16px')" />
+      </div>
+    </div>
+    <div v-else-if="variant === 'message-detail'" aria-hidden="true">
+      <div class="detail-identity">
+        <span class="avatar large"
+          ><t-skeleton animation="gradient" :row-col="rectRow('100%', '100%')"
+        /></span>
+        <h2><t-skeleton animation="gradient" :row-col="textRow('160px', '28px')" /></h2>
+      </div>
+      <dl class="details">
+        <template
+          v-for="key in [
+            'type',
+            'scope',
+            'published',
+            'content',
+            'expiry',
+            'sender',
+            'recipientIDs',
+          ]"
+          :key="key"
+          ><dt>{{ t(`app.msg.${key}`) }}</dt>
+          <dd>
+            <t-skeleton
+              animation="gradient"
+              :row-col="rectRow('75%', key === 'content' ? '66px' : '18px')"
+            /></dd
+        ></template>
+      </dl>
+    </div>
+    <div v-else-if="variant === 'overview'" aria-hidden="true">
       <div class="skeleton-heading">
         <t-skeleton animation="gradient" :row-col="textRow('94px', '34px')" />
         <t-skeleton animation="gradient" :row-col="textRow('148px', '14px')" />
@@ -155,7 +208,7 @@ const structured = computed(() =>
       </div>
       <t-skeleton animation="gradient" :row-col="rectRow('100%', '46px')" />
     </div>
-    <div v-else-if="variant === 'list' || variant === 'management'" aria-hidden="true">
+    <div v-else-if="variant === 'management'" aria-hidden="true">
       <template v-if="variant === 'management'">
         <div class="skeleton-management-heading">
           <t-skeleton animation="gradient" :row-col="textRow('136px', '34px')" />
@@ -221,6 +274,13 @@ const structured = computed(() =>
 </template>
 
 <style scoped>
+.page-skeleton-options,
+.page-skeleton-message-detail {
+  padding: 0;
+}
+.page-skeleton-options .t-skeleton {
+  width: 100%;
+}
 .page-skeleton-structured {
   --skeleton-record-padding: 14px;
   --skeleton-summary-gap: 8px;

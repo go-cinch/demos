@@ -1,8 +1,13 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import { nextTick, ref, watch } from 'vue';
+import { createRouter, createWebHistory, type LocationQuery } from 'vue-router';
+import { nextTick, ref, shallowRef, watch } from 'vue';
 import { canMenu, initializeSession, pendingRequests, session } from './lib/api';
 export const routeLoading = ref(true);
 export const routeSkeleton = ref(false);
+export const routeSkeletonTarget = shallowRef<{
+  path: string;
+  fullPath: string;
+  query: LocationQuery;
+} | null>(null);
 let loadingGeneration = 0;
 let initialNavigation = true;
 let initialLoadingExpired = false;
@@ -13,7 +18,7 @@ const initialLoadingTimer = window.setTimeout(
   () => {
     initialLoadingExpired = true;
     routeLoading.value = false;
-    routeSkeleton.value = true;
+    routeSkeleton.value = !router.currentRoute.value.matched.length;
   },
   Math.max(0, initialLoadingDeadline - performance.now()),
 );
@@ -22,6 +27,8 @@ function finishInitialLoading() {
   window.clearTimeout(initialLoadingTimer);
   initialNavigation = false;
   routeLoading.value = false;
+  routeSkeleton.value = false;
+  routeSkeletonTarget.value = null;
 }
 
 function waitForRequestsOrDeadline() {
@@ -65,10 +72,11 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', component: () => import('./pages/NotFoundPage.vue') },
   ],
 });
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   loadingGeneration++;
+  routeSkeletonTarget.value = { path: to.path, fullPath: to.fullPath, query: to.query };
   if (initialNavigation && !initialLoadingExpired) routeLoading.value = true;
-  else routeSkeleton.value = true;
+  else routeSkeleton.value = to.path !== from.path;
   await initializeSession();
   const publicPage = ['/auth/login', '/auth/register'].includes(to.path);
   if (!session.accessToken && !publicPage)
@@ -85,7 +93,12 @@ router.beforeEach(async (to) => {
     return { path: '/dashboard/overview', query: { denied: '1' } };
   if (to.path === '/dashboard/workspace' && !canMenu(to.path)) return '/dashboard/overview';
 });
-router.afterEach(async () => {
+router.afterEach(async (to, _from, failure) => {
+  if (routeSkeletonTarget.value?.fullPath !== to.fullPath) return;
+  if (failure) {
+    finishInitialLoading();
+    return;
+  }
   const current = loadingGeneration;
   await nextTick();
   if (!initialNavigation || initialLoadingExpired) {

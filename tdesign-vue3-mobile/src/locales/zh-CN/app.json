@@ -40,7 +40,7 @@
   },
   "msg": {
     "inbox": "我的消息",
-    "manage": "站内信管理",
+    "manage": "消息",
     "hint": "查看通知，管理你的已读和删除状态。",
     "manageHint": "发布全员或定向通知，查看发送记录。",
     "send": "发送消息",
@@ -104,7 +104,7 @@
     "loadingMore": "正在加载更多…",
     "noMore": "已经到底了",
     "selectedCount": "已选 {count} 条",
-    "deleteSelected": "批量删除",
+    "deleteSelected": "删除",
     "readSelectedConfirm": "将选中的消息标为已读？",
     "deleteSelectedConfirm": "删除选中的消息？仅从你的收件箱删除。",
     "deleteSelectedGlobalConfirm": "为所有接收者删除选中的消息？"

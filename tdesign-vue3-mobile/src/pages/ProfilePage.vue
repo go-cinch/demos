@@ -107,7 +107,7 @@ async function submit() {
       </div>
     </header>
     <section class="profile-card card" :aria-busy="infoLoading">
-      <template v-if="infoLoading">
+      <template v-if="infoLoading && !session.user">
         <span class="avatar large profile-avatar" aria-hidden="true">
           <t-skeleton animation="gradient" :row-col="avatarSkeleton" />
         </span>

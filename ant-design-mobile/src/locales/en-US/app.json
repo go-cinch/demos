@@ -98,7 +98,7 @@
     "loadingMore": "Loading more…",
     "noMore": "No more messages",
     "selectedCount": "{count} selected",
-    "deleteSelected": "Delete selected",
+    "deleteSelected": "Delete",
     "readSelectedConfirm": "Mark selected messages as read?",
     "deleteSelectedConfirm": "Delete selected messages from your inbox?",
     "deleteSelectedGlobalConfirm": "Delete selected messages for every recipient?"

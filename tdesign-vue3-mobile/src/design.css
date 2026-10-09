@@ -212,6 +212,10 @@ h1 {
 }
 .bottom-nav button {
   position: relative;
+  width: 100%;
+  min-width: 44px;
+  max-width: 72px;
+  justify-self: center;
   min-height: 48px;
   border-radius: 0;
   font-weight: 400;
@@ -412,20 +416,20 @@ h1 {
 .app-grid,
 .device .app-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
   border: 0;
 }
 .app-card {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-height: 110px;
-  padding: 16px;
+  padding: 14px 8px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  text-align: left;
+  text-align: center;
 }
 .app-card strong {
   font-size: 14px;
@@ -439,7 +443,7 @@ h1 {
   margin: -16px -20px 0;
   padding: 18px 20px 14px;
   gap: 0;
-  background: var(--surface);
+  background: var(--bg);
 }
 .management h1 {
   font-size: 26px;
@@ -453,8 +457,8 @@ h1 {
 .management .search-region {
   padding: 0 20px 16px;
   margin: 0 -20px 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 0;
+  background: var(--bg);
 }
 .search-field > label {
   font-size: 12px;
@@ -503,6 +507,46 @@ h1 {
   border-radius: 2px;
   background: var(--accent);
 }
+.management .status-segmented {
+  width: 100%;
+  gap: 2px;
+  margin-block: 8px;
+  padding: 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+}
+.management .status-segmented button {
+  isolation: isolate;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.management .status-segmented button::before {
+  content: '';
+  position: absolute;
+  inset: 4px 2px;
+  z-index: -1;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.management .status-segmented button::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+  width: auto;
+  height: auto;
+  background: transparent;
+}
+.management .status-segmented button.active {
+  color: var(--on-accent);
+}
+.management .status-segmented button.active::before {
+  background: var(--accent);
+}
 .result-toolbar,
 .management .result-toolbar {
   padding: 0;
@@ -532,13 +576,60 @@ h1 {
   border-radius: 6px;
 }
 .selection-tools {
-  flex-direction: row-reverse;
+  flex-direction: row;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
 }
 .result-count {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
   font-size: 12px;
+}
+.management .results-region .result-toolbar {
+  min-height: 44px;
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+}
+.results-region .result-toolbar + .selection-tools {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.results-region .create-button,
+.selection-actions .action-chip {
+  position: relative;
+  isolation: isolate;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  gap: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+}
+.results-region .create-button::before,
+.selection-actions .action-chip::before {
+  content: '';
+  position: absolute;
+  inset: 5px 0;
+  z-index: -1;
+  border-radius: 10px;
+  pointer-events: none;
+}
+.results-region .create-button::before {
+  background: var(--accent);
+}
+.selection-actions .action-chip::before {
+  border: 1px solid var(--line);
+  background: var(--input);
+}
+.selection-actions .action-chip-danger::before {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 .management[data-resource] .record-open {
   display: flex;
@@ -596,19 +687,43 @@ h1 {
   border-bottom: 1px solid var(--line);
 }
 .pagination {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
   font-size: 12px;
-  margin-top: 16px;
+  margin: 20px 0;
 }
 .pagination-button,
 .page-config button {
   min-height: 44px;
-  border-radius: 6px;
-  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
   font-size: 12px;
 }
+.pagination-button {
+  min-width: 44px;
+  padding-inline: 10px;
+}
 .page-config {
-  border-radius: 0;
+  gap: 8px;
+  padding: 0;
+  border: 0;
   background: none;
+  font-variant-numeric: tabular-nums;
+}
+.page-config > span {
+  padding: 0;
+  border: 0;
+}
+.page-config button {
+  padding-inline: 10px;
+}
+.pagination-button:disabled {
+  opacity: 0.45;
+}
+.pagination button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .profile-card {
   display: flex;
@@ -1019,7 +1134,8 @@ h1 {
 .shell-back > svg {
   margin-left: -4px;
 }
-.management .record-list {
+.management .record-list,
+.device .management .record-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1111,6 +1227,8 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--input);
+  height: 40px;
+  min-height: 40px;
 }
 .management-primary-search > .search-field {
   flex: 1;
@@ -1127,17 +1245,19 @@ h1 {
   white-space: nowrap;
 }
 .management-primary-search .t-input {
-  padding: 9px 12px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 10px;
   background: transparent;
   border: 0;
-  --td-input-vertical-padding: 10px;
+  --td-input-vertical-padding: 0;
 }
 .management-primary-search .t-input__control {
   font-size: 14px;
 }
 .filter-toggle {
-  width: 44px;
-  min-height: 44px;
+  width: 40px;
+  min-height: 40px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -1147,6 +1267,117 @@ h1 {
 }
 .management .search-region .advanced-filters {
   margin-top: 12px;
+}
+.management .search-region .t-input {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  --td-input-vertical-padding: 0;
+}
+.management .management-primary-search .t-input {
+  height: 38px;
+  min-height: 38px;
+  border: 0;
+}
+.management .search-region .t-input__control {
+  font-size: 14px;
+}
+.management .search-region .input-loading-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 38px;
+  margin: 0 -10px 0 0;
+}
+.management .search-region .input-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  line-height: 1;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+.management .search-region .input-clear > span {
+  transform: translateY(-2px);
+}
+.management-primary-search:focus-within {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+}
+.management .search-region .t-input:focus-within {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+  box-shadow: none;
+}
+.management .management-primary-search .t-input:focus-within {
+  outline: none;
+}
+.management .search-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.management .search-actions button:first-child {
+  margin-right: 0;
+}
+.management .search-actions .action-chip {
+  min-width: 76px;
+  min-height: 36px;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 12px;
+}
+.management .results-region .create-button,
+.management .selection-actions .action-chip {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  transition: color 120ms;
+}
+.management .results-region .create-button:hover,
+.management .results-region .create-button:active,
+.management .selection-actions .action-chip:hover,
+.management .selection-actions .action-chip:active {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.results-region .create-button:focus,
+.selection-actions .action-chip:focus {
+  outline: none;
+  box-shadow: none;
+}
+.results-region .create-button:focus-visible::before,
+.selection-actions .action-chip:focus-visible::before {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+  box-shadow: none;
+}
+.management .record-selection {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  --td-checkbox-icon-size: 18px;
+  --td-checkbox-title-line-height: 18px;
+}
+.management .record-selection::after {
+  content: '';
+  position: absolute;
+  inset: 0 -8px;
+}
+.management .record-selection .t-checkbox__icon-left,
+.management .record-selection .t-checkbox__icon--left {
+  width: 18px;
+  margin-right: 0;
 }
 @media (max-width: 360px) {
   .overview-summary {
