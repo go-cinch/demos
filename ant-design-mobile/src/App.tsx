@@ -17,7 +17,7 @@ import { modules } from './lib/navigation';
 import { locale, t, toggleLocale } from './locales';
 import type { ResourceKind } from './lib/types';
 import { Icon, IconButton, Sheet, Copyright, TextField, Loading, NoData } from './components/UI';
-import PageSkeleton from './components/PageSkeleton';
+import RouteSkeleton from './components/RouteSkeleton';
 import MsgBell from './components/MsgBell';
 import Settings, { Choices } from './components/Settings';
 const MsgPage = lazy(() => import('./pages/MsgPage'));
@@ -64,7 +64,7 @@ export default function App() {
   const pendingRequests = useSyncExternalStore(subscribePendingRequests, getPendingRequests);
   const location = useLocation(),
     navigate = useNavigate(),
-    auth = location.pathname.startsWith('/auth/');
+    auth = location.pathname === '/auth' || location.pathname.startsWith('/auth/');
   const [settings, setSettings] = useState(false),
     [tools, setTools] = useState(false),
     [authTools, setAuthTools] = useState(false),
@@ -75,6 +75,9 @@ export default function App() {
     [lockError, setLockError] = useState(''),
     [initialLoadingExpired, setInitialLoadingExpired] = useState(performance.now() >= 5000);
   const content = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    document.title = `Cinch · ${t('moon')}`;
+  }, [locale.value]);
   function clearLock() {
     setLock(null);
     try {
@@ -133,7 +136,48 @@ export default function App() {
     window.addEventListener('cinch-lock-screen', openLock);
     return () => window.removeEventListener('cinch-lock-screen', openLock);
   }, []);
-  if (!session.ready) return initialLoadingExpired ? <PageSkeleton /> : <Loading />;
+  if (!session.ready) {
+    if (!initialLoadingExpired) return <Loading />;
+    return (
+      <div className="ambience">
+        <div className="studio">
+          <div className="device">
+            <header className={auth ? 'auth-topbar' : 'topbar'}>
+              <span className="workspace">
+                <img
+                  className="workspace-logo"
+                  src={p.dark ? '/go-cinch-white.svg' : '/go-cinch.svg'}
+                  alt=""
+                />
+                <span>Go Cinch Admin</span>
+              </span>
+              <span className="icon-button">
+                <Icon name="ellipsis" />
+              </span>
+            </header>
+            <div className={`app-scroll ${auth ? 'auth-content' : ''}`}>
+              <RouteSkeleton path={location.pathname} search={location.search} />
+              {!auth && p.footer && <Copyright />}
+            </div>
+            {!auth && (
+              <nav
+                className="dock glass"
+                aria-hidden="true"
+                {...({ inert: '' } as Record<string, string>)}
+              >
+                {['home', 'manage', 'security', 'mine'].map((key, index) => (
+                  <button disabled key={key}>
+                    <Icon name={['home', 'app', 'secured', 'user'][index]} size={20} />
+                    <span>{t(key)}</span>
+                  </button>
+                ))}
+              </nav>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
   const publicPage = ['/auth/login', '/auth/register'].includes(location.pathname);
   if (!session.accessToken && !publicPage)
     return (
@@ -180,13 +224,8 @@ export default function App() {
     ...modules.value,
     { path: '/profile', label: t('page.auth.profile'), icon: 'user' },
   ].filter((x) => x.label.toLowerCase().includes(query.toLowerCase()));
-  const routeSkeletonVariant = location.pathname.startsWith('/system/')
-    ? 'management'
-    : location.pathname.startsWith('/dashboard/')
-      ? 'overview'
-      : 'page';
   const routes = (
-    <Suspense fallback={<PageSkeleton variant={routeSkeletonVariant} />}>
+    <Suspense fallback={<RouteSkeleton path={location.pathname} search={location.search} />}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/auth" element={<Navigate to="/auth/login" replace />} />

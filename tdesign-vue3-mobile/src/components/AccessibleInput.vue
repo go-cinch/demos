@@ -15,12 +15,19 @@ const props = withDefaults(
   }>(),
   { clearable: undefined, loading: undefined },
 );
-const emit = defineEmits<{ 'update:modelValue': [value: string | number]; enter: [] }>();
+const emit = defineEmits<{ 'update:modelValue': [value: string | number]; enter: []; clear: [] }>();
 const control = ref<InstanceType<typeof Input>>();
 const attrs = useAttrs();
 const revealed = ref(false);
+const focused = ref(false);
+function leaveControl(event: FocusEvent) {
+  const root = control.value?.$el as HTMLElement | undefined;
+  focused.value =
+    !!root && event.relatedTarget instanceof Node && root.contains(event.relatedTarget);
+}
 function clearInput() {
   emit('update:modelValue', '');
+  emit('clear');
   (control.value?.$el as HTMLElement | undefined)?.querySelector('input')?.focus();
 }
 watch(
@@ -45,11 +52,13 @@ onUpdated(sync);
     :class="{ 'password-control': type === 'password' }"
     :type="type === 'password' && revealed ? 'text' : type"
     :disabled="disabled"
-    :clearable="loading === undefined && clearable"
+    :clearable="false"
     :value="modelValue"
     :autocomplete="autocomplete || 'off'"
     @change="emit('update:modelValue', $event)"
     @keydown.enter="emit('enter')"
+    @focusin="focused = true"
+    @focusout="leaveControl"
   >
     <template v-if="type === 'password'" #suffix>
       <button
@@ -63,18 +72,18 @@ onUpdated(sync);
         <Icon :name="revealed ? 'eye' : 'eye-off'" />
       </button>
     </template>
-    <template v-else-if="loading !== undefined" #suffix>
+    <template v-else-if="loading !== undefined || clearable" #suffix>
       <span class="input-loading-slot">
         <span v-if="loading" class="username-check-loading" role="status" :aria-label="t('loading')"
           ><t-loading theme="circular" size="20px" inherit-color aria-hidden="true"
         /></span>
         <button
-          v-else-if="clearable && String(modelValue ?? '').length && !disabled"
+          v-else-if="focused && clearable && String(modelValue ?? '').length && !disabled"
           type="button"
           class="input-clear"
-          tabindex="-1"
           :aria-label="t('clear')"
-          @mousedown.prevent
+          @pointerdown.prevent
+          @keydown.enter.stop
           @click="clearInput"
         >
           <span aria-hidden="true">×</span>

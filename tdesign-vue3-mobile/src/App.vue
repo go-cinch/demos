@@ -14,25 +14,21 @@ import Sheet from './components/Sheet.vue';
 import SettingsSheet from './components/SettingsSheet.vue';
 import Copyright from './components/Copyright.vue';
 import Field from './components/Field.vue';
-import PageSkeleton from './components/PageSkeleton.vue';
-import { routeLoading, routeSkeleton } from './router';
+import RouteSkeleton from './components/RouteSkeleton.vue';
+import { routeLoading, routeSkeleton, routeSkeletonTarget } from './router';
 const route = useRoute();
 const router = useRouter();
-const auth = computed(() => route.path.startsWith('/auth/'));
-const managementDetail = computed(() => route.path.startsWith('/system/'));
+const displayRoute = computed(() =>
+  routeSkeleton.value && routeSkeletonTarget.value ? routeSkeletonTarget.value : route,
+);
+const auth = computed(() => displayRoute.value.path.startsWith('/auth/'));
+const managementDetail = computed(() => displayRoute.value.path.startsWith('/system/'));
 const settings = ref(false);
 const authToolsOpen = ref(false);
 const authTools = ref<HTMLElement>();
 const toolsOpen = ref(false);
 const panel = ref('');
 const search = ref('');
-const routeSkeletonVariant = computed(() => {
-  if (route.path.startsWith('/system/')) return 'management';
-  if (route.path === '/dashboard/overview' && String(route.query.tab || 'home') === 'home')
-    return 'overview';
-  if (route.path === '/profile') return 'profile';
-  return 'page';
-});
 function closeAuthTools(event?: Event) {
   if (event && authTools.value?.contains(event.target as Node)) return;
   authToolsOpen.value = false;
@@ -72,11 +68,12 @@ watch(
   },
 );
 const active = computed(() =>
-  route.path === '/profile' || route.path === '/msg/inbox'
+  displayRoute.value.path === '/profile' || displayRoute.value.path === '/msg/inbox'
     ? 'mine'
-    : route.path.startsWith('/system/') || route.path === '/dashboard/workspace'
+    : displayRoute.value.path.startsWith('/system/') ||
+        displayRoute.value.path === '/dashboard/workspace'
       ? 'manage'
-      : String(route.query.tab || 'home'),
+      : String(displayRoute.value.query.tab || 'home'),
 );
 function navigate(value: string) {
   void router.push(
@@ -228,8 +225,14 @@ async function signout() {
           </div>
         </header>
         <main id="main" class="main auth-content">
-          <PageSkeleton v-if="routeSkeleton" />
-          <RouterView v-else />
+          <RouteSkeleton
+            v-if="routeSkeleton"
+            :path="displayRoute.path"
+            :query="displayRoute.query"
+          />
+          <RouterView v-slot="{ Component }"
+            ><component :is="Component" v-show="!routeSkeleton"
+          /></RouterView>
         </main>
       </div>
     </div>
@@ -264,8 +267,14 @@ async function signout() {
           </div>
         </header>
         <main id="main" class="main">
-          <PageSkeleton v-if="routeSkeleton" :variant="routeSkeletonVariant" />
-          <RouterView v-else :key="route.path" /><Copyright v-if="p.footer" />
+          <RouteSkeleton
+            v-if="routeSkeleton"
+            :path="displayRoute.path"
+            :query="displayRoute.query"
+          />
+          <RouterView v-slot="{ Component }"
+            ><component :is="Component" v-show="!routeSkeleton" :key="route.path" /></RouterView
+          ><Copyright v-if="p.footer" />
         </main>
         <nav class="bottom-nav glass" :aria-label="t('workspace')">
           <button

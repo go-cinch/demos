@@ -69,7 +69,15 @@ function pick(value: string) {
   suggestions.value = [];
   emit('search');
 }
-function blur() {
+function blur(_value: unknown, context?: { e: FocusEvent }) {
+  const target = context?.e.target;
+  const next = context?.e.relatedTarget;
+  if (
+    target instanceof Element &&
+    next instanceof Node &&
+    target.closest('.search-field')?.contains(next)
+  )
+    return;
   clearTimeout(blurTimer);
   blurTimer = setTimeout(() => {
     if (text.value.trim()) pick(text.value);
