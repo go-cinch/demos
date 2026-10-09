@@ -65,12 +65,12 @@
         "weather": "今日晴，20℃–32℃。"
       },
       "navigation": {
-        "accessManagement": "权限管理",
+        "accessManagement": "权限",
         "charts": "图表",
         "components": "组件",
         "dashboard": "仪表盘",
         "home": "首页",
-        "systemManagement": "系统管理"
+        "systemManagement": "系统"
       },
       "people": {
         "chris": "克里斯",

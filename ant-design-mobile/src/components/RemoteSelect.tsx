@@ -4,7 +4,8 @@ import { listResource, request } from '../lib/api';
 import { loadOptionPage } from '../lib/option-pages';
 import type { ResourceKind } from '../lib/types';
 import { t } from '../locales';
-import { Sheet, Icon, Loading, ErrorBox, NoData } from './UI';
+import { Sheet, Icon, ErrorBox, NoData } from './UI';
+import PageSkeleton from './PageSkeleton';
 export interface Option {
   value: string | number;
   label: string;
@@ -118,6 +119,8 @@ export default function RemoteSelect({
           setPage(1);
           setLoaded([]);
           setHasMore(false);
+          setBusy(!options);
+          setError('');
           setOpen(true);
         }}
       >
@@ -140,6 +143,7 @@ export default function RemoteSelect({
                   setPage(1);
                   setLoaded([]);
                   setHasMore(false);
+                  setBusy(!options);
                 }}
                 placeholder={t('searchOptions')}
                 aria-label={t('searchOptions')}
@@ -174,8 +178,8 @@ export default function RemoteSelect({
           ))}
         </div>
         <ErrorBox error={error} retry={() => setRetry((x) => x + 1)} />
-        {busy && <Loading />}
         <div role="listbox" aria-label={label} aria-multiselectable={multiple}>
+          {busy && !choices.length && <PageSkeleton variant="options" optionDetail={!!resource} />}
           {choices.map((item) => (
             <button
               key={item.value}

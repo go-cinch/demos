@@ -89,7 +89,7 @@ export default function ProfilePage() {
       </header>
       <ErrorBox error={infoError} />
       <section className="profile-card metal-card" aria-busy={infoLoading}>
-        {infoLoading ? (
+        {infoLoading && !session.user ? (
           <div className="profile-skeleton">
             <Skeleton.Title animated />
             <Skeleton.Title animated />
