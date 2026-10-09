@@ -193,7 +193,9 @@ export default function OverviewPage() {
               ].map((x) => (
                 <Link className="metric" key={x.status} to={`/system/user?status=${x.status}`}>
                   {loading[x.status === 1 ? 'active' : x.status === 0 ? 'pending' : 'locked'] ? (
-                    <Skeleton.Title animated className="metric-skeleton" />
+                    <strong className="skeleton-label" aria-hidden="true">
+                      0
+                    </strong>
                   ) : (
                     <strong>{x.value}</strong>
                   )}
@@ -215,7 +217,7 @@ export default function OverviewPage() {
               </div>
               <div className="queue card">
                 {loading.pending ? (
-                  <PageSkeleton variant="list" />
+                  <PageSkeleton variant="list" listKind="queue" rows={reviews.length || 1} />
                 ) : reviews.length ? (
                   reviews.map((u) => (
                     <Link
@@ -279,7 +281,7 @@ export default function OverviewPage() {
               </div>
               <section className="card recent-record-list" aria-busy={loading.recent}>
                 {loading.recent ? (
-                  <PageSkeleton variant="list" />
+                  <PageSkeleton variant="list" listKind="recent" rows={users.length || 5} />
                 ) : users.length ? (
                   users.map((user) => (
                     <Link

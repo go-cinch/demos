@@ -325,7 +325,7 @@ export default function MsgInboxPage() {
       <div className="results-region">
         <ErrorBox error={feed.error} retry={() => void feed.load()} />
         {feed.loading ? (
-          <PageSkeleton variant="list" />
+          <PageSkeleton variant="list" listKind="message" rows={feed.rows.length || 5} />
         ) : (
           <div className="message-list">
             {feed.rows.map((row) => (

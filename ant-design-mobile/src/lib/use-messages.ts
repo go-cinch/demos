@@ -22,7 +22,7 @@ export function useMessages(
     [size, setSize] = useState(20);
   const [type, setType] = useState(""),
     [status, setStatus] = useState(""),
-    [loading, setLoading] = useState(false),
+    [loading, setLoading] = useState(readable),
     [error, setPageError] = useState(""),
     [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState(false),
