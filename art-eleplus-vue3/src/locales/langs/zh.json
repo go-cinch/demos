@@ -274,10 +274,10 @@
       "pricing": "定价"
     },
     "article": {
-      "title": "文章管理",
+      "title": "文章",
       "articleList": "文章列表",
       "articleDetail": "文章详情",
-      "comment": "留言管理",
+      "comment": "留言",
       "articlePublish": "文章发布"
     },
     "result": {
@@ -308,15 +308,15 @@
       }
     },
     "system": {
-      "title": "系统管理",
-      "user": "用户管理",
-      "role": "角色管理",
-      "userGroup": "用户组管理",
-      "action": "权限管理",
+      "title": "系统",
+      "user": "用户",
+      "role": "角色",
+      "userGroup": "用户组",
+      "action": "权限",
       "dictionary": "数据字典",
-      "whitelist": "白名单管理",
+      "whitelist": "白名单",
       "userCenter": "个人中心",
-      "menu": "菜单管理",
+      "menu": "菜单",
       "nested": "嵌套菜单",
       "menu1": "菜单1",
       "menu2": "菜单2",
@@ -328,8 +328,8 @@
       "msg": "消息"
     },
     "safeguard": {
-      "title": "运维管理",
-      "server": "服务器管理"
+      "title": "运维",
+      "server": "服务器"
     },
     "plan": {
       "title": "版本计划",
