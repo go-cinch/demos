@@ -420,12 +420,23 @@ onBeforeUnmount(() => {
         <p>{{ error }}</p>
         <button @click="load">{{ tr('retry') }}</button>
       </div>
-      <PageSkeleton v-else-if="loading" variant="list" :density="density" />
+      <PageSkeleton
+        v-else-if="loading"
+        variant="list"
+        list-kind="sent"
+        :columns="visible"
+        :selecting="selecting"
+        :rows="rows.length || 5"
+        :density="density"
+      />
       <div v-else class="card record-list">
         <article v-for="row in rows" :key="row.id" class="record-wrap" :data-record-id="row.id">
           <div class="record">
             <t-checkbox
               v-if="selecting"
+              class="record-selection"
+              :block="false"
+              borderless
               role="checkbox"
               :tabindex="busy || loading ? -1 : 0"
               :aria-checked="checkedVisible.includes(row.id)"
@@ -498,7 +509,7 @@ onBeforeUnmount(() => {
       fixed-column="title"
     />
     <Sheet v-model="detailOpen" :title="tr('detail')"
-      ><PageSkeleton v-if="detailLoading" /><template v-else-if="selected"
+      ><PageSkeleton v-if="detailLoading" variant="message-detail" /><template v-else-if="selected"
         ><div class="detail-identity">
           <span class="avatar large"><Icon name="notification" :size="30" /></span>
           <h2>{{ selected.title }}</h2>

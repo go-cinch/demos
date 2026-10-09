@@ -289,7 +289,12 @@ onBeforeUnmount(() => {
             <Icon name="filter" :size="19" />
           </button>
         </div>
-        <div v-if="resource === 'user'" class="segmented" role="group" :aria-label="t('status')">
+        <div
+          v-if="resource === 'user'"
+          class="segmented status-segmented"
+          role="group"
+          :aria-label="t('status')"
+        >
           <button
             v-for="value in ['all', '1', '0', '2']"
             :key="value"
@@ -325,9 +330,9 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="expanded" class="search-actions">
           <button class="action-chip action-chip-quiet" @click="reset">
-            <span>{{ t('system.common.reset') }}</span></button
+            <Icon name="refresh" :size="14" /><span>{{ t('system.common.reset') }}</span></button
           ><button class="action-chip action-chip-primary" @click="search">
-            <span>{{ t('system.common.search') }}</span>
+            <Icon name="search" :size="14" /><span>{{ t('system.common.search') }}</span>
           </button>
         </div>
       </section>
@@ -339,7 +344,7 @@ onBeforeUnmount(() => {
             :aria-label="t('system.common.create')"
             @click="openEditor(null)"
           >
-            <Icon name="add" :size="20" /><span>{{
+            <Icon name="add" :size="16" /><span>{{
               t('createRecord', { entity: config.entity })
             }}</span>
           </button>
@@ -347,8 +352,9 @@ onBeforeUnmount(() => {
         <div class="selection-tools">
           <div class="selection-actions">
             <button
-              v-if="can(resource, 'delete') && records.length"
+              v-if="can(resource, 'delete') && (records.length || loading)"
               class="action-chip action-chip-quiet"
+              :disabled="loading"
               @click="
                 selecting = !selecting;
                 selected = [];
@@ -382,7 +388,15 @@ onBeforeUnmount(() => {
         <div v-if="error" class="form-error" role="alert">
           {{ error }}<button @click="load">{{ t('retry') }}</button>
         </div>
-        <PageSkeleton v-if="loading" variant="list" :density="density" />
+        <PageSkeleton
+          v-if="loading"
+          variant="list"
+          :density="density"
+          :resource="resource"
+          :columns="visibleColumns"
+          :rows="records.length || 5"
+          :selecting="selecting"
+        />
         <div v-else-if="!error" class="card record-list">
           <article
             v-for="item in records"
@@ -393,9 +407,17 @@ onBeforeUnmount(() => {
             <div class="record">
               <t-checkbox
                 v-if="selecting"
+                class="record-selection"
+                :block="false"
+                borderless
+                role="checkbox"
+                tabindex="0"
+                :aria-checked="selected.includes(item.id)"
                 :checked="selected.includes(item.id)"
                 :aria-label="`${t('select')} ${labelFor(item)}`"
                 @change="toggleSelected(item.id)"
+                @keydown.space.prevent="toggleSelected(item.id)"
+                @keydown.enter.prevent="toggleSelected(item.id)"
               /><button
                 class="record-open"
                 :aria-label="`${t('view')} ${labelFor(item)}`"

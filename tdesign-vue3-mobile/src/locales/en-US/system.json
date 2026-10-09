@@ -65,8 +65,8 @@
     "title": "Whitelist Management"
   },
   "dictionary": {
-    "entity": "Data Dictionary",
-    "title": "Data Dictionary Management"
+    "entity": "Dictionary",
+    "title": "Dictionary Management"
   },
   "common": {
     "actions": "Actions",
@@ -75,9 +75,9 @@
     "create": "Create",
     "edit": "Edit",
     "delete": "Delete",
-    "deleteSelected": "Delete Selected",
+    "deleteSelected": "Delete",
     "refresh": "Refresh",
-    "selectAll": "Select All",
+    "selectAll": "All",
     "selection": "Selection",
     "less": "Less",
     "more": "More",
