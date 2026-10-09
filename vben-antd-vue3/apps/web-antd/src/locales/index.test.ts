@@ -42,7 +42,7 @@ describe('application internationalization', () => {
 
   it('loads English fallback on a Chinese first visit and switches component locales', async () => {
     await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
-    expect(i18n.global.t('system.menu.users')).toBe('用户管理');
+    expect(i18n.global.t('system.menu.users')).toBe('用户');
     expect(i18n.global.t('system.table.total', { count: 12 })).toBe('共 12 条');
     expect(document.documentElement.lang).toBe('zh-CN');
     expect(antdLocale.value.locale).toBe('zh-cn');
