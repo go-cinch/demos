@@ -122,7 +122,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     ]
   },
   dictionary: {
-    title: 'Data Dictionary Management / 数据字典管理',
+    title: 'Dictionary Management / 数据字典管理',
     permission: 'system.dictionary',
     columns: [
       ['id', 'ID'],
