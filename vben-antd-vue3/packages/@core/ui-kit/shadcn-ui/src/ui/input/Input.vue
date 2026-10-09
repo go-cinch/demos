@@ -45,7 +45,6 @@ input {
     display: none;
   }
 
-  &::-webkit-credentials-auto-fill-button,
   &::-webkit-inner-spin-button,
   &::-webkit-outer-spin-button {
     display: none;

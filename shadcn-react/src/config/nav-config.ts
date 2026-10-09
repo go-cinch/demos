@@ -21,41 +21,41 @@ export const navGroups: NavGroup[] = [
     ]
   },
   {
-    label: 'System / 系统管理',
+    label: 'System / 系统',
     items: [
       {
-        title: 'Users / 用户管理',
+        title: 'Users / 用户',
         url: '/system/user',
         icon: 'teams',
         shortcut: ['s', 'u'],
         items: []
       },
       {
-        title: 'Roles / 角色管理',
+        title: 'Roles / 角色',
         url: '/system/role',
         icon: 'account',
         items: []
       },
       {
-        title: 'User Groups / 用户组管理',
+        title: 'User Groups / 用户组',
         url: '/system/user-group',
         icon: 'teams',
         items: []
       },
       {
-        title: 'Actions / 权限管理',
+        title: 'Actions / 权限',
         url: '/system/action',
         icon: 'code',
         items: []
       },
       {
-        title: 'Data Dictionary / 数据字典',
+        title: 'Dictionary / 数据字典',
         url: '/system/dictionary',
         icon: 'forms',
         items: []
       },
       {
-        title: 'Whitelist / 白名单管理',
+        title: 'Whitelist / 白名单',
         url: '/system/whitelist',
         icon: 'circleCheck',
         items: []

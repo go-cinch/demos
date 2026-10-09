@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
           {{ tr('retry') }}
         </button>
       </div>
-      <PageSkeleton v-if="loading" variant="list" />
+      <PageSkeleton v-if="loading" variant="list" list-kind="message" :rows="rows.length || 5" />
       <div v-else class="message-list">
         <article
           v-for="row in rows"

@@ -28,7 +28,7 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
     [total, setTotal] = useState(0),
     [page, setPage] = useState(1),
     [size, setSize] = useState(20),
-    [loading, setLoading] = useState(false),
+    [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [filters, setFilters] = useState<Record<string, unknown>>(() =>
@@ -167,11 +167,12 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
               onSearch={search}
             />
             {resource === 'user' && (
-              <div className="segmented">
+              <div className="segmented status-segmented" role="group" aria-label={t('status')}>
                 {['all', '1', '0', '2'].map((value) => (
                   <button
                     key={value}
                     className={status === value ? 'active' : ''}
+                    aria-pressed={status === value}
                     onClick={() => {
                       changeFilter('status', value === 'all' ? undefined : [Number(value)]);
                       search();
@@ -295,9 +296,10 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
             </ResultToolbar>
             <div className="selection-tools">
               <div className="selection-actions">
-                {can(resource, 'delete') && records.length > 0 && (
+                {can(resource, 'delete') && (records.length > 0 || loading) && (
                   <button
                     className="action-chip action-chip-quiet"
+                    disabled={loading}
                     onClick={() => {
                       setSelecting((v) => !v);
                       setSelected([]);
@@ -344,7 +346,13 @@ export default function ManagementPage({ resource }: { resource: ResourceKind })
             )}
             <ErrorBox error={error} retry={() => setRevision((v) => v + 1)} />
             {loading ? (
-              <PageSkeleton variant="list" />
+              <PageSkeleton
+                variant="list"
+                resource={resource}
+                rows={records.length || 5}
+                selecting={selecting}
+                columns={columns}
+              />
             ) : records.length ? (
               <div className="card record-list">
                 {records.map((r) => (

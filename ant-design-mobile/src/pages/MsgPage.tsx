@@ -228,7 +228,7 @@ function MsgManagementPage() {
           <>
             <ErrorBox error={m.error} retry={() => void m.load()} />
             {m.loading ? (
-              <PageSkeleton variant="list" />
+              <PageSkeleton variant="list" listKind="sent" columns={columns} selecting={selecting} rows={m.rows.length || 5} />
             ) : (
               <div className="card record-list">
                 {m.rows.map((row) => (
@@ -373,7 +373,7 @@ function MsgManagementPage() {
         }
       >
         {m.detailLoading ? (
-          <PageSkeleton />
+          <PageSkeleton variant="message-detail" />
         ) : (
           m.selected && (
             <>

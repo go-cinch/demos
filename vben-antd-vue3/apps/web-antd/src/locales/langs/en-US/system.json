@@ -65,8 +65,8 @@
     "title": "Whitelist Management"
   },
   "dictionary": {
-    "entity": "Data Dictionary",
-    "title": "Data Dictionary Management"
+    "entity": "Dictionary",
+    "title": "Dictionary Management"
   },
   "common": {
     "actions": "Actions",
@@ -165,6 +165,6 @@
     "groups": "User Groups",
     "actions": "Actions",
     "whitelist": "Whitelist",
-    "dictionary": "Data Dictionary"
+    "dictionary": "Dictionary"
   }
 }

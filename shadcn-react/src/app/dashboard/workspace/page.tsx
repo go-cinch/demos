@@ -80,7 +80,7 @@ export default function WorkspacePage() {
             </Link>
             <Link className='rounded-md border p-3 text-sm hover:bg-muted' href='/system/user'>
               <IconUsers className='mb-2 size-5' />
-              {pick('Users', '用户管理')}
+              {pick('Users', '用户')}
             </Link>
             <Link className='rounded-md border p-3 text-sm hover:bg-muted' href='/system/role'>
               <IconSettings className='mb-2 size-5' />
