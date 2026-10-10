@@ -1,5 +1,6 @@
 'use client';
 
+import { GoCinchLogo } from '@/components/go-cinch-logo';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,9 +109,7 @@ export default function AppSidebar() {
     <Sidebar collapsible='icon'>
       <SidebarHeader>
         <div className='flex h-10 items-center gap-2 px-2 font-semibold'>
-          <div className='flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
-            G
-          </div>
+          <GoCinchLogo className='size-8' />
           <span className='group-data-[collapsible=icon]:hidden'>Go Cinch Admin</span>
         </div>
       </SidebarHeader>
