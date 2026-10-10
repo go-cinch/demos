@@ -13,6 +13,8 @@
   interface Props {
     /** logo 大小 */
     size?: number | string
+    /** logo 所在区域的主题，默认跟随全局主题 */
+    theme?: string
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -21,6 +23,9 @@
 
   const settingStore = useSettingStore()
   const { isDark } = storeToRefs(settingStore)
-  const logoSource = computed(() => (isDark.value ? '/go-cinch-white.svg' : '/go-cinch.svg'))
+  const logoSource = computed(() => {
+    const dark = props.theme ? props.theme === 'dark' : isDark.value
+    return `${import.meta.env.BASE_URL}${dark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`
+  })
   const logoStyle = computed(() => ({ width: `${props.size}px` }))
 </script>

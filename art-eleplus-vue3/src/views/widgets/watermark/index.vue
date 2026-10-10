@@ -3,7 +3,7 @@
     <!-- 基础文字水印 -->
     <ElCard class="mb-7.5">
       <template #header>基础文字水印</template>
-      <ElWatermark content="Art Design Pro" :font="{ color: 'rgba(128, 128, 128, 0.2)' }">
+      <ElWatermark content="Go Cinch" :font="{ color: 'rgba(128, 128, 128, 0.2)' }">
         <div style="height: 200px"></div>
       </ElWatermark>
     </ElCard>
@@ -12,7 +12,7 @@
     <ElCard class="mb-7.5">
       <template #header>多行文字水印</template>
       <ElWatermark
-        :content="['Art Design Pro', '专注用户体验，视觉设计']"
+        :content="['Go Cinch', '专注用户体验，视觉设计']"
         :font="{ fontSize: 16, color: 'rgba(128, 128, 128, 0.2)' }"
       >
         <div style="height: 200px"></div>
@@ -22,7 +22,7 @@
     <!-- 图片水印 -->
     <ElCard class="mb-7.5">
       <template #header>图片水印</template>
-      <ElWatermark :image="watermarkImage" :opacity="0.2" :width="80" :height="20">
+      <ElWatermark :image="watermarkImage" :opacity="0.2" :width="64" :height="64">
         <div style="height: 200px"></div>
       </ElWatermark>
     </ElCard>
@@ -31,7 +31,7 @@
     <ElCard class="mb-7.5">
       <template #header>自定义样式水印</template>
       <ElWatermark
-        content="Art Design Pro"
+        content="Go Cinch"
         :font="{
           fontSize: 20,
           fontFamily: 'Arial',
@@ -63,7 +63,10 @@
   /**
    * 水印图片 URL
    */
-  const watermarkImage = ref('https://element-plus.org/images/element-plus-logo.svg')
+  const watermarkImage = computed(
+    () =>
+      `${import.meta.env.BASE_URL}${settingStore.isDark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`
+  )
 
   /**
    * 切换全局水印显示状态

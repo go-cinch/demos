@@ -11,7 +11,7 @@
       class="dual-menu-left"
       :style="{ width: dualMenuShowText ? '80px' : '64px', background: getMenuTheme.background }"
     >
-      <ArtLogo class="logo" @click="navigateToHome" />
+      <ArtLogo class="logo" :theme="getMenuTheme.theme" @click="navigateToHome" />
 
       <ElScrollbar style="height: calc(100% - 135px)">
         <ul>
@@ -77,7 +77,7 @@
           background: getMenuTheme.background
         }"
       >
-        <ArtLogo v-if="!isDualMenu" class="logo" />
+        <ArtLogo v-if="!isDualMenu" class="logo" :theme="getMenuTheme.theme" />
 
         <p
           :title="AppConfig.systemInfo.name"

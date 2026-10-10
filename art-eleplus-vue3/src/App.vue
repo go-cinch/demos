@@ -19,9 +19,24 @@
   import { toggleTransition } from './utils/ui/animation'
   import { checkStorageCompatibility } from './utils/storage'
   import { initializeTheme } from './hooks/core/useTheme'
+  import { useSettingStore } from './store/modules/setting'
 
   const userStore = useUserStore()
   const { language } = storeToRefs(userStore)
+  const settingStore = useSettingStore()
+
+  watch(
+    () => settingStore.isDark,
+    (dark) => {
+      document
+        .querySelector('link[rel="icon"][type="image/svg+xml"]')
+        ?.setAttribute(
+          'href',
+          `${import.meta.env.BASE_URL}${dark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`
+        )
+    },
+    { immediate: true }
+  )
 
   const locales = {
     zh: zh,
