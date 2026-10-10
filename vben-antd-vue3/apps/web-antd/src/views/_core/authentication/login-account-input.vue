@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref } from 'vue';
+import type { AutoCompleteProps } from 'ant-design-vue';
+
+import { computed, h, onActivated, onDeactivated, ref } from 'vue';
 
 import { X } from '@vben/icons';
 import { $t } from '@vben/locales';
@@ -17,6 +19,7 @@ defineOptions({ inheritAttrs: false });
 const emit = defineEmits<{ select: [] }>();
 const model = defineModel<string>({ default: '' });
 const active = ref(true);
+const open = ref(false);
 const history = ref(readLoginAccountHistory());
 
 onActivated(() => {
@@ -26,6 +29,7 @@ onDeactivated(() => {
   // AutoComplete teleports its popup outside the cached login page. Destroy
   // the control so an old open state cannot reopen it after the form resets.
   active.value = false;
+  open.value = false;
 });
 
 const options = computed(() => {
@@ -55,31 +59,76 @@ function remove(account: string) {
 function clear() {
   clearLoginAccountHistory();
   history.value = [];
+  open.value = false;
 }
+
+function selectAccount(value: unknown) {
+  if (typeof value !== 'string') return;
+  // Keep the form value and the combobox's displayed search text in sync.
+  model.value = value;
+  open.value = false;
+  emit('select');
+}
+
+const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
+  h('div', [
+    history.value.length
+      ? h(
+          'div',
+          {
+            class:
+              'text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs',
+          },
+          [
+            h('span', $t('authentication.accountHistory')),
+            h(
+              'button',
+              {
+                type: 'button',
+                class:
+                  'hover:text-primary focus-visible:ring-ring shrink-0 rounded px-1 py-1 focus-visible:outline-none focus-visible:ring-2',
+                onMousedown: (event: MouseEvent) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                },
+                onClick: (event: MouseEvent) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  clear();
+                },
+                onKeydown: (event: KeyboardEvent) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.stopPropagation();
+                  }
+                },
+              },
+              $t('authentication.clearAccountHistory'),
+            ),
+          ],
+        )
+      : null,
+    dropdown?.menuNode,
+  ]);
 </script>
 
 <template>
   <div class="w-full">
-    <div
-      v-if="history.length"
-      class="text-muted-foreground mb-1 flex items-center justify-between text-xs"
-    >
-      <span>{{ $t('authentication.accountHistory') }}</span>
-      <button type="button" class="hover:text-primary" @click="clear">
-        {{ $t('authentication.clearAccountHistory') }}
-      </button>
-    </div>
     <AutoComplete
       v-if="active"
       v-model:value="model"
+      :search-value="model"
+      :open="open"
       :disabled="Boolean($attrs.disabled)"
       :default-active-first-option="false"
       :filter-option="false"
+      :dropdown-render="renderDropdown"
       :options="options"
+      :not-found-content="history.length ? $t('common.noData') : undefined"
       :show-action="['focus']"
       class="w-full"
       @focus="history = readLoginAccountHistory()"
-      @select="emit('select')"
+      @dropdown-visible-change="open = $event"
+      @select="selectAccount"
     >
       <Input
         v-bind="$attrs"
@@ -91,13 +140,20 @@ function clear() {
       />
       <template #option="{ value }">
         <div class="flex min-w-0 items-center justify-between gap-2">
-          <span class="min-w-0 break-all">
+          <button
+            type="button"
+            class="min-w-0 flex-1 cursor-pointer break-all text-start"
+            @mousedown.prevent
+            @click.stop="selectAccount(value)"
+            @keydown.enter.stop
+            @keydown.space.stop
+          >
             <span
               v-for="(part, index) in segments(String(value))"
               :key="index"
               :class="{ 'font-bold text-primary': part.matched }"
               >{{ part.text }}</span>
-          </span>
+          </button>
           <button
             :aria-label="
               $t('authentication.removeAccountHistory', { account: value })
