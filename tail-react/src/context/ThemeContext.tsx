@@ -33,6 +33,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (isInitialized) {
       localStorage.setItem("theme", theme);
+      document.querySelector('link[rel="icon"][type="image/svg+xml"]')?.setAttribute(
+        "href",
+        `${import.meta.env.BASE_URL}images/logo/${theme === "dark" ? "go-cinch-white.svg" : "go-cinch.svg"}`,
+      );
       if (theme === "dark") {
         document.documentElement.classList.add("dark");
         document.documentElement.setAttribute("data-color-scheme", "dark");

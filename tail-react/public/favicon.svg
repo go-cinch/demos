@@ -1,5 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" shape-rendering="geometricPrecision" role="img" aria-labelledby="title">
-  <title id="title">Go Cinch</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" shape-rendering="geometricPrecision">
+  <title>Go Cinch</title>
+  <style>
+    .dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      .light { display: none; }
+      .dark { display: inline; }
+    }
+  </style>
   <defs>
   <filter id="edge-smoothing" filterUnits="userSpaceOnUse" x="0" y="0" width="128" height="128" color-interpolation-filters="sRGB">
     <feGaussianBlur stdDeviation="0.12"/>
@@ -22,9 +29,14 @@
       <path fill="#fff" filter="url(#edge-smoothing)" d="M108 33 76 14C68 9.25 60 9.2 52 14L22 32C16.666667 35.2 14 40.333333 14 47V81C14 87.666667 16.666667 92.8 22 96L52 114C60 118.8 68 118.8 76 114L106 96C111.333333 92.8 114 87.666667 114 81V59H67L55 80H90V81L64 97 38 81V47L64 31 96 50Z"/>
     </mask>
   </defs>
+  <g class="light">
   <g mask="url(#silhouette)">
     <path fill="url(#ribbon)" d="M0 0H128V128H0Z"/>
     <path fill="url(#edge)" d="M90 80H128V128H0V72H14L38 81 64 97 90 81Z"/>
     <path fill="url(#fold)" d="M67 59H128V80H55Z"/>
+  </g>
+  </g>
+  <g class="dark">
+  <path filter="url(#edge-smoothing)" fill="#FFFFFF" d="M108 33 76 14C68 9.25 60 9.2 52 14L22 32C16.666667 35.2 14 40.333333 14 47V81C14 87.666667 16.666667 92.8 22 96L52 114C60 118.8 68 118.8 76 114L106 96C111.333333 92.8 114 87.666667 114 81V59H67L55 80H90V81L64 97 38 81V47L64 31 96 50Z"/>
   </g>
 </svg>

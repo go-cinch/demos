@@ -1,44 +1,30 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M0 8.42105C0 3.77023 3.77023 0 8.42105 0H23.5789C28.2298 0 32 3.77023 32 8.42105V23.5789C32 28.2298 28.2298 32 23.5789 32H8.42105C3.77023 32 0 28.2298 0 23.5789V8.42105Z" fill="#465FFF"/>
-<g filter="url(#filter0_d_1884_16361)">
-<path d="M8.42383 8.42152C8.42383 7.49135 9.17787 6.7373 10.108 6.7373C11.0382 6.7373 11.7922 7.49135 11.7922 8.42152V23.5794C11.7922 24.5096 11.0382 25.2636 10.108 25.2636C9.17787 25.2636 8.42383 24.5096 8.42383 23.5794V8.42152Z" fill="white"/>
-</g>
-<g filter="url(#filter1_d_1884_16361)">
-<path d="M14.7422 15.1569C14.7422 14.2267 15.4962 13.4727 16.4264 13.4727C17.3566 13.4727 18.1106 14.2267 18.1106 15.1569V23.5779C18.1106 24.5081 17.3566 25.2621 16.4264 25.2621C15.4962 25.2621 14.7422 24.5081 14.7422 23.5779V15.1569Z" fill="white" fill-opacity="0.9" shape-rendering="crispEdges"/>
-</g>
-<g filter="url(#filter2_d_1884_16361)">
-<path d="M21.0547 10.9459C21.0547 10.0158 21.8087 9.26172 22.7389 9.26172C23.6691 9.26172 24.4231 10.0158 24.4231 10.9459V23.5775C24.4231 24.5077 23.6691 25.2617 22.7389 25.2617C21.8087 25.2617 21.0547 24.5077 21.0547 23.5775V10.9459Z" fill="white" fill-opacity="0.7" shape-rendering="crispEdges"/>
-</g>
-<defs>
-<filter id="filter0_d_1884_16361" x="7.42383" y="6.2373" width="5.36841" height="20.5264" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-<feFlood flood-opacity="0" result="BackgroundImageFix"/>
-<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-<feOffset dy="0.5"/>
-<feGaussianBlur stdDeviation="0.5"/>
-<feComposite in2="hardAlpha" operator="out"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.12 0"/>
-<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1884_16361"/>
-<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1884_16361" result="shape"/>
-</filter>
-<filter id="filter1_d_1884_16361" x="13.7422" y="12.9727" width="5.36841" height="13.7891" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-<feFlood flood-opacity="0" result="BackgroundImageFix"/>
-<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-<feOffset dy="0.5"/>
-<feGaussianBlur stdDeviation="0.5"/>
-<feComposite in2="hardAlpha" operator="out"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.12 0"/>
-<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1884_16361"/>
-<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1884_16361" result="shape"/>
-</filter>
-<filter id="filter2_d_1884_16361" x="20.0547" y="8.76172" width="5.36841" height="18" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-<feFlood flood-opacity="0" result="BackgroundImageFix"/>
-<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-<feOffset dy="0.5"/>
-<feGaussianBlur stdDeviation="0.5"/>
-<feComposite in2="hardAlpha" operator="out"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.12 0"/>
-<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1884_16361"/>
-<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1884_16361" result="shape"/>
-</filter>
-</defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" shape-rendering="geometricPrecision" role="img" aria-labelledby="title">
+  <title id="title">Go Cinch</title>
+  <defs>
+  <filter id="edge-smoothing" filterUnits="userSpaceOnUse" x="0" y="0" width="128" height="128" color-interpolation-filters="sRGB">
+    <feGaussianBlur stdDeviation="0.12"/>
+  </filter>
+
+    <linearGradient id="ribbon" x1="30" y1="18" x2="93" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#32D5E8"/>
+      <stop offset=".46" stop-color="#398BFA"/>
+      <stop offset="1" stop-color="#7060E8"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="69" y1="59" x2="107" y2="95" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#54E2EB"/>
+      <stop offset="1" stop-color="#278FEF"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="88" y1="80" x2="107" y2="97" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#245CD0"/>
+      <stop offset="1" stop-color="#5263DB"/>
+    </linearGradient>
+    <mask id="silhouette" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128" mask-type="alpha">
+      <path fill="#fff" filter="url(#edge-smoothing)" d="M108 33 76 14C68 9.25 60 9.2 52 14L22 32C16.666667 35.2 14 40.333333 14 47V81C14 87.666667 16.666667 92.8 22 96L52 114C60 118.8 68 118.8 76 114L106 96C111.333333 92.8 114 87.666667 114 81V59H67L55 80H90V81L64 97 38 81V47L64 31 96 50Z"/>
+    </mask>
+  </defs>
+  <g mask="url(#silhouette)">
+    <path fill="url(#ribbon)" d="M0 0H128V128H0Z"/>
+    <path fill="url(#edge)" d="M90 80H128V128H0V72H14L38 81 64 97 90 81Z"/>
+    <path fill="url(#fold)" d="M67 59H128V80H55Z"/>
+  </g>
 </svg>
