@@ -13,7 +13,7 @@ import { consumeRegistrationLogin } from '@/features/auth/registration-login';
 import { isValidPassword, isValidUsername } from '@/features/auth/validation';
 import { useLocale } from '@/features/i18n/locale-context';
 import { IconLayoutSidebarLeftExpand, IconLayoutSidebarRightExpand } from '@tabler/icons-react';
-import Image from 'next/image';
+import { GoCinchLogo } from '@/components/go-cinch-logo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -323,22 +323,7 @@ export function AuthShell({
       <section className='relative z-10 flex w-full flex-1 items-center justify-center lg:w-1/2'>
         <div className='w-full max-w-md py-8'>
           <div className='mb-5 flex min-w-0 items-center justify-center gap-3 px-2'>
-            <Image
-              src='/go-cinch.svg'
-              width={48}
-              height={48}
-              alt='Go Cinch'
-              className='size-12 shrink-0 dark:hidden'
-              priority
-            />
-            <Image
-              src='/go-cinch-white.svg'
-              width={48}
-              height={48}
-              alt='Go Cinch'
-              className='hidden size-12 shrink-0 dark:block'
-              priority
-            />
+            <GoCinchLogo size={48} className='size-12' priority />
             <div className='min-w-0 leading-tight font-semibold tracking-tight'>
               <span className='text-base sm:hidden'>Go Cinch</span>
               <span className='hidden text-lg sm:inline xl:hidden'>Go Cinch Admin</span>

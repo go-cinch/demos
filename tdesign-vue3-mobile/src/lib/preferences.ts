@@ -34,6 +34,12 @@ watch(
   () => {
     writeStored('cinch-mobile-preferences', preferences);
     document.documentElement.dataset.theme = preferences.dark ? 'dark' : 'light';
+    document
+      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      ?.setAttribute(
+        'href',
+        `${import.meta.env.BASE_URL}${preferences.dark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`,
+      );
     document.documentElement.setAttribute('theme-mode', preferences.dark ? 'dark' : 'light');
     document.documentElement.dataset.reduced = String(preferences.reducedTransparency);
     document.documentElement.dataset.accent = preferences.accent;
