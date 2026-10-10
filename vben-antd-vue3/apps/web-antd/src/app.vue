@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 import { useAntdDesignTokens } from '@vben/hooks';
 import { preferences, usePreferences } from '@vben/preferences';
@@ -12,6 +12,19 @@ defineOptions({ name: 'App' });
 
 const { isDark } = usePreferences();
 const { tokens } = useAntdDesignTokens();
+
+watch(
+  isDark,
+  (dark) => {
+    document
+      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      ?.setAttribute(
+        'href',
+        `${import.meta.env.BASE_URL}${dark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`,
+      );
+  },
+  { immediate: true },
+);
 
 const tokenTheme = computed(() => {
   const algorithm = isDark.value
