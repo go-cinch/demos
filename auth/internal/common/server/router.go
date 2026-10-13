@@ -4,6 +4,7 @@ import (
 	"auth/internal/common/apperror"
 	"errors"
 
+	"auth/internal/common/auditctx"
 	"log/slog"
 
 	"net/http"
@@ -29,7 +30,7 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 	r := chi.NewRouter()
 	policy := redact.New(cfg.Redact.Keys...)
 	r.Use(TraceID(cfg.Server.Name, policy))
-	r.Use(Locale(), AccessLog(policy), Recoverer())
+	r.Use(Locale(), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, apperror.NotFound)
@@ -94,6 +95,8 @@ func authenticationMiddleware(authenticator *authn.Manager, authorizer modules.H
 			}
 			return
 		}
+		identity, _ := authn.FromContext(request.Context())
+		auditctx.Identity(request.Context(), identity.UserID, identity.Username)
 		if authorizer != nil && request.URL.Path != permissionEndpoint {
 			allowed, err := authorizer.AuthorizeHTTP(request.Context(), request.Method, request.URL.Path)
 			if err != nil {

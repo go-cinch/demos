@@ -32,6 +32,7 @@ func (m *Module) HTTP() http.Handler {
 	r.Get("/unread-count", m.unreadCount)
 	r.Post("/", m.create)
 	r.Get("/sent", m.listSent)
+	r.Get("/sent/summary", m.sentSummary)
 	r.Get("/sent/{id}", m.getSent)
 	r.Delete("/sent/{id}", m.deleteSent)
 	r.Get("/recipient-option", m.recipientOptions)
@@ -254,7 +255,7 @@ func (m *Module) unreadCount(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusUnauthorized, apperror.Unauthorized)
 		return
 	}
-	count, err := m.UnreadCount(r.Context(), identity.UserID)
+	value, err := m.Status(r.Context(), identity.UserID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalid), errors.Is(err, ErrRecipient):
@@ -267,9 +268,7 @@ func (m *Module) unreadCount(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	server.WriteOK(w, struct {
-		Count int64 `json:"count"`
-	}{Count: count})
+	server.WriteOK(w, value)
 }
 
 func (m *Module) recipientOptions(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +371,11 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	input := ListInput{Type: query.Get("type"), Scope: query.Get("scope")}
+	input := ListInput{Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
+	if len(query["q"]) > 1 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
 	for _, key := range []string{"type", "scope"} {
 		if values, provided := query[key]; provided && (len(values) != 1 || values[0] == "") {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
@@ -416,6 +419,22 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
+		return
+	}
+	server.WriteOK(w, value)
+}
+
+func (m *Module) sentSummary(w http.ResponseWriter, r *http.Request) {
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || len(query) != 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	value, err := m.SentSummary(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "summarize msg failed: "+err.Error())
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
 	server.WriteOK(w, value)

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
 	"auth/internal/common/server"
 	"auth/internal/modules"
@@ -623,7 +624,11 @@ func (m *Module) login(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
+	auditctx.Identity(r.Context(), 0, strings.TrimSpace(input.Username))
 	loginResult, err := m.Login(r.Context(), input)
+	if err != nil {
+		auditctx.Error(r.Context(), apperror.Code(err))
+	}
 	if errors.Is(err, ErrSliderCaptchaRequired) {
 		server.WriteError(w, r, http.StatusBadRequest, ErrSliderCaptchaRequired)
 		return

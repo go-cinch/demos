@@ -11,19 +11,21 @@ func (a *Application) generatedModules() ([]modules.HTTPModule, []modules.GRPCMo
 	var grpcModules []modules.GRPCModule
 	module0 := a.actionModule
 	httpModules = append(httpModules, module0)
-	module1 := a.authModule
+	module1 := a.auditModule
 	httpModules = append(httpModules, module1)
-	module2 := a.dictionaryModule
+	module2 := a.authModule
 	httpModules = append(httpModules, module2)
-	module3 := a.msgModule
+	module3 := a.dictionaryModule
 	httpModules = append(httpModules, module3)
-	module4 := a.roleModule
+	module4 := a.msgModule
 	httpModules = append(httpModules, module4)
-	module5 := a.userModule
+	module5 := a.roleModule
 	httpModules = append(httpModules, module5)
-	module6 := a.groupModule
+	module6 := a.userModule
 	httpModules = append(httpModules, module6)
-	module7 := a.whitelistModule
+	module7 := a.groupModule
 	httpModules = append(httpModules, module7)
+	module8 := a.whitelistModule
+	httpModules = append(httpModules, module8)
 	return httpModules, grpcModules
 }

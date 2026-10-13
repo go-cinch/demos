@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"auth/internal/common/auditctx"
 	"context"
 	"google.golang.org/grpc"
 	"net/http"
@@ -47,4 +48,10 @@ type AnonymousHTTPModule interface {
 // GRPCModule exposes RPC services without requiring an HTTP route or Name.
 type GRPCModule interface {
 	GRPC(grpc.ServiceRegistrar)
+}
+
+// HTTPAuditRecorder classifies business targets and persists sanitized audit events.
+type HTTPAuditRecorder interface {
+	AuditTarget(method, path string) auditctx.Target
+	RecordHTTP(context.Context, auditctx.Event) error
 }

@@ -15,6 +15,7 @@ import (
 	"auth/internal/common/authn"
 	"auth/internal/common/idempotency"
 	actionmodule "auth/internal/modules/action"
+	auditmodule "auth/internal/modules/audit"
 	authmodule "auth/internal/modules/auth"
 	dictionarymodule "auth/internal/modules/dictionary"
 	msgmodule "auth/internal/modules/msg"
@@ -35,8 +36,9 @@ import (
 )
 
 type Application struct {
-	msgModule  *msgmodule.Module
-	pagination pagination.Limits
+	auditModule *auditmodule.Module
+	msgModule   *msgmodule.Module
+	pagination  pagination.Limits
 
 	authenticator    *authn.Manager
 	idempotencyKeys  idempotency.Store
@@ -247,6 +249,7 @@ func authSwitchesFromConfig(cfg *config.Config) authmodule.Switches {
 func (a *Application) wireBusinessModules() {
 	// Build in dependency order; generatedModules registers these same instances.
 	// The dictionary is initialized earlier because captcha construction needs it.
+	a.auditModule = auditmodule.New(a.db, a.pagination)
 	a.actionModule = actionmodule.New(a.db, a.pagination, a.authSwitches.ProtectSuper)
 	a.roleModule = rolemodule.New(a.db, a.pagination, a.actionModule, a.authSwitches.ProtectSuper)
 	a.userModule = usermodule.New(a.db, a.pagination, a.credentials, a.passwordGuard, a.actionModule, a.roleModule, a.authSwitches)

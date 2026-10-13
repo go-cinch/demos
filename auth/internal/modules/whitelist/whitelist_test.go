@@ -13,7 +13,7 @@ import (
 	"github.com/lib/pq"
 )
 
-var whitelistTestTime = time.Date(2026, 9, 18, 3, 0, 0, 0, time.UTC)
+var whitelistTestTime = time.Date(2026, 9, 18, 3, 0, 0, 0, time.UTC).UnixMilli()
 
 func newTestModule(t *testing.T) (*Module, sqlmock.Sqlmock) {
 	t.Helper()

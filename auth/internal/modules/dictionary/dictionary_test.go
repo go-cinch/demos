@@ -19,7 +19,7 @@ import (
 	"github.com/lib/pq"
 )
 
-var dictionaryTestTime = time.Date(2026, 9, 22, 13, 0, 0, 0, time.UTC)
+var dictionaryTestTime = time.Date(2026, 9, 22, 13, 0, 0, 0, time.UTC).UnixMilli()
 
 type trackingValueCache struct {
 	ValueCache

@@ -25,6 +25,7 @@ func (*Module) Idempotent() bool { return true }
 func (m *Module) HTTP() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", m.list)
+	r.Get("/summary", m.summary)
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
 	r.Patch("/{id}", m.update)
@@ -171,12 +172,28 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	query := r.URL.Query()
 	input := ListUserGroupsInput{Name: query.Get("name"), Word: query.Get("word"), ActionCode: query.Get("action_code")}
+	if values, provided := query["has_permissions"]; provided {
+		if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		parsed, _ := strconv.ParseBool(values[0])
+		input.HasPermissions = &parsed
+	}
+	if values, provided := query["has_members"]; provided {
+		if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		parsed, _ := strconv.ParseBool(values[0])
+		input.HasMembers = &parsed
+	}
 	if values, provided := query["p"]; provided {
 		if len(values) != 1 {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.Page)
@@ -206,6 +223,22 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 	value, err := m.List(r.Context(), input)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "list user groups failed: "+err.Error())
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+		return
+	}
+	server.WriteOK(w, value)
+}
+
+func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || len(query) != 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	value, err := m.Summary(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "summarize usergroup failed: "+err.Error())
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

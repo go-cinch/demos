@@ -2,6 +2,7 @@ package server
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/i18n"
 	"encoding/json"
 	"log/slog"
@@ -43,6 +44,7 @@ func ErrorMessage(r *http.Request, err error) string {
 }
 
 func WriteError(w http.ResponseWriter, r *http.Request, status int, err error) {
+	auditctx.Error(r.Context(), apperror.Code(err))
 	w.Header().Set("Content-Language", i18n.Locale(r.Context(), r.Header.Get("Accept-Language")))
 	WriteJSON(w, status, ErrorResponse{ErrorCode: apperror.Code(err), Msg: ErrorMessage(r, err)})
 }
