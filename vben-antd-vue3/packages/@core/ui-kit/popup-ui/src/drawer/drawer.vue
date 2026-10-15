@@ -214,7 +214,7 @@ const getForceMount = computed(() => {
         v-if="showHeader"
         :class="
           cn(
-            'flex! flex-row items-center justify-between border-b px-6 py-5',
+            'flex! flex-row items-center justify-between gap-3 border-b px-6 py-5',
             headerClass,
             {
               'px-4 py-3': closable,
@@ -223,7 +223,7 @@ const getForceMount = computed(() => {
           )
         "
       >
-        <div class="flex items-center">
+        <div class="flex min-w-0 flex-1 items-center">
           <SheetClose
             v-if="closable && closeIconPlacement === 'left'"
             as-child
@@ -242,20 +242,22 @@ const getForceMount = computed(() => {
             decorative
             orientation="vertical"
           />
-          <SheetTitle v-if="title" class="text-left">
-            <slot name="title">
-              {{ title }}
+          <div class="min-w-0 flex-1 text-left">
+            <SheetTitle v-if="title" class="text-left">
+              <slot name="title">
+                {{ title }}
 
-              <VbenHelpTooltip v-if="titleTooltip" trigger-class="pb-1">
-                {{ titleTooltip }}
-              </VbenHelpTooltip>
-            </slot>
-          </SheetTitle>
-          <SheetDescription v-if="description" class="mt-1 text-xs">
-            <slot name="description">
-              {{ description }}
-            </slot>
-          </SheetDescription>
+                <VbenHelpTooltip v-if="titleTooltip" trigger-class="pb-1">
+                  {{ titleTooltip }}
+                </VbenHelpTooltip>
+              </slot>
+            </SheetTitle>
+            <SheetDescription v-if="description" class="mt-1 text-xs">
+              <slot name="description">
+                {{ description }}
+              </slot>
+            </SheetDescription>
+          </div>
         </div>
 
         <VisuallyHidden v-if="!title || !description">
@@ -263,7 +265,7 @@ const getForceMount = computed(() => {
           <SheetDescription v-if="!description" />
         </VisuallyHidden>
 
-        <div class="flex-center">
+        <div class="flex-center shrink-0">
           <slot name="extra"></slot>
           <SheetClose
             v-if="closable && closeIconPlacement === 'right'"

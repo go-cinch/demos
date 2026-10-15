@@ -177,3 +177,19 @@ describe('updateUser', () => {
     expect(request.mock.calls[0]?.[1]?.data).not.toHaveProperty('password');
   });
 });
+
+
+describe('bounded user group requests', () => {
+  it('selects lightweight fields on list, create and update, and pages members separately', async () => {
+    const { listUserGroups, listUserGroupMembers, createUserGroup, updateUserGroup } = await import('./index');
+    const f = 'actions,member_count,member_preview';
+    await listUserGroups({ p: 1, s: 20 });
+    expect(get).toHaveBeenLastCalledWith('/user-group', { params: { p: 1, s: 20, f } });
+    await listUserGroupMembers(7, { p: 2, s: 20, q: 'reader' });
+    expect(get).toHaveBeenLastCalledWith('/user-group/7/member', { params: { p: 2, s: 20, q: 'reader' } });
+    await createUserGroup('create-group', { name: 'Group', word: 'group', user_ids: [] });
+    expect(post).toHaveBeenLastCalledWith('/user-group', { name: 'Group', word: 'group', user_ids: [] }, { headers: { 'x-idempotent': 'create-group' }, params: { f } });
+    await updateUserGroup(7, { add_user_ids: [1001], remove_user_ids: [1] });
+    expect(request).toHaveBeenLastCalledWith('/user-group/7', { data: { add_user_ids: [1001], remove_user_ids: [1] }, method: 'PATCH', params: { f } });
+  });
+});

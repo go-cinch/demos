@@ -41,6 +41,7 @@ const style = computed(() => {
   const { gap } = props;
   return {
     '--gap': `${gap}px`,
+    '--tab-radius': 'min(var(--gap), var(--radius))',
   };
 });
 
@@ -109,7 +110,7 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
           :modal="false"
           item-class="pr-6"
         >
-          <div class="relative size-full px-1">
+          <div class="relative flex size-full items-center px-1">
             <!-- divider -->
             <div
               v-if="i !== 0 && tab.key !== active"
@@ -120,19 +121,17 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
               class="tabs-chrome__background absolute z-[-1] size-full px-[calc(var(--gap)-1px)] py-0 transition-opacity duration-150"
             >
               <div
-                class="tabs-chrome__background-content h-full rounded-tl-(--gap) rounded-tr-(--gap) duration-150 group-[.is-active]:bg-primary/15 group-[.is-active]:dark:bg-accent"
+                class="tabs-chrome__background-content h-full rounded-t-(--tab-radius) duration-150 group-[.is-active]:bg-primary/15 group-[.is-active]:dark:bg-accent"
               ></div>
               <svg
                 class="tabs-chrome__background-before absolute bottom-0 -left-px fill-transparent transition-all duration-150 group-[.is-active]:fill-primary/15 group-[.is-active]:dark:fill-accent"
-                height="7"
-                width="7"
+                viewBox="0 0 7 7"
               >
                 <path d="M 0 7 A 7 7 0 0 0 7 0 L 7 7 Z" />
               </svg>
               <svg
                 class="tabs-chrome__background-after absolute -right-px bottom-0 fill-transparent transition-all duration-150 group-[.is-active]:fill-primary/15 group-[.is-active]:dark:fill-accent"
-                height="7"
-                width="7"
+                viewBox="0 0 7 7"
               >
                 <path d="M 0 0 A 7 7 0 0 0 7 7 L 0 7 Z" />
               </svg>
@@ -140,7 +139,8 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
 
             <!-- extra -->
             <div
-              class="tabs-chrome__extra absolute top-1/2 right-(--gap) z-3 flex h-4 items-center translate-y-[-50%]"
+              :class="!tab.affixTab && tabsView.length > 1 && tab.closable ? 'ml-4' : 'ml-0 group-hover:ml-4 group-focus-within:ml-4'"
+              class="tabs-chrome__extra relative z-3 mr-[calc(var(--gap)*2)] flex h-4 shrink-0 items-center transition-[margin] duration-200"
             >
               <!-- pin-icon -->
               <button
@@ -175,12 +175,7 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
 
             <!-- tab-item-main -->
             <div
-              :class="
-                tab.affixTab
-                  ? 'pr-0 group-hover:pr-4 group-focus-within:pr-4'
-                  : 'pr-4 group-hover:pr-8 group-focus-within:pr-8'
-              "
-              class="tabs-chrome__item-main z-2 mx-[calc(var(--gap)*2)] my-0 flex h-full items-center overflow-hidden rounded-tl-[5px] rounded-tr-[5px] pl-2 text-accent-foreground transition-all duration-200 ease-out group-[.is-active]:text-primary group-[.is-active]:dark:text-accent-foreground"
+              class="tabs-chrome__item-main z-2 order-first my-0 ml-[calc(var(--gap)*2)] flex h-full shrink-0 items-center overflow-hidden rounded-t-[calc(var(--radius)*0.625)] pl-2 text-accent-foreground group-[.is-active]:text-primary group-[.is-active]:dark:text-accent-foreground"
             >
               <VbenIcon
                 v-if="showIcon"
@@ -200,6 +195,18 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
 </template>
 
 <style scoped>
+.tabs-chrome__background-before,
+.tabs-chrome__background-after {
+  width: var(--tab-radius);
+  height: var(--tab-radius);
+}
+.tabs-chrome__background-before {
+  left: calc(var(--gap) - 1px - var(--tab-radius));
+}
+.tabs-chrome__background-after {
+  right: calc(var(--gap) - 1px - var(--tab-radius));
+}
+
 @reference "@vben/tailwind-config/theme";
 
 .tabs-chrome__item:not(.dragging) {

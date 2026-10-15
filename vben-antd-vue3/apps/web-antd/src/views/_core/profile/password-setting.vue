@@ -159,7 +159,7 @@ async function handleSubmit(values: Recordable<any>) {
 <template>
   <ProfilePasswordSetting
     ref="passwordSettingRef"
-    class="w-full lg:w-1/2 xl:w-1/3"
+    class="w-full max-w-xl"
     :form-schema="formSchema"
     :loading="submitting"
     @submit="handleSubmit"

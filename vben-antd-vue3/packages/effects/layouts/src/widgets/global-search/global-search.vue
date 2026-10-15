@@ -149,6 +149,7 @@ defineExpose({
     </Modal>
     <div
       v-if="showButton"
+      data-testid="global-search-trigger"
       class="group flex h-8 cursor-pointer items-center gap-3 rounded-2xl border-none bg-none px-2 py-0.5 outline-hidden md:bg-accent"
       @click="toggleOpen()"
     >

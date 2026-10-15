@@ -100,7 +100,6 @@
     "bordered": "Bordered",
     "striped": "Striped Rows",
     "sticky": "Sticky Header",
-    "stickyHint": "Keep column headers visible while scrolling",
     "total": "{count} records"
   },
   "status": {
@@ -127,10 +126,6 @@
     "removeHistory": "Remove {value} from history"
   },
   "hints": {
-    "actionGroup": "Select an existing action group or enter a new group name.",
-    "action": "Search by permission name or key (for example, User Read or user.read), or open the list to browse.",
-    "role": "Search by role name or key, or open the list to browse.",
-    "user": "Search by username or user code, or open the list to browse.",
     "createGroup": "Create “{name}”"
   },
   "messages": {

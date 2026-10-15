@@ -7,7 +7,7 @@
   &.boxed {
     padding: 10px;
     border: 1px solid hsl(var(--border));
-    border-radius: 4px;
+    border-radius: calc(var(--radius) * 0.5);
   }
 
   .vjs-key {
@@ -71,7 +71,7 @@
     cursor: pointer;
     user-select: none;
     background-color: hsl(var(--secondary));
-    border-radius: 3px;
+    border-radius: calc(var(--radius) * 0.375);
     opacity: 0;
     transition: opacity 0.2s;
 

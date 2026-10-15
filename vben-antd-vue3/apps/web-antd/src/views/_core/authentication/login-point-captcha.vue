@@ -3,14 +3,16 @@ import type { CaptchaPoint } from '@vben/common-ui';
 
 import type { AuthApi } from '#/api';
 
-import { $t } from '#/locales';
-
 import { onBeforeUnmount, ref, watch } from 'vue';
 
 import { PointSelectionCaptcha } from '@vben/common-ui';
 import { CircleCheckBig, LockKeyhole } from '@vben/icons';
 
 import { Popover } from 'ant-design-vue';
+
+import { isBadGatewayError } from '#/api/request-error';
+import { vSkeleton } from '#/directives/skeleton';
+import { $t } from '#/locales';
 
 defineOptions({ name: 'LoginPointCaptcha' });
 
@@ -31,11 +33,13 @@ const selectedPoints = ref<AuthApi.CaptchaPoint[]>([]);
 const selectionComplete = ref(false);
 const refreshing = ref(false);
 const verificationFailed = ref(false);
+const gatewayFailed = ref(false);
 const verifying = ref(false);
 const panelOpen = ref(false);
 let failureTimer: ReturnType<typeof setTimeout> | undefined;
 
 function clearVerificationFailure() {
+  gatewayFailed.value = false;
   verificationFailed.value = false;
   if (failureTimer) {
     clearTimeout(failureTimer);
@@ -89,14 +93,23 @@ async function handlePointsChange(points: CaptchaPoint[]) {
     resetSelection();
     showVerificationFailure();
     panelOpen.value = true;
-  } catch {
+  } catch (error) {
     resetSelection();
+    if (isBadGatewayError(error)) {
+      clearVerificationFailure();
+      gatewayFailed.value = true;
+      panelOpen.value = false;
+      return;
+    }
     showVerificationFailure();
     panelOpen.value = true;
     try {
       await props.onRefresh();
-    } catch {
-      // The request layer reports network and server errors.
+    } catch (error) {
+      if (isBadGatewayError(error)) {
+        clearVerificationFailure();
+        gatewayFailed.value = true;
+      }
     }
   } finally {
     verifying.value = false;
@@ -110,6 +123,8 @@ async function handleRefresh() {
   refreshing.value = true;
   try {
     await props.onRefresh();
+  } catch (error) {
+    gatewayFailed.value = isBadGatewayError(error);
   } finally {
     refreshing.value = false;
   }
@@ -136,10 +151,10 @@ function handleOpenChange(open: boolean) {
   >
     <template #content>
       <div
+        v-skeleton="refreshing || verifying"
         class="captcha-panel relative rounded-sm"
         :class="{
           'captcha-panel-error': verificationFailed,
-          'pointer-events-none opacity-70': refreshing || verifying,
         }"
       >
         <PointSelectionCaptcha
@@ -160,7 +175,7 @@ function handleOpenChange(open: boolean) {
       :aria-expanded="panelOpen"
       class="captcha-trigger group relative flex h-10 w-full items-center overflow-hidden rounded-md border bg-background-deep px-3 text-sm transition-all duration-300"
       :class="
-        verificationFailed
+        (verificationFailed || gatewayFailed)
           ? 'border-red-500 bg-red-500/10 text-red-500'
           : selectionComplete
             ? 'captcha-trigger-success border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.16)]'
@@ -183,8 +198,10 @@ function handleOpenChange(open: boolean) {
             ? $t('app.captcha.passed')
             : verifying
               ? $t('app.captcha.checking')
-              : verificationFailed
-                ? $t('app.captcha.failed')
+              : gatewayFailed
+                ? $t('app.errors.serverLost')
+                : verificationFailed
+                  ? $t('app.captcha.failed')
                 : panelOpen
                   ? $t('app.captcha.progress')
                   : $t('app.captcha.start')

@@ -22,6 +22,23 @@
   }
 }
 
+/* Keep action progress after the label, including async confirmation buttons.
+   Include the leaving icon so Ant's width transition keeps the same layout. */
+.ant-btn.ant-btn:has(> .ant-btn-loading-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-btn > .ant-btn-loading-icon {
+  flex-shrink: 0;
+  order: 1;
+}
+
+.ant-btn.ant-btn:not(.ant-btn-icon-only) > .ant-btn-loading-icon > .anticon {
+  margin-inline: 8px 0;
+}
+
 .ant-tag {
   > svg {
     display: inline-block;

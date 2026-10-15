@@ -9,9 +9,12 @@ import { Notification } from '@vben/layouts';
 import { useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
-import { Button, Modal, Spin } from 'ant-design-vue';
+import { Button, Modal } from 'ant-design-vue';
 
+import { messageAttention, visitMessages } from '#/api/message-attention';
 import { msgApi, msgChanged } from '#/api/msg';
+import MessageTypeIcon from '#/components/message-type-icon.vue';
+import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 import MessageHistory from '#/views/msg/history.vue';
 
@@ -30,16 +33,17 @@ const detailLoading = ref(false);
 let generation = 0;
 let detailGeneration = 0;
 let disposed = false;
+function syncSeen() { count.value = messageAttention.count(Number(userStore.userInfo?.userId)); }
 let timer: ReturnType<typeof setInterval>;
 
 const notifications = computed(() =>
-  rows.value.map((item) => ({
+  (loading.value && !rows.value.length ? Array.from({ length: 4 }, (_, index) => ({ id: -index - 1, published_at: 0, read_at: null, summary: '────────────────', title: '────────', type: 'system' })) : rows.value).map((item) => ({
     id: item.id,
     avatar: '',
-    avatarName: userStore.userInfo?.username || '',
+    type: item.type,
     date: formatDateTime(item.published_at),
     isRead: item.read_at !== null,
-    message: item.content,
+    message: item.summary ?? '',
     title: item.title,
   })),
 );
@@ -51,9 +55,9 @@ async function refresh() {
   if (loadList) loading.value = true;
   await Promise.all([
     msgApi
-      .count()
+      .count(Number(userStore.userInfo?.userId))
       .then((result) => {
-        if (current === generation) count.value = result.count;
+        if (current === generation) { messageAttention.update(result); count.value = messageAttention.count(Number(userStore.userInfo?.userId)); };
       })
       .catch(() => {
         if (current === generation) count.value = null;
@@ -61,10 +65,10 @@ async function refresh() {
     ...(loadList
       ? [
           msgApi
-            .list(false, { p: 1, s: 10 })
+            .list(false, { p: 1, s: 5 })
             .then((result) => {
               if (current === generation) {
-                rows.value = result.items.slice(0, 10);
+                rows.value = result.items.slice(0, 5);
                 error.value = false;
               }
             })
@@ -81,7 +85,7 @@ async function refresh() {
 }
 function onOpenChange(value: boolean) {
   open.value = value;
-  if (value) void refresh();
+  if (value) { visitMessages(Number(userStore.userInfo?.userId)); void refresh(); }
 }
 async function mutate(action: () => Promise<unknown>) {
   if (busy.value) return;
@@ -125,7 +129,7 @@ async function openDetail(id: number | string) {
   if (busy.value || loading.value) return;
   const current = ++detailGeneration;
   popup.value?.close();
-  selected.value = undefined;
+  selected.value = rows.value.find((row) => row.id === Number(id));
   detailOpen.value = true;
   detailLoading.value = true;
   try {
@@ -145,6 +149,8 @@ watch(detailOpen, (value) => {
 onMounted(() => {
   void refresh();
   timer = setInterval(refresh, 30000);
+  window.addEventListener('cinch-msg-seen', syncSeen);
+  window.addEventListener('storage', syncSeen);
   window.addEventListener('cinch-msg-changed', refresh);
   document.addEventListener('visibilitychange', refresh);
 });
@@ -153,6 +159,8 @@ onBeforeUnmount(() => {
   generation++;
   detailGeneration++;
   clearInterval(timer);
+  window.removeEventListener('cinch-msg-seen', syncSeen);
+  window.removeEventListener('storage', syncSeen);
   window.removeEventListener('cinch-msg-changed', refresh);
   document.removeEventListener('visibilitychange', refresh);
 });
@@ -163,6 +171,7 @@ onBeforeUnmount(() => {
     ref="popup"
     :dot="(count ?? 0) > 0"
     :notifications="notifications"
+    :loading="loading"
     :disabled="busy || loading || error"
     :trigger-label="$t('msg.inbox')"
     @open-change="onOpenChange"
@@ -176,11 +185,11 @@ onBeforeUnmount(() => {
     @on-click="(item) => openDetail(item.id)"
     @view-all="historyOpen = true"
   >
+    <template #avatar="{ item }">
+      <MessageTypeIcon :type="item.type" />
+    </template>
     <template #empty>
-      <div v-if="loading" class="flex items-center gap-2" role="status">
-        <Spin size="small" />{{ $t('msg.loading') }}
-      </div>
-      <div v-else-if="error" class="flex flex-col items-center gap-2" role="alert">
+      <div v-if="error" class="flex flex-col items-center gap-2" role="alert">
         <span>{{ $t('msg.error') }}</span>
         <Button type="link" @click="refresh">{{ $t('msg.retry') }}</Button>
       </div>
@@ -205,10 +214,7 @@ onBeforeUnmount(() => {
   </Notification>
   <MessageHistory v-model:open="historyOpen" />
   <Modal v-model:open="detailOpen" :title="$t('msg.detail')" :width="560" :footer="null">
-    <div v-if="detailLoading" class="flex min-h-32 items-center justify-center" role="status">
-      <Spin :tip="$t('msg.loading')" />
-    </div>
-    <template v-else-if="selected">
+    <div v-if="selected" v-skeleton="detailLoading" class="message-detail-viewport">
       <h3 class="mb-2 text-base font-semibold break-words">
         {{ selected.title }}
       </h3>
@@ -218,9 +224,13 @@ onBeforeUnmount(() => {
       <p class="max-h-96 overflow-auto whitespace-pre-wrap break-words">
         {{ selected.content }}
       </p>
-    </template>
+    </div>
     <div class="mt-4 flex justify-end">
       <Button @click="detailOpen = false">{{ $t('msg.close') }}</Button>
     </div>
   </Modal>
 </template>
+
+<style scoped>
+.message-detail-viewport { height: min(420px, 60vh); overflow: auto; scrollbar-gutter: stable; }
+</style>

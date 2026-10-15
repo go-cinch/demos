@@ -1,6 +1,14 @@
-import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts';
 import {
+  BarChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  RadarChart,
+} from 'echarts/charts';
+import {
+  VisualMapComponent,
   DatasetComponent,
+  DataZoomComponent,
   GraphicComponent,
   GridComponent,
   LegendComponent,
@@ -18,6 +26,9 @@ import {
 import { CanvasRenderer } from 'echarts/renderers';
 
 echarts.use([
+  DataZoomComponent,
+  HeatmapChart,
+  VisualMapComponent,
   TitleComponent,
   PieChart,
   RadarChart,

@@ -172,6 +172,11 @@ async function handleSubmit(params: Recordable<any>) {
     ref="loginFormRef"
     :form-schema="formSchema"
     :loading="authStore.loginLoading"
+    :title="`${$t('app.journey.title')} 👋🏻`"
+    :sub-title="$t('app.journey.description')"
+    :submit-button-text="
+      authStore.loginEntering ? $t('app.journey.entering') : ''
+    "
     :show-code-login="false"
     :show-qrcode-login="false"
     :show-third-party-login="false"

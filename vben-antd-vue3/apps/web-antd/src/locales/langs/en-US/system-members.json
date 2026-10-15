@@ -1,0 +1,6 @@
+{
+  "viewAll": "View all {count} members",
+  "remove": "Remove",
+  "changes": "Pending: add {added}, remove {removed}",
+  "count": "{count} members"
+}

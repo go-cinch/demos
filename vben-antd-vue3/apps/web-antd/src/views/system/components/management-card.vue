@@ -7,7 +7,7 @@ import { Card } from 'ant-design-vue';
 <style scoped>
 .system-section-card.ant-card {
   border-color: hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 :deep(.ant-table-cell) {

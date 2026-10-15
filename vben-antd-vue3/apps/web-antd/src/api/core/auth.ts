@@ -8,7 +8,7 @@ import {
   authPublicRequestClient,
   authRequestClient,
   authSessionRequestClient,
-  authSilentPublicRequestClient,
+  authVerificationRequestClient,
 } from '#/api/request';
 
 export namespace AuthApi {
@@ -194,7 +194,7 @@ export async function verifyLoginCaptchaApi(
   captchaId: string,
   captchaPoints: AuthApi.CaptchaPoint[],
 ) {
-  return authSilentPublicRequestClient.post<AuthApi.PointCaptchaVerificationResult>(
+  return authVerificationRequestClient.post<AuthApi.PointCaptchaVerificationResult>(
     '/auth/pub/captcha/verify',
     {
       captcha_id: captchaId,
@@ -204,9 +204,9 @@ export async function verifyLoginCaptchaApi(
   );
 }
 
-/** Resolve the verification mode for the current username without showing background-request errors. */
+/** Resolve the verification mode for the current username while reporting gateway outages. */
 export async function getLoginVerificationApi(username: string) {
-  return authSilentPublicRequestClient.get<AuthApi.LoginVerificationResult>(
+  return authVerificationRequestClient.get<AuthApi.LoginVerificationResult>(
     '/auth/pub/login/verification',
     { params: { username } },
   );
@@ -266,7 +266,7 @@ export async function createSliderCaptchaChallengeApi(
   purpose: 'login' | 'register',
   username: string,
 ) {
-  return authSilentPublicRequestClient.post<AuthApi.SliderCaptchaChallenge>(
+  return authVerificationRequestClient.post<AuthApi.SliderCaptchaChallenge>(
     '/auth/pub/slider/challenge',
     { purpose, username },
   );
@@ -275,7 +275,7 @@ export async function createSliderCaptchaChallengeApi(
 export async function verifySliderCaptchaApi(
   data: AuthApi.SliderCaptchaVerification,
 ) {
-  return authSilentPublicRequestClient.post<{ proof: string }>(
+  return authVerificationRequestClient.post<{ proof: string }>(
     '/auth/pub/slider/verify',
     data,
   );

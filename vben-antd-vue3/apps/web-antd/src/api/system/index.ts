@@ -8,6 +8,18 @@ export interface PageParams {
   [key: string]: boolean | number | string | undefined;
 }
 
+type FieldNames<F extends string> = F extends `${infer First},${infer Rest}`
+  ? First | FieldNames<Rest>
+  : F;
+export type SelectedRecord<T, F extends string> = string extends F
+  ? Partial<T>
+  : Pick<T, Extract<FieldNames<F>, keyof T>>;
+
+interface ListApi<T> {
+  <F extends string>(params: PageParams & { f: F }): Promise<PageResult<SelectedRecord<T, F>>>;
+  (params?: PageParams): Promise<PageResult<T>>;
+}
+
 export interface PageResult<T> {
   items: T[];
   p: number;
@@ -67,12 +79,14 @@ export interface UserSummary {
 
 export interface UserGroupRecord {
   action_codes: string[];
-  actions: ActionRecord[];
+  actions?: ActionRecord[];
   created_at: number;
   id: number;
   name: string;
   updated_at: number;
-  users: UserSummary[];
+  users?: UserSummary[]
+  member_count?: number;
+  member_preview?: UserSummary[];
   word: string;
 }
 
@@ -134,6 +148,8 @@ interface UpdateUserRequest extends Omit<UserPayload, 'password'> {
 }
 
 export interface UserGroupPayload {
+  add_user_ids?: number[];
+  remove_user_ids?: number[];
   action_codes?: string[];
   name?: string;
   user_ids?: number[];
@@ -174,7 +190,7 @@ async function remove(resource: string, ids: number[]) {
   await authRequestClient.delete<unknown>(`/${resource}/${ids.join(',')}`);
 }
 
-export const listActions = (params: PageParams = {}) =>
+export const listActions: ListApi<ActionRecord> = (params: PageParams = {}) =>
   list<ActionRecord>('action', params);
 export const listActionGroups = (keyword = '') =>
   authRequestClient.get<ActionGroupResult>('/action/group', {
@@ -186,7 +202,7 @@ export const updateAction = (id: number, data: ActionPayload) =>
   update<ActionRecord, ActionPayload>('action', id, data);
 export const deleteActions = (ids: number[]) => remove('action', ids);
 
-export const listRoles = (params: PageParams = {}) =>
+export const listRoles: ListApi<RoleRecord> = (params: PageParams = {}) =>
   list<RoleRecord>('role', params);
 export const createRole = (idempotencyKey: string, data: RolePayload) =>
   create<RoleRecord, RolePayload>('role', idempotencyKey, data);
@@ -194,7 +210,7 @@ export const updateRole = (id: number, data: RolePayload) =>
   update<RoleRecord, RolePayload>('role', id, data);
 export const deleteRoles = (ids: number[]) => remove('role', ids);
 
-export const listUsers = (params: PageParams = {}) =>
+export const listUsers: ListApi<UserRecord> = (params: PageParams = {}) =>
   list<UserRecord>('user', params);
 export const createUser = async (idempotencyKey: string, data: UserPayload) => {
   const username = data.username?.trim();
@@ -224,18 +240,22 @@ export const updateUser = async (id: number, data: UserPayload) => {
 };
 export const deleteUsers = (ids: number[]) => remove('user', ids);
 
-export const listUserGroups = (params: PageParams = {}) =>
-  list<UserGroupRecord>('user-group', params);
-export const createUserGroup = (
-  idempotencyKey: string,
-  data: UserGroupPayload,
-) =>
-  create<UserGroupRecord, UserGroupPayload>('user-group', idempotencyKey, data);
+const groupFields = 'actions,member_count,member_preview';
+export const listUserGroups: ListApi<UserGroupRecord> = (params: PageParams = {}) =>
+  list<UserGroupRecord>('user-group', { f: groupFields, ...params });
+export const listUserGroupMembers = (id: number, params: PageParams = {}) =>
+  authRequestClient.get<PageResult<UserSummary>>(`/user-group/${id}/member`, { params });
+export const createUserGroup = (idempotencyKey: string, data: UserGroupPayload) =>
+  authRequestClient.post<UserGroupRecord>('/user-group', data, {
+    headers: { 'x-idempotent': idempotencyKey }, params: { f: groupFields },
+  });
 export const updateUserGroup = (id: number, data: UserGroupPayload) =>
-  update<UserGroupRecord, UserGroupPayload>('user-group', id, data);
+  authRequestClient.request<UserGroupRecord>(`/user-group/${id}`, {
+    data, method: 'PATCH', params: { f: groupFields },
+  });
 export const deleteUserGroups = (ids: number[]) => remove('user-group', ids);
 
-export const listWhitelists = (params: PageParams = {}) =>
+export const listWhitelists: ListApi<WhitelistRecord> = (params: PageParams = {}) =>
   list<WhitelistRecord>('whitelist', params);
 export const createWhitelist = (
   idempotencyKey: string,
@@ -246,7 +266,7 @@ export const updateWhitelist = (id: number, data: WhitelistPayload) =>
   update<WhitelistRecord, WhitelistPayload>('whitelist', id, data);
 export const deleteWhitelists = (ids: number[]) => remove('whitelist', ids);
 
-export const listDictionaries = (params: PageParams = {}) =>
+export const listDictionaries: ListApi<DictionaryRecord> = (params: PageParams = {}) =>
   list<DictionaryRecord>('dictionary', params);
 export const createDictionary = (
   idempotencyKey: string,

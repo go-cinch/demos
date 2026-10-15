@@ -23,7 +23,10 @@
     "start": "Click to start verification"
   },
   "errors": {
-    "failed": "Request failed. Please try again later."
+    "failed": "Request failed. Please try again later.",
+    "serverLost": "The server seems to be lost~",
+    "statisticsLoad": "Unable to load statistics. Please retry.",
+    "dataLoad": "Unable to load data. Please retry."
   },
   "resetPassword": {
     "title": "Reset password",
@@ -31,5 +34,10 @@
     "submit": "Reset and continue",
     "logout": "Sign out",
     "success": "Password reset successfully"
+  },
+  "journey": {
+    "title": "Welcome ashore",
+    "description": "Sign in to Go Cinch and pick up where you left off",
+    "entering": "Signed in. Taking you in…"
   }
 }

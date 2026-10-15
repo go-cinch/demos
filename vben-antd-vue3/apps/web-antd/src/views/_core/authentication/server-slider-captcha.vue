@@ -6,6 +6,8 @@ import { nextTick, ref, useTemplateRef } from 'vue';
 import { SliderCaptcha } from '@vben/common-ui';
 
 import { createSliderCaptchaChallengeApi, verifySliderCaptchaApi } from '#/api';
+import { isBadGatewayError } from '#/api/request-error';
+import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
 const props = defineProps<{
@@ -27,11 +29,13 @@ const errorMessage = ref('');
 let challengePromise:
   | ReturnType<typeof createSliderCaptchaChallengeApi>
   | undefined;
+let challengeFailure: unknown;
 let startedAt = 0;
 let tracks: Array<{ t: number; x: number }> = [];
 
 function handleStart() {
   errorMessage.value = '';
+  challengeFailure = undefined;
   modelValue.value = '';
   verified.value = false;
   startedAt = performance.now();
@@ -40,7 +44,13 @@ function handleStart() {
     props.purpose,
     props.username,
   );
-  void challengePromise.catch(() => undefined);
+  const currentChallenge = challengePromise;
+  void currentChallenge.catch((error) => {
+    if (challengePromise === currentChallenge && isBadGatewayError(error)) {
+      challengeFailure = error;
+      errorMessage.value = $t('app.errors.serverLost');
+    }
+  });
 }
 
 function handleMove(data: SliderRotateVerifyPassingData) {
@@ -52,6 +62,11 @@ function handleMove(data: SliderRotateVerifyPassingData) {
 }
 
 async function handleEnd() {
+  if (isBadGatewayError(challengeFailure)) {
+    errorMessage.value = $t('app.errors.serverLost');
+    reset(false);
+    return;
+  }
   const root = rootRef.value;
   const action = root?.querySelector<HTMLElement>('[name="captcha-action"]');
   const width = Math.max(
@@ -99,8 +114,8 @@ async function handleEnd() {
     pending.value = false;
     verified.value = true;
     sliderRef.value?.showPassedAtEnd();
-  } catch {
-    errorMessage.value = $t('app.captcha.sliderFailed');
+  } catch (error) {
+    errorMessage.value = $t(isBadGatewayError(error) ? 'app.errors.serverLost' : 'app.captcha.sliderFailed');
     reset(false);
   } finally {
     pending.value = false;
@@ -110,6 +125,7 @@ async function handleEnd() {
 
 function reset(clearError: boolean) {
   if (clearError) errorMessage.value = '';
+  challengeFailure = undefined;
   modelValue.value = '';
   verified.value = false;
   pending.value = false;
@@ -127,7 +143,7 @@ defineExpose({ resume });
 </script>
 
 <template>
-  <div ref="rootRef" class="w-full">
+  <div v-skeleton="pending" ref="rootRef" class="relative w-full">
     <SliderCaptcha
       ref="sliderRef"
       v-model="verified"
@@ -138,7 +154,7 @@ defineExpose({ resume });
       @move="handleMove"
       @start="handleStart"
     />
-    <p v-if="errorMessage" class="mt-1 text-sm text-destructive" role="alert">
+    <p v-if="errorMessage" class="absolute mt-1 text-sm leading-5 text-destructive" role="alert">
       {{ errorMessage }}
     </p>
   </div>

@@ -26,6 +26,7 @@ import {
 import { $t } from '#/locales';
 
 import { recordLoginAccount } from './login-account-history';
+import { playLoginTransition } from './login-transition';
 
 interface RegistrationLoginCredentials {
   password: string;
@@ -55,6 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
 
   const loginLoading = ref(false);
+  const loginEntering = ref(false);
   const passwordResetRequired = ref(false);
   const loginCaptcha = ref<AuthApi.PointCaptchaChallenge>();
   let loginCaptchaUsername = '';
@@ -134,6 +136,8 @@ export const useAuthStore = defineStore('auth', () => {
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
         } else {
+          loginEntering.value = true;
+          await playLoginTransition();
           onSuccess
             ? await onSuccess?.()
             : await router.push(
@@ -161,6 +165,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } finally {
       loginLoading.value = false;
+      loginEntering.value = false;
     }
 
     return {
@@ -278,6 +283,7 @@ export const useAuthStore = defineStore('auth', () => {
     acceptSession(await resetPasswordApi(newPassword));
     accessStore.setIsAccessChecked(false);
     const info = await fetchUserInfo();
+    await playLoginTransition();
     notification.success({ message: $t('app.resetPassword.success') });
     await router.replace(info.homePath || preferences.app.defaultHomePath);
   }
@@ -286,6 +292,7 @@ export const useAuthStore = defineStore('auth', () => {
     pendingRegistrationLogin = null;
     passwordResetRequired.value = false;
     loginLoading.value = false;
+    loginEntering.value = false;
     resetLoginVerification();
   }
 
@@ -300,6 +307,7 @@ export const useAuthStore = defineStore('auth', () => {
     fetchUserInfo,
     loginCaptcha,
     loginLoading,
+    loginEntering,
     logout,
     refreshLoginCaptcha,
     resetLoginVerification,

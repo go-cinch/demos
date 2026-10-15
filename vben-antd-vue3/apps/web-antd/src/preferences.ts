@@ -8,7 +8,6 @@ interface WebAntdPreferencesExtension {
   defaultTableSize: number;
   enableFormFullscreen: boolean;
   reportTitle: string;
-  tenantMode: 'multi' | 'single';
 }
 
 export const applicationWidgetPreferences = {
@@ -51,6 +50,9 @@ export const overridesPreferences = defineOverridesPreferences({
     icpLink: '',
   },
   logo: applicationBrandingPreferences.logo,
+  theme: {
+    radius: '0.25',
+  },
   widget: applicationWidgetPreferences,
 });
 
@@ -65,22 +67,6 @@ export const preferencesExtension =
         key: 'enableFormFullscreen',
         label: 'preferences.antd.fields.enableFormFullscreen.label',
         tip: 'preferences.antd.fields.enableFormFullscreen.tip',
-      },
-      {
-        component: 'select',
-        defaultValue: 'single',
-        key: 'tenantMode',
-        label: 'preferences.antd.fields.tenantMode.label',
-        options: [
-          {
-            label: 'preferences.antd.fields.tenantMode.options.single.label',
-            value: 'single',
-          },
-          {
-            label: 'preferences.antd.fields.tenantMode.options.multi.label',
-            value: 'multi',
-          },
-        ],
       },
       {
         component: 'number',

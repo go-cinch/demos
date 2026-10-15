@@ -15,18 +15,36 @@ import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
-import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
+import {
+  isBadGatewayError,
+  normalizeGatewayError,
+  requestErrorMessage,
+} from './request-error';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+
+// Share the window across clients so concurrent page requests produce one toast.
+const recentErrorMessages = new Map<string, number>();
+const errorMessageWindowMs = 500;
+
+function showRequestErrorMessage(content: string) {
+  const now = performance.now();
+  for (const [text, shownAt] of recentErrorMessages) {
+    if (now - shownAt >= errorMessageWindowMs) recentErrorMessages.delete(text);
+  }
+  if (recentErrorMessages.has(content)) return;
+  recentErrorMessages.set(content, now);
+  message.error(content);
+}
 
 function createRequestClient(
   baseURL: string,
   options?: RequestClientOptions,
   enableReAuthentication: boolean = true,
-  enableErrorMessage: boolean = true,
+  enableErrorMessage: boolean | 'gateway' = true,
 ) {
   const client = new RequestClient({
     ...options,
@@ -90,6 +108,11 @@ function createRequestClient(
     }),
   );
 
+  // Normalize gateway failures for both notifying and silent clients.
+  client.addResponseInterceptor({
+    rejected: (error) => Promise.reject(normalizeGatewayError(error)),
+  });
+
   // token过期的处理
   if (enableReAuthentication) {
     client.addResponseInterceptor(
@@ -118,16 +141,8 @@ function createRequestClient(
   if (enableErrorMessage) {
     client.addResponseInterceptor(
       errorMessageResponseInterceptor((msg: string, error) => {
-        // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
-        // 当前mock接口返回的错误字段是 error 或者 message
-        const responseData = error?.response?.data ?? {};
-        const errorMessage = [
-          responseData?.msg,
-          responseData?.message,
-          responseData?.error,
-        ].find((value) => typeof value === 'string' && value.trim());
-        // Backend business errors are localized using the request language.
-        message.error(errorMessage || msg || $t('app.errors.failed'));
+        if (enableErrorMessage === 'gateway' && !isBadGatewayError(error)) return;
+        showRequestErrorMessage(requestErrorMessage(error, msg));
       }),
     );
   }
@@ -163,6 +178,16 @@ export const authSilentPublicRequestClient = createRequestClient(
   },
   false,
   false,
+);
+
+/** Verification failures stay inline; an unavailable gateway must remain visible. */
+export const authVerificationRequestClient = createRequestClient(
+  authApiURL,
+  {
+    responseReturn: 'body',
+  },
+  false,
+  'gateway',
 );
 
 export const authSessionRequestClient = authSilentPublicRequestClient;

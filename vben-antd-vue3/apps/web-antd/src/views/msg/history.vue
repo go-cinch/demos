@@ -1,41 +1,23 @@
 <script setup lang="ts">
-import { Modal } from 'ant-design-vue';
+import { onDeactivated } from 'vue';
 
-import { $t } from '#/locales';
+import { Drawer } from 'ant-design-vue';
 
-import MessageTable from './message-table.vue';
+import InboxFeed from './inbox-feed.vue';
+
 const open = defineModel<boolean>('open', { default: false });
+onDeactivated(() => { open.value = false; });
 </script>
 <template>
-  <Modal
+  <Drawer
     v-model:open="open"
-    :title="$t('msg.history')"
-    :footer="null"
-    width="100vw"
-    wrap-class-name="msg-history-fullscreen"
-    :mask-closable="false"
-    :destroy-on-close="true"
+    placement="right"
+    width="min(600px, 100vw)"
+    :closable="false"
+    :body-style="{ padding: 0, overflow: 'hidden' }"
+    destroy-on-close
+    root-class-name="message-history-drawer"
   >
-    <MessageTable v-if="open" embedded @close="open = false" />
-  </Modal>
+    <InboxFeed v-if="open" @close="open = false" />
+  </Drawer>
 </template>
-<style>
-.msg-history-fullscreen .ant-modal {
-  top: 0;
-  width: 100vw;
-  max-width: 100vw;
-  margin: 0;
-  padding-bottom: 0;
-}
-.msg-history-fullscreen .ant-modal-content {
-  display: flex;
-  height: 100dvh;
-  flex-direction: column;
-  border-radius: 0;
-}
-.msg-history-fullscreen .ant-modal-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-</style>

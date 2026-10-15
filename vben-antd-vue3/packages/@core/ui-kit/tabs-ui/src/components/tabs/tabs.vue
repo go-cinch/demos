@@ -111,10 +111,11 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
           :modal="false"
           item-class="pr-6"
         >
-          <div class="relative flex size-full items-center">
+          <div class="relative flex size-full items-center px-3">
             <!-- extra -->
             <div
-              class="absolute top-1/2 right-1.5 z-3 flex items-center overflow-hidden translate-y-[-50%]"
+              :class="!tab.affixTab && tabsView.length > 1 && tab.closable ? 'ml-3' : 'ml-0 group-hover:ml-3 group-focus-within:ml-3'"
+              class="relative z-3 flex shrink-0 items-center overflow-hidden transition-[margin] duration-200"
             >
               <!-- pin-icon -->
               <button
@@ -149,12 +150,7 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
 
             <!-- tab-item-main -->
             <div
-              :class="
-                tab.affixTab
-                  ? 'pr-0 group-hover:pr-3 group-focus-within:pr-3'
-                  : 'pr-3 group-hover:pr-7 group-focus-within:pr-7'
-              "
-              class="mx-3 mr-4 flex h-full items-center overflow-hidden rounded-tl-[5px] rounded-tr-[5px] text-accent-foreground transition-all duration-300 group-[.is-active]:text-primary group-[.is-active]:dark:text-accent-foreground"
+              class="order-first flex h-full shrink-0 items-center overflow-hidden rounded-t-[calc(var(--radius)*0.625)] text-accent-foreground group-[.is-active]:text-primary group-[.is-active]:dark:text-accent-foreground"
             >
               <VbenIcon
                 v-if="showIcon"

@@ -99,7 +99,7 @@ defineExpose({
       </Title>
     </slot>
 
-    <Form @submit="handleSubmit">
+    <Form class="auth-feedback-form" @submit="handleSubmit">
       <div class="col-span-full">
         <VbenButton
           :class="{ 'cursor-wait': loading }"
@@ -153,3 +153,15 @@ defineExpose({
     </slot>
   </div>
 </template>
+
+<style scoped>
+/* Reserve a compact feedback line before validation so controls stay in place. */
+.auth-feedback-form :deep([data-slot='form-item']) {
+  padding-bottom: 28px;
+}
+.auth-feedback-form :deep([data-slot='form-message']) {
+  position: absolute;
+  margin-top: 4px;
+  line-height: 20px;
+}
+</style>

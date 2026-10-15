@@ -23,6 +23,7 @@ withDefaults(
     /** 显示圆点 */
     dot?: boolean;
     disabled?: boolean;
+    loading?: boolean;
     triggerLabel?: string;
     /** 消息列表 */
     notifications?: NotificationItem[];
@@ -30,6 +31,7 @@ withDefaults(
   {
     dot: false,
     disabled: false,
+    loading: false,
     triggerLabel: undefined,
     notifications: () => [],
   },
@@ -80,7 +82,7 @@ defineExpose({ toggle, close });
           :aria-label="triggerLabel || $t('ui.widgets.notifications')"
           :aria-expanded="open"
         >
-          <span v-if="dot" class="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary"></span>
+          <span v-if="dot" data-testid="message-unread-dot" class="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary"></span>
           <Bell class="size-4" />
         </VbenIconButton>
       </div>
@@ -104,16 +106,21 @@ defineExpose({ toggle, close });
           <MailCheck class="size-4" />
         </VbenIconButton>
       </header>
-      <VbenScrollbar v-if="notifications.length > 0">
+      <VbenScrollbar v-if="notifications.length > 0" class="notification-viewport">
         <ul class="flex! max-h-90 w-full flex-col">
           <template v-for="item in notifications" :key="item.id ?? item.title">
             <li
               class="notification-row border-t border-border hover:bg-accent"
+              :class="{ 'notification-skeleton': loading }"
+              :inert="loading || undefined"
+              :aria-busy="loading"
               @click="!disabled && emit('onClick', item)"
             >
               <slot name="content" :item="item">
                 <div data-testid="notification-avatar" class="self-start">
-                  <VbenAvatar :src="item.avatar" :alt="item.avatarName || item.title" :size="40" />
+                  <slot name="avatar" :item="item">
+                    <VbenAvatar :src="item.avatar" :alt="item.avatarName || item.title" :size="40" />
+                  </slot>
                 </div>
                 <button
                   type="button"
@@ -128,8 +135,7 @@ defineExpose({ toggle, close });
                   <span
                     class="notification-message text-xs text-muted-foreground"
                     data-testid="notification-content"
-                    >{{ item.message }}</span
-                  >
+                    >{{ item.message }}</span>
                   <time class="notification-date text-xs text-muted-foreground">{{
                     item.date
                   }}</time>
@@ -159,7 +165,7 @@ defineExpose({ toggle, close });
       </VbenScrollbar>
 
       <template v-else>
-        <div class="flex-center min-h-37.5 w-full text-muted-foreground">
+        <div class="notification-empty flex-center w-full text-muted-foreground">
           <slot name="empty">{{ $t('common.noData') }}</slot>
         </div>
       </template>
@@ -246,4 +252,18 @@ defineExpose({ toggle, close });
     transform: rotateZ(2deg);
   }
 }
+</style>
+
+<style scoped>
+.notification-viewport { max-height: 360px; }
+.notification-empty { min-height: 96px; padding: 24px; }
+.notification-skeleton :is(.notification-copy > *, [data-testid="notification-avatar"], .notification-actions) {
+  color: transparent !important;
+  border-radius: calc(var(--radius) * 0.5);
+  background: hsl(var(--muted));
+  animation: notification-skeleton-pulse 1.8s ease-in-out infinite alternate;
+}
+.notification-skeleton :is([data-testid="notification-avatar"], .notification-actions) > * { visibility: hidden; }
+@keyframes notification-skeleton-pulse { to { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .notification-skeleton * { animation: none !important; } }
 </style>

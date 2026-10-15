@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   info: vi.fn(),
   logout: vi.fn(),
   recordAccount: vi.fn(),
+  transition: vi.fn(),
 }));
 vi.mock('vue-router', () => ({ useRouter: () => mocks.router }));
 vi.mock('@vben/preferences', () => ({
@@ -50,6 +51,9 @@ vi.mock('#/api', () => ({
 vi.mock('./login-account-history', () => ({
   recordLoginAccount: mocks.recordAccount,
 }));
+vi.mock('./login-transition', () => ({
+  playLoginTransition: mocks.transition,
+}));
 import {
   consumeRegistrationLogin,
   stageRegistrationLogin,
@@ -72,6 +76,7 @@ const complete = {
 describe('first-login password reset', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.transition.mockResolvedValue(undefined);
     consumeRegistrationLogin();
     setActivePinia(createPinia());
     localStorage.clear();
@@ -144,6 +149,7 @@ describe('first-login password reset', () => {
     expect(auth.passwordResetRequired).toBe(true);
     expect(mocks.router.replace).toHaveBeenCalledWith('/auth/reset-password');
     expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
   });
   it('restores the restriction from the server after a page reload', async () => {
     mocks.access.refreshToken = 'pending-refresh';
@@ -201,6 +207,7 @@ describe('first-login password reset', () => {
     });
     expect(result.userInfo).toBeNull();
     expect(mocks.recordAccount).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
   });
 
   it('records a successful login requiring reset without saving either password', async () => {
@@ -230,5 +237,70 @@ describe('first-login password reset', () => {
     await first;
     expect(mocks.login).toHaveBeenCalledTimes(1);
     expect(mocks.recordAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps login pending until arrival completes and preserves the destination', async () => {
+    let arrived!: () => void;
+    mocks.transition.mockReturnValue(
+      new Promise<void>((resolve) => {
+        arrived = resolve;
+      }),
+    );
+    mocks.login.mockResolvedValue(complete);
+    const auth = useAuthStore();
+    const signingIn = auth.authLogin({
+      username: 'tester',
+      password: 'password',
+    });
+    await vi.waitFor(() => expect(mocks.transition).toHaveBeenCalledOnce());
+    expect(mocks.router.push).not.toHaveBeenCalled();
+    expect(auth.loginLoading).toBe(true);
+    expect(
+      (await auth.authLogin({ username: 'tester', password: 'password' }))
+        .userInfo,
+    ).toBeNull();
+    arrived();
+    await signingIn;
+    expect(mocks.router.push).toHaveBeenCalledWith('/profile');
+    expect(auth.loginLoading).toBe(false);
+  });
+
+  it('plays arrival after a successful required password reset, before navigation', async () => {
+    let arrived!: () => void;
+    mocks.transition.mockReturnValue(
+      new Promise<void>((resolve) => {
+        arrived = resolve;
+      }),
+    );
+    mocks.reset.mockResolvedValue(complete);
+    const reset = useAuthStore().completePasswordReset('new-password');
+    await vi.waitFor(() => expect(mocks.transition).toHaveBeenCalledOnce());
+    expect(mocks.info).toHaveBeenCalledOnce();
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    arrived();
+    await reset;
+    expect(mocks.router.replace).toHaveBeenCalledWith('/profile');
+  });
+
+  it('does not play arrival when profile loading fails', async () => {
+    mocks.login.mockResolvedValue(complete);
+    mocks.info.mockRejectedValueOnce(new Error('profile unavailable'));
+    await useAuthStore().authLogin({
+      username: 'tester',
+      password: 'password',
+    });
+    expect(mocks.transition).not.toHaveBeenCalled();
+    expect(mocks.router.push).not.toHaveBeenCalled();
+  });
+
+  it('does not delay reauthentication in an expired-session modal', async () => {
+    mocks.login.mockResolvedValue(complete);
+    mocks.access.loginExpired = true;
+    await useAuthStore().authLogin({
+      username: 'tester',
+      password: 'password',
+    });
+    expect(mocks.transition).not.toHaveBeenCalled();
+    expect(mocks.access.setLoginExpired).toHaveBeenCalledWith(false);
   });
 });

@@ -84,7 +84,7 @@
   --ring: 222.2 84% 4.9%;
 
   /* 基本圆角大小 */
-  --radius: 0.5rem;
+  /* Inherit the global radius preference, including in semi-dark shell regions. */
 
   /* ============= Custom ============= */
 

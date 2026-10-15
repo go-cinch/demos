@@ -81,11 +81,11 @@ withDefaults(
   }
 
   &.no-gap > :deep(button):nth-of-type(1) {
-    border-radius: calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
+    border-radius: calc(var(--radius) * 0.75) 0 0 calc(var(--radius) * 0.75);
   }
 
   &.no-gap > :deep(button):last-of-type {
-    border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0;
+    border-radius: 0 calc(var(--radius) * 0.75) calc(var(--radius) * 0.75) 0;
   }
 
   &.no-gap {

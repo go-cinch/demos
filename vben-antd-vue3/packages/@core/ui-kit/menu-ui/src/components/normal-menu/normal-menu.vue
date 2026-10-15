@@ -71,7 +71,7 @@ function menuIcon(menu: MenuRecordRaw) {
 }
 
 .vben-normal-menu.is-rounded {
-  --menu-item-radius: 6px;
+  --menu-item-radius: calc(var(--radius) * 0.75);
   --menu-item-margin-x: 8px;
 }
 

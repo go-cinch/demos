@@ -20,18 +20,40 @@ import type {
   WhitelistPayload,
   WhitelistRecord,
 } from '#/api';
+import type {
+  SystemSummary,
+  SystemSummaryDay,
+  SystemSummaryGroup,
+} from '#/api/system/insights';
 
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
-import { formatDateTime } from '@vben/utils';
+import { useTimezoneStore } from '@vben/stores';
 
-import { useDebounceFn, useFullscreen, useTimeoutFn } from '@vueuse/core';
 import {
+  useDebounceFn,
+  useFullscreen,
+  useResizeObserver,
+  useTimeoutFn,
+} from '@vueuse/core';
+import {
+  Alert,
   AutoComplete,
+  Avatar,
   Button,
   Checkbox,
   DatePicker,
@@ -40,11 +62,12 @@ import {
   InputPassword,
   message,
   Modal,
+  Pagination,
   Popconfirm,
+  Result,
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Textarea,
 } from 'ant-design-vue';
@@ -77,13 +100,28 @@ import {
   updateUserGroup,
   updateWhitelist,
 } from '#/api';
+import { getSummaryUserGroup, getSystemSummary } from '#/api/system/insights';
+import LoadWarning from '#/components/load-warning.vue';
+import { renderSkeletonOptions } from '#/components/skeleton-options';
+import Table from '#/components/skeleton-table.vue';
+import { useDefaultPageSize } from '#/composables/use-default-page-size';
+import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
+import AssociationEditor from './association-editor.vue';
 import ManagementCard from './management-card.vue';
+import ManagementDrawer from './management-drawer.vue';
 import ManagementForm from './management-form.vue';
 import ManagementSearch from './management-search.vue';
 import ManagementToolbar from './management-toolbar.vue';
-import { buildChangedPayload, snapshotPayload } from './update-payload';
+import ManagementViewSwitch from './management-view-switch.vue';
+import RuleListEditor from './rule-list-editor.vue';
+import SystemOverview from './system-overview.vue';
+import SystemRecordDetail from './system-record-detail.vue';
+import GroupMembers from './group-members.vue';
+import { memberCount, memberPreview } from './system-record-format';
+import SystemResourceCards from './system-resource-cards.vue';
+import { buildChangedPayload, buildUserGroupChanges, snapshotPayload } from './update-payload';
 import {
   isValidUsername,
   isValidUserPassword,
@@ -534,11 +572,17 @@ const configs = computed<Record<ResourceKind, Omit<ResourceConfig, 'api'>>>(
           width: 130,
         },
         {
-          dataIndex: 'metadata',
-          display: 'json',
-          key: 'metadata',
-          title: $t('system.fields.metadata'),
-          width: 320,
+          dataIndex: 'login_count',
+          key: 'login_count',
+          title: $t('system-insights.loginCount'),
+          width: 100,
+        },
+        {
+          dataIndex: 'last_logged_in_at',
+          display: 'date',
+          key: 'last_logged_in_at',
+          title: $t('system-insights.lastLogin'),
+          width: 180,
         },
         {
           dataIndex: 'action_codes',
@@ -559,6 +603,13 @@ const configs = computed<Record<ResourceKind, Omit<ResourceConfig, 'api'>>>(
           key: 'updated_at',
           title: $t('system.fields.updatedAt'),
           width: 180,
+        },
+        {
+          dataIndex: 'metadata',
+          display: 'json',
+          key: 'metadata',
+          title: $t('system.fields.metadata'),
+          width: 440,
         },
       ],
       entity: $t('system.user.entity'),
@@ -898,13 +949,279 @@ function loadFilterHistory(): FilterHistory {
 }
 
 const loading = ref(false);
-const submitting = ref(false);
 const records = ref<SystemRecord[]>([]);
 const selectedRowKeys = ref<number[]>([]);
 const filters = reactive<FormModel>({});
+
+const loadError = ref(false);
+const timezone = useTimezoneStore();
+const viewMode = ref<'cards' | 'matrix' | 'table'>(
+  props.resource === 'user'
+    ? 'table'
+    : props.resource === 'action'
+      ? 'matrix'
+      : 'cards',
+);
+const viewOptions = computed(() => [
+  props.resource === 'action'
+    ? { value: 'matrix', label: $t('system-insights.matrix'), icon: 'lucide:table-properties' }
+    : { value: 'cards', label: $t('system-insights.cards'), icon: 'lucide:layout-grid' },
+  { value: 'table', label: $t('system-insights.table'), icon: 'lucide:list' },
+]);
+const summary = ref<SystemSummary>();
+const summaryLoading = ref(false);
+const summaryError = ref(false);
+const summaryDays = ref(14);
+const selectedRecord = ref<null | SystemRecord>(null);
+const selectedDay = ref('');
+const selectedDayKind = ref<'created' | 'login'>('created');
+let listRequest = 0;
+let lastLoadedQuery = '';
+let pendingListQuery = '';
+let summaryRequest = 0;
+let active = true;
+const detailsOpen = ref(false);
+const detailLoading = ref(false);
+const detailError = ref(false);
+let detailRequest = 0;
+let detailGroupID: number | undefined;
+watch(detailsOpen, (open) => {
+  if (!open) {
+    ++detailRequest;
+    selectedRecord.value = null;
+    detailLoading.value = false;
+    detailError.value = false;
+  }
+});
+const selectedStatus = computed(() =>
+  Array.isArray(filters.status)
+    ? filters.status.length === 1
+      ? Number(filters.status[0])
+      : undefined
+    : typeof filters.status === 'number'
+      ? filters.status
+      : undefined,
+);
+const selectedExactGroups = computed<string[]>(() =>
+  Array.isArray(filters.groups_exact) ? filters.groups_exact : [],
+);
+const selectedRoleGroups = computed<string[]>(() =>
+  Array.isArray(filters.groups_all) ? filters.groups_all : [],
+);
+const selectedRolePermissionLabel = computed(() =>
+  ['role', 'user-group'].includes(props.resource) && typeof filters.has_permissions === 'boolean'
+    ? $t(
+        filters.has_permissions
+          ? 'system-insights.withPermissions'
+          : 'system-insights.withoutPermissions',
+      )
+    : '',
+);
+const selectedPermissionGroups = computed(() =>
+  props.resource === 'role'
+    ? selectedRoleGroups.value
+    : selectedExactGroups.value,
+);
+
+async function loadOverview() {
+  const request = ++summaryRequest;
+  if (!canRead.value || !active) {
+    summary.value = undefined;
+    summaryLoading.value = false;
+    return;
+  }
+  summaryLoading.value = true;
+  summaryError.value = false;
+  try {
+    const result = await getSystemSummary(
+      props.resource,
+      props.resource === 'user'
+        ? { days: summaryDays.value, time_zone: timezone.timezone }
+        : {},
+    );
+    if (request === summaryRequest && active) {
+      summary.value = result;
+      if (selectedDay.value) {
+        const day = result.trend.find(
+          (item) => item.date === selectedDay.value,
+        );
+        const prefix =
+          selectedDayKind.value === 'login' ? 'last_logged_in' : 'created';
+        if (
+          day &&
+          (filters[`${prefix}_from`] !== day.from ||
+            filters[`${prefix}_to`] !== day.to)
+        ) {
+          setDayRange(day, selectedDayKind.value);
+          void loadData();
+        }
+      }
+    }
+  } catch {
+    if (request === summaryRequest && active) {
+      summary.value = undefined;
+      summaryError.value = true;
+    }
+  } finally {
+    if (request === summaryRequest) summaryLoading.value = false;
+  }
+}
+async function refreshAll() {
+  await Promise.all([loadData(), loadOverview()]);
+}
+async function quickFilter(input: {
+  key: string;
+  value: boolean | number | string | undefined;
+}) {
+  if (input.key === 'status') {
+    filters.status =
+      input.value !== undefined && selectedStatus.value !== input.value
+        ? [input.value]
+        : undefined;
+  } else {
+    filters[input.key] = input.value;
+  }
+  await search();
+}
+function setDayRange(day: SystemSummaryDay, kind: 'created' | 'login') {
+  filters.created_from = kind === 'created' ? day.from : undefined;
+  filters.created_to = kind === 'created' ? day.to : undefined;
+  filters.last_logged_in_from = kind === 'login' ? day.from : undefined;
+  filters.last_logged_in_to = kind === 'login' ? day.to : undefined;
+}
+async function selectDay(
+  day: SystemSummaryDay,
+  kind: 'created' | 'login' = 'created',
+) {
+  if (selectedDay.value === day.date && selectedDayKind.value === kind) {
+    await clearDay();
+    return;
+  }
+  selectedDay.value = day.date;
+  selectedDayKind.value = kind;
+  setDayRange(day, kind);
+  await search();
+}
+async function clearDay() {
+  selectedDay.value = '';
+  selectedDayKind.value = 'created';
+  filters.created_from = undefined;
+  filters.created_to = undefined;
+  filters.last_logged_in_from = undefined;
+  filters.last_logged_in_to = undefined;
+  await search();
+}
+async function selectPermissionGroup(name?: string) {
+  filters.group = undefined;
+  filters.group_exact = undefined;
+  filters.groups_exact = name === undefined
+    ? []
+    : selectedExactGroups.value.includes(name)
+      ? selectedExactGroups.value.filter((group) => group !== name)
+      : [...selectedExactGroups.value, name];
+  await search();
+}
+async function toggleRolePermissionGroup(name: string) {
+  filters.groups_all = selectedRoleGroups.value.includes(name)
+    ? selectedRoleGroups.value.filter((group) => group !== name)
+    : [...selectedRoleGroups.value, name];
+  await search();
+}
+async function clearPermissionGroup(name: string) {
+  if (props.resource === 'role') {
+    filters.groups_all = selectedRoleGroups.value.filter((group) => group !== name);
+    await search();
+  } else {
+    await selectPermissionGroup(name);
+  }
+}
+function clearPermissionGroupLabel(name: string) {
+  return props.resource === 'role'
+    ? $t('system-insights.clearRoleGroup', {
+        name: name || $t('system-insights.ungrouped'),
+      })
+    : $t('system-insights.clearGroup');
+}
+async function selectUserGroup(group: SystemSummaryGroup) {
+  detailGroupID = group.id;
+  await loadGroupDetail();
+}
+async function loadGroupDetail() {
+  if (!detailGroupID || !canRead.value || !active) return;
+  const request = ++detailRequest;
+  selectedRecord.value = records.value.find((record) => record.id === detailGroupID) ?? selectedRecord.value;
+  detailLoading.value = true;
+  detailError.value = false;
+  detailsOpen.value = true;
+  try {
+    const record = await getSummaryUserGroup(detailGroupID);
+    if (request === detailRequest && active && canRead.value)
+      selectedRecord.value = record;
+  } catch {
+    if (request === detailRequest && active) detailError.value = true;
+  } finally {
+    if (request === detailRequest) detailLoading.value = false;
+  }
+}
+function selectAllCards(checked: boolean) {
+  selectedRowKeys.value = checked
+    ? records.value.map((record) => record.id)
+    : [];
+}
+function openDetail(record: Recordable<any>) {
+  ++detailRequest;
+  detailLoading.value = false;
+  detailError.value = false;
+  detailGroupID = undefined;
+  selectedRecord.value =
+    records.value.find((item) => item.id === record.id) ?? null;
+  detailsOpen.value = selectedRecord.value !== null;
+}
+function editDetail(record: SystemRecord) {
+  void openEditor(record);
+}
+function confirmRemove(record: SystemRecord) {
+  Modal.confirm({
+    title: $t('system.confirm.delete', { name: getRecordLabel(record) }),
+    onOk: () => removeRecords([record.id]),
+  });
+}
+watch([summaryDays, () => timezone.timezone], () => {
+  if (props.resource === 'user') {
+    summary.value = undefined;
+    summaryError.value = false;
+    void clearDay();
+    void loadOverview();
+  }
+});
+watch(
+  () => filters.group,
+  (value) => {
+    if (value && (!Array.isArray(value) || value.length)) {
+      filters.group_exact = undefined;
+      filters.groups_exact = undefined;
+    }
+  },
+);
+watch(canRead, (value) => {
+  if (value && active) void refreshAll();
+  else {
+    ++listRequest;
+    ++summaryRequest;
+    records.value = [];
+    summary.value = undefined;
+    detailsOpen.value = false;
+    selectedRecord.value = null;
+    loading.value = false;
+    summaryLoading.value = false;
+  }
+});
+
+const submitting = ref(false);
 const filterHistory = reactive<FilterHistory>(loadFilterHistory());
 const backendFilterSuggestions = reactive<Record<string, string[]>>({});
 const filterSuggestionQueries = reactive<Record<string, string>>({});
+const filterSuggestionsLoading = reactive<Record<string, boolean>>({});
 const backendSuggestionRequestIds = new Map<string, number>();
 const modalOpen = ref(false);
 const editingRecord = ref<null | SystemRecord>(null);
@@ -928,16 +1245,11 @@ const actionGroupOptions = ref<ActionGroupOption[]>([]);
 const actionGroupOptionsLoading = ref(false);
 const actionGroupOptionsQuery = ref('');
 const initialActionGroup = ref('');
-const actionOptions = ref<SearchableSelectOption<string>[]>([]);
-const actionOptionsLoading = ref(false);
-const actionOptionsQuery = ref('');
 const roleOptions = ref<SearchableSelectOption<number>[]>([]);
 const roleOptionsLoading = ref(false);
 const roleOptionsQuery = ref('');
-const userOptions = ref<SearchableSelectOption<number>[]>([]);
-const userOptionsLoading = ref(false);
-const userOptionsQuery = ref('');
-const pagination = reactive({ current: 1, pageSize: 10, total: 0 });
+const defaultPageSize = useDefaultPageSize();
+const pagination = reactive({ current: 1, pageSize: defaultPageSize.value, total: 0 });
 const searchExpanded = ref(false);
 const filtersDirty = ref(false);
 const tableContainerRef = ref<HTMLElement>();
@@ -954,7 +1266,16 @@ const adaptiveColumnMaxWidth = 560;
 const metadataColumnMaxWidth = 320;
 const visibleColumnKeys = ref<string[]>([
   selectionColumnKey,
-  ...config.value.columns.map((column) => column.key),
+  ...(props.resource === 'user'
+    ? [
+        'username',
+        'role',
+        'status',
+        'login_count',
+        'last_logged_in_at',
+        'metadata',
+      ]
+    : config.value.columns.map((column) => column.key)),
 ]);
 const { isFullscreen, toggle: toggleFullscreen } =
   useFullscreen(tableContainerRef);
@@ -962,6 +1283,8 @@ const { start: scheduleFilterSearch, stop: cancelFilterSearch } = useTimeoutFn(
   async () => {
     if (!filtersDirty.value || !canRead.value) return;
     filtersDirty.value = false;
+    const key = listQueryKey(buildListParams(1));
+    if (key === lastLoadedQuery || key === pendingListQuery) return;
     await runSearch();
   },
   500,
@@ -980,24 +1303,64 @@ const editorFields = computed(() =>
     : config.value.fields.filter((field) => field.createVisible !== false),
 );
 
+const editorSnapshot = ref('');
+const editorError = ref('');
+let editorRequest = 0;
+const editorDirty = computed(() => modalOpen.value && editorSnapshot.value !== JSON.stringify(
+  snapshotPayload(formModel, editorFields.value.map((field) => field.key)),
+));
+const drawerTitle = computed(() => $t(
+  modalOpen.value
+    ? (editingRecord.value ? 'system.common.editTitle' : 'system.common.createTitle')
+    : 'system-editor.detailTitle',
+  { entity: config.value.entity },
+));
+function closeEditorPanel(returnToDetail = false) {
+  if (submitting.value) return;
+  const close = () => {
+    ++editorRequest;
+    if (returnToDetail && editingRecord.value) {
+      selectedRecord.value = editingRecord.value;
+      detailsOpen.value = true;
+    } else detailsOpen.value = false;
+    modalOpen.value = false;
+    editorError.value = '';
+    formModel.password = '';
+  };
+  if (editorDirty.value) {
+    Modal.confirm({
+      title: $t('system-editor.discardTitle'),
+      okText: $t('system-editor.discard'),
+      cancelText: $t('system-editor.continue'),
+      onOk: close,
+    });
+  } else close();
+}
+
+
 const columnOptions = computed(() => [
   { label: $t('system.common.selection'), value: selectionColumnKey },
-  ...config.value.columns.map((column) => ({
-    label: column.title,
-    value: column.key,
-  })),
+  ...config.value.columns
+    .filter(
+      (column) =>
+        viewMode.value !== 'matrix' ||
+        ['button', 'menu', 'name', 'resource'].includes(column.key),
+    )
+    .map((column) => ({ label: column.title, value: column.key })),
 ]);
-
 const showSelectionColumn = computed(() =>
   visibleColumnKeys.value.includes(selectionColumnKey),
 );
-
-const allColumnsSelected = computed(
-  () => visibleColumnKeys.value.length === columnOptions.value.length,
+const allColumnsSelected = computed(() =>
+  columnOptions.value.every((column) =>
+    visibleColumnKeys.value.includes(column.value),
+  ),
 );
-
 const columnsIndeterminate = computed(
-  () => visibleColumnKeys.value.length > 0 && !allColumnsSelected.value,
+  () =>
+    columnOptions.value.some((column) =>
+      visibleColumnKeys.value.includes(column.value),
+    ) && !allColumnsSelected.value,
 );
 
 function adaptiveColumnValues(
@@ -1010,9 +1373,7 @@ function adaptiveColumnValues(
       : [];
   }
   if (column.display === 'users') {
-    return 'users' in record && Array.isArray(record.users)
-      ? record.users.map((user) => user.username)
-      : [];
+    return memberPreview(record).map((user) => user.username);
   }
   if (column.display === 'resource-rules') {
     return 'resource' in record ? resourceRules(record.resource) : [];
@@ -1084,25 +1445,132 @@ function adaptiveColumnWidth(column: DisplayColumn) {
   return Math.min(widestRow, maximumColumnWidth);
 }
 
-const tableColumns = computed<TableColumnsType<SystemRecord>>(() => {
-  const columns: TableColumnsType<SystemRecord> = config.value.columns
-    .filter((column) => visibleColumnKeys.value.includes(column.key))
-    .map((column) => ({ ...column, width: adaptiveColumnWidth(column) }));
+const operationActions = ref<HTMLElement[]>([]);
+const operationContentWidth = ref(0);
+const managementTableRef = ref<InstanceType<typeof Table>>();
+const tableViewportWidth = ref(0);
+useResizeObserver(
+  () => {
+    const root = managementTableRef.value?.$el as HTMLElement | undefined;
+    return root?.querySelector<HTMLElement>('.ant-table-container');
+  },
+  ([entry]) => {
+    tableViewportWidth.value = Math.floor(entry?.contentRect.width ?? 0);
+  },
+);
+// Reserve the page's complete action set even when a particular row has fewer actions.
+const operationColumnWidth = computed(() => {
+  const labels = [
+    ...(canRead.value ? [$t('system-insights.details')] : []),
+    ...(canUpdate.value ? [$t('system.common.edit')] : []),
+    ...(canUpdate.value && props.resource === 'user'
+      ? [[ $t('system.user.approve'), $t('system.user.lock'), $t('system.user.unlock') ]
+          .sort((a, b) => b.length - a.length)[0]!]
+      : []),
+    ...(canDelete.value ? [$t('system.common.delete')] : []),
+  ];
+  const textWidth = labels.reduce((total, label) => total + estimatedTagWidth(label, 1000) - 18 + 16, 0);
+  return Math.max(textWidth + Math.max(0, labels.length - 1) * 8 + 32, operationContentWidth.value);
+});
 
-  if (canUpdate.value || canDelete.value) {
+function measureOperationActions() {
+  operationContentWidth.value = Math.max(
+    0,
+    ...operationActions.value.map((element) => {
+      if (!element.isConnected) return 0;
+      const cell = element.closest('td');
+      if (!cell) return 0;
+      const style = window.getComputedStyle(cell);
+      return Math.ceil(
+        element.getBoundingClientRect().width +
+          (Number.parseFloat(style.paddingLeft) || 0) +
+          (Number.parseFloat(style.paddingRight) || 0),
+      );
+    }),
+  );
+}
+
+watch(
+  [
+    records,
+    viewMode,
+    tableSize,
+    canRead,
+    canUpdate,
+    canDelete,
+    tableContainerRef,
+    visibleColumnKeys,
+    () => tableSettings.sticky,
+  ],
+  () => {
+    operationActions.value = [
+      ...(tableContainerRef.value?.querySelectorAll<HTMLElement>(
+        '.system-operation-actions',
+      ) ?? []),
+    ];
+    measureOperationActions();
+  },
+  { flush: 'post' },
+);
+useResizeObserver(operationActions, measureOperationActions);
+
+const contentTableColumns = computed<TableColumnsType<SystemRecord>>(() => {
+  const matrix = props.resource === 'action' && viewMode.value === 'matrix';
+  const columns: TableColumnsType<SystemRecord> = config.value.columns
+    .filter((column) =>
+      matrix
+        ? ['button', 'menu', 'name', 'resource'].includes(column.key) &&
+          visibleColumnKeys.value.includes(column.key)
+        : visibleColumnKeys.value.includes(column.key),
+    )
+    .map((column) => ({
+      ...column,
+      width: matrix
+        ? ({ name: 160, resource: 240, menu: 110, button: 110 }[column.key] ??
+          120)
+        : adaptiveColumnWidth(column),
+    }));
+  if (canRead.value || canUpdate.value || canDelete.value)
     columns.push({
       fixed: 'right',
       key: 'operation',
       title: $t('system.common.actions'),
-      width: props.resource === 'user' ? 280 : 140,
+      width: operationColumnWidth.value,
     });
-  }
   return columns;
+});
+
+const tableColumns = computed(() => {
+  const columns = contentTableColumns.value;
+  const dataWidth = columns.reduce(
+    (total, column) =>
+      total + (column.key === 'operation' ? 0 : Number(column.width)),
+    0,
+  );
+  if (!dataWidth) return columns;
+  const fixedWidth =
+    (showSelectionColumn.value ? selectionColumnWidth : 0) +
+    (columns.some((column) => column.key === 'operation')
+      ? operationColumnWidth.value
+      : 0);
+  // Distribute spare width across data columns, keeping action buttons compact.
+  let remainingWidth = Math.max(dataWidth, tableViewportWidth.value - fixedWidth);
+  let remainingContentWidth = dataWidth;
+  return columns.map((column) => {
+    if (column.key === 'operation') return column;
+    const contentWidth = Number(column.width);
+    const width = Math.round(
+      (contentWidth / remainingContentWidth) * remainingWidth,
+    );
+    remainingWidth -= width;
+    remainingContentWidth -= contentWidth;
+    return { ...column, width };
+  });
 });
 
 const tableScrollWidth = computed(() => {
   let width = showSelectionColumn.value ? selectionColumnWidth : 0;
-  for (const column of tableColumns.value) {
+  for (const column of contentTableColumns.value) {
     if ('width' in column && typeof column.width === 'number') {
       width += column.width;
     }
@@ -1111,6 +1579,7 @@ const tableScrollWidth = computed(() => {
 });
 
 const rowSelection = computed(() => ({
+  columnWidth: selectionColumnWidth,
   onChange: (keys: (number | string)[]) => {
     selectedRowKeys.value = keys.map(Number);
   },
@@ -1199,13 +1668,13 @@ function columnValue(record: Recordable<any>, column: Recordable<any>) {
 }
 
 function formatDate(value: unknown) {
-  return typeof value === 'number' ? formatDateTime(value) : '-';
+  return typeof value === 'number'
+    ? dayjs(value).tz(timezone.timezone).format('YYYY-MM-DD HH:mm:ss')
+    : '-';
 }
 
 function formatLockExpiration(value: unknown) {
-  return typeof value === 'number' && value > 0
-    ? dayjs(value).format('YYYY-MM-DD HH:mm:ss')
-    : '-';
+  return typeof value === 'number' && value > 0 ? formatDate(value) : '-';
 }
 
 function userLockExpiration(record: Recordable<any>) {
@@ -1292,42 +1761,85 @@ function newIdempotencyKey() {
   ].join('-');
 }
 
+function buildListParams(pageNumber = pagination.current): PageParams {
+  const params: PageParams = {
+    p: pageNumber,
+    s: pagination.pageSize,
+  };
+  for (const [key, value] of Object.entries(filters).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (key === 'groups_exact') {
+      if (selectedExactGroups.value.length)
+        params.groups_exact = JSON.stringify(selectedExactGroups.value);
+    } else if (key === 'groups_all') {
+      if (selectedRoleGroups.value.length)
+        params.groups_all = JSON.stringify(selectedRoleGroups.value);
+    } else if (Array.isArray(value)) {
+      const joined = value
+        .filter((item) => ['boolean', 'number', 'string'].includes(typeof item))
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .join(',');
+      if (joined) params[key] = joined;
+    } else if ((value !== '' || key === 'group_exact') && value !== undefined)
+      params[key] = value as boolean | number | string;
+  }
+  return params;
+}
+function listQueryKey(params: PageParams) {
+  return JSON.stringify([props.resource, params]);
+}
+
 async function loadData() {
+  const request = ++listRequest;
+  selectedRowKeys.value = [];
+  if (!canRead.value || !active) {
+    records.value = [];
+    pagination.total = 0;
+    loading.value = false;
+    return;
+  }
   loading.value = true;
+  loadError.value = false;
   try {
-    const params: PageParams = {
-      p: pagination.current,
-      s: pagination.pageSize,
-    };
-    for (const [key, value] of Object.entries(filters)) {
-      if (Array.isArray(value)) {
-        const joinedValue = value
-          .filter(
-            (item): item is boolean | number | string =>
-              typeof item === 'boolean' ||
-              typeof item === 'number' ||
-              typeof item === 'string',
-          )
-          .map((item) => String(item).trim())
-          .filter(Boolean)
-          .join(',');
-        if (joinedValue) params[key] = joinedValue;
-      } else if (value !== '' && value !== undefined) {
-        params[key] = value as boolean | number | string;
-      }
-    }
+    const params = buildListParams();
+    const key = listQueryKey(params);
+    pendingListQuery = key;
     const result = await config.value.api.list(params);
+    if (request !== listRequest || !active) return;
+    lastLoadedQuery = key;
     records.value = result.items;
     pagination.total = result.t;
     selectedRowKeys.value = [];
+    if (selectedRecord.value && detailGroupID === undefined) {
+      const updated = result.items.find(
+        (record) => record.id === selectedRecord.value?.id,
+      );
+      if (updated) selectedRecord.value = updated;
+      else detailsOpen.value = false;
+    }
+  } catch {
+    if (request === listRequest && active) {
+      lastLoadedQuery = '';
+      records.value = [];
+      pagination.total = 0;
+      selectedRowKeys.value = [];
+      detailsOpen.value = false;
+      selectedRecord.value = null;
+      loadError.value = true;
+    }
   } finally {
-    loading.value = false;
+    if (request === listRequest) {
+      loading.value = false;
+      pendingListQuery = '';
+    }
   }
 }
 
 function handleTableChange(value: TablePaginationConfig) {
   pagination.current = value.current ?? 1;
-  pagination.pageSize = value.pageSize ?? 10;
+  pagination.pageSize = value.pageSize ?? pagination.pageSize;
   loadData();
 }
 
@@ -1338,12 +1850,14 @@ function tableRowClassName(_record: SystemRecord, index: number) {
 }
 
 function toggleAllColumns() {
-  visibleColumnKeys.value = allColumnsSelected.value
-    ? []
-    : columnOptions.value.map((column) => column.value);
-  if (!visibleColumnKeys.value.includes(selectionColumnKey)) {
-    selectedRowKeys.value = [];
+  const keys = new Set(visibleColumnKeys.value);
+  const selected = allColumnsSelected.value;
+  for (const option of columnOptions.value) {
+    if (selected) keys.delete(option.value);
+    else keys.add(option.value);
   }
+  visibleColumnKeys.value = [...keys];
+  if (!showSelectionColumn.value) selectedRowKeys.value = [];
 }
 
 function toggleColumn(key: string) {
@@ -1538,6 +2052,7 @@ const loadBackendFilterSuggestions = useDebounceFn(
     try {
       const result = await apiByResource[suggestionResource].list({
         [suggestionFieldKey]: query,
+        f: suggestionFieldKey,
         p: 1,
         s: 10,
       });
@@ -1562,6 +2077,8 @@ const loadBackendFilterSuggestions = useDebounceFn(
       if (backendSuggestionRequestIds.get(requestKey) === requestId) {
         backendFilterSuggestions[requestKey] = [];
       }
+    } finally {
+      if (backendSuggestionRequestIds.get(requestKey) === requestId) filterSuggestionsLoading[requestKey] = false;
     }
   },
   250,
@@ -1573,6 +2090,7 @@ function searchBackendFilterSuggestions(fieldKey: string, value: string) {
   backendSuggestionRequestIds.set(key, requestId);
   const query = normalizeTextFilterValue(fieldKey, value).trim();
   filterSuggestionQueries[key] = query;
+  filterSuggestionsLoading[key] = !!query;
   if (!query) {
     backendFilterSuggestions[key] = [];
     return;
@@ -1597,16 +2115,18 @@ function clearBackendFilterSuggestion(fieldKey: string) {
   );
   backendFilterSuggestions[key] = [];
   filterSuggestionQueries[key] = '';
+  filterSuggestionsLoading[key] = false;
 }
 
 function clearBackendFilterSuggestions() {
-  for (const key of Object.keys(backendFilterSuggestions)) {
+  for (const key of new Set([...Object.keys(backendFilterSuggestions), ...Object.keys(filterSuggestionsLoading)])) {
     backendSuggestionRequestIds.set(
       key,
       (backendSuggestionRequestIds.get(key) || 0) + 1,
     );
     backendFilterSuggestions[key] = [];
     filterSuggestionQueries[key] = '';
+  filterSuggestionsLoading[key] = false;
   }
 }
 
@@ -1626,6 +2146,8 @@ async function resetSearch() {
   cancelFilterSearch();
   filtersDirty.value = false;
   resetObject(filters);
+  selectedDay.value = '';
+  selectedDayKind.value = 'created';
   clearBackendFilterSuggestions();
   await runSearch();
 }
@@ -1638,6 +2160,8 @@ function applyRouteFilters() {
   });
   if (routeFilters.length === 0) return false;
   resetObject(filters);
+  selectedDay.value = '';
+  selectedDayKind.value = 'created';
   for (const [field, value] of routeFilters) {
     filters[field.key] =
       field.type === 'category' || field.type === 'status'
@@ -1665,7 +2189,7 @@ function applyRouteFilters() {
 
 async function loadInitialData() {
   applyRouteFilters();
-  await loadData();
+  await refreshAll();
 }
 
 watch(
@@ -1750,73 +2274,6 @@ function handleActionGroupDropdownVisibleChange(open: boolean) {
   if (open) searchActionGroupOptions('');
 }
 
-let userOptionsRequestId = 0;
-
-function selectedUserIds() {
-  const value = formModel.user_ids;
-  return new Set(
-    Array.isArray(value)
-      ? value.filter((item): item is number => typeof item === 'number')
-      : [],
-  );
-}
-
-function retainSelectedUserOptions() {
-  const selected = selectedUserIds();
-  userOptions.value = userOptions.value.filter((option) =>
-    selected.has(option.value),
-  );
-}
-
-const loadUserOptions = useDebounceFn(
-  async (query: string, requestId: number) => {
-    try {
-      const results = query
-        ? await Promise.all([
-            listUsers({ p: 1, s: 20, username: query }),
-            listUsers({ code: query, p: 1, s: 20 }),
-          ])
-        : [await listUsers({ p: 1, s: 20 })];
-      if (requestId !== userOptionsRequestId) return;
-
-      const selected = selectedUserIds();
-      const options = new Map(
-        userOptions.value
-          .filter((option) => selected.has(option.value))
-          .map((option) => [option.value, option]),
-      );
-      for (const result of results) {
-        for (const item of result.items) {
-          options.set(item.id, {
-            label: `${item.username} · ${item.code}`,
-            value: item.id,
-          });
-        }
-      }
-      userOptions.value = [...options.values()];
-    } catch {
-      if (requestId === userOptionsRequestId) retainSelectedUserOptions();
-    } finally {
-      if (requestId === userOptionsRequestId) {
-        userOptionsLoading.value = false;
-      }
-    }
-  },
-  250,
-);
-
-function searchUserOptions(value: string) {
-  const requestId = ++userOptionsRequestId;
-  const query = value.trim();
-  userOptionsQuery.value = query;
-  userOptionsLoading.value = true;
-  void loadUserOptions(query, requestId);
-}
-
-function handleUserDropdownVisibleChange(open: boolean) {
-  if (open) searchUserOptions('');
-}
-
 let roleOptionsRequestId = 0;
 
 function retainSelectedRoleOption() {
@@ -1829,12 +2286,7 @@ function retainSelectedRoleOption() {
 const loadRoleOptions = useDebounceFn(
   async (query: string, requestId: number) => {
     try {
-      const results = query
-        ? await Promise.all([
-            listRoles({ name: query, p: 1, s: 20 }),
-            listRoles({ p: 1, s: 20, word: query }),
-          ])
-        : [await listRoles({ p: 1, s: 20 })];
+      const result = await listRoles({ f: 'id,name,word', p: 1, q: query || undefined, s: 20 });
       if (requestId !== roleOptionsRequestId) return;
 
       const selectedRoleId = Number(formModel.role_id);
@@ -1843,13 +2295,11 @@ const loadRoleOptions = useDebounceFn(
           .filter((option) => option.value === selectedRoleId)
           .map((option) => [option.value, option]),
       );
-      for (const result of results) {
-        for (const item of result.items) {
-          options.set(item.id, {
-            label: `${item.name} · ${item.word}`,
-            value: item.id,
-          });
-        }
+      for (const item of result.items) {
+        options.set(item.id, {
+          label: `${item.name} · ${item.word}`,
+          value: item.id,
+        });
       }
       roleOptions.value = [...options.values()];
     } catch {
@@ -1875,76 +2325,11 @@ function handleRoleDropdownVisibleChange(open: boolean) {
   if (open) searchRoleOptions('');
 }
 
-let actionOptionsRequestId = 0;
-
-function selectedActionCodes() {
-  const value = formModel.action_codes;
-  return new Set(
-    Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string')
-      : [],
-  );
-}
-
-function retainSelectedActionOptions() {
-  const selected = selectedActionCodes();
-  actionOptions.value = actionOptions.value.filter((option) =>
-    selected.has(option.value),
-  );
-}
-
-const loadActionOptions = useDebounceFn(
-  async (query: string, requestId: number) => {
-    try {
-      const results = query
-        ? await Promise.all([
-            listActions({ name: query, p: 1, s: 20 }),
-            listActions({ p: 1, s: 20, word: query }),
-          ])
-        : [await listActions({ p: 1, s: 20 })];
-      if (requestId !== actionOptionsRequestId) return;
-
-      const selected = selectedActionCodes();
-      const options = new Map(
-        actionOptions.value
-          .filter((option) => selected.has(option.value))
-          .map((option) => [option.value, option]),
-      );
-      for (const result of results) {
-        for (const item of result.items) {
-          options.set(item.code, {
-            label: `${item.name} · ${item.word}`,
-            value: item.code,
-          });
-        }
-      }
-      actionOptions.value = [...options.values()];
-    } catch {
-      if (requestId === actionOptionsRequestId) {
-        retainSelectedActionOptions();
-      }
-    } finally {
-      if (requestId === actionOptionsRequestId) {
-        actionOptionsLoading.value = false;
-      }
-    }
-  },
-  250,
-);
-
-function searchActionOptions(value: string) {
-  const requestId = ++actionOptionsRequestId;
-  const query = value.trim();
-  actionOptionsQuery.value = query;
-  actionOptionsLoading.value = true;
-  void loadActionOptions(query, requestId);
-}
-
-function handleActionDropdownVisibleChange(open: boolean) {
-  if (open) searchActionOptions('');
-}
-
 async function openEditor(record?: Recordable<any>) {
+  ++editorRequest;
+  editorError.value = '';
+  selectedRecord.value = (record as SystemRecord | undefined) ?? null;
+  detailsOpen.value = Boolean(record);
   editingRecord.value = (record as SystemRecord | undefined) ?? null;
   idempotencyKey.value = record ? '' : newIdempotencyKey();
   resetObject(formModel);
@@ -1956,18 +2341,6 @@ async function openEditor(record?: Recordable<any>) {
       ? record.group
       : '';
   actionGroupOptions.value = fallbackActionGroupOptions('');
-  userOptionsRequestId += 1;
-  userOptionsLoading.value = false;
-  userOptionsQuery.value = '';
-  userOptions.value =
-    record && props.resource === 'user-group' && Array.isArray(record.users)
-      ? record.users.map(
-          (item: { code: string; id: number; username: string }) => ({
-            label: `${item.username} · ${item.code}`,
-            value: item.id,
-          }),
-        )
-      : [];
   roleOptionsRequestId += 1;
   roleOptionsLoading.value = false;
   roleOptionsQuery.value = '';
@@ -1980,16 +2353,6 @@ async function openEditor(record?: Recordable<any>) {
           },
         ]
       : [];
-  actionOptionsRequestId += 1;
-  actionOptionsLoading.value = false;
-  actionOptionsQuery.value = '';
-  actionOptions.value =
-    record && 'actions' in record && Array.isArray(record.actions)
-      ? record.actions.map((item: ActionRecord) => ({
-          label: `${item.name} · ${item.word}`,
-          value: item.code,
-        }))
-      : [];
   for (const field of editorFields.value) {
     if (field.defaultValue !== undefined) {
       formModel[field.key] = field.defaultValue;
@@ -1997,8 +2360,8 @@ async function openEditor(record?: Recordable<any>) {
   }
   if (record) {
     Object.assign(formModel, record);
-    if (props.resource === 'user-group' && 'users' in record) {
-      formModel.user_ids = record.users.map((item: { id: number }) => item.id);
+    if (props.resource === 'user-group') {
+      formModel.user_ids = { added: [], removed: [] };
     }
     if (props.resource === 'user') {
       formModel.password = '';
@@ -2014,6 +2377,7 @@ async function openEditor(record?: Recordable<any>) {
         editorFields.value.map((field) => field.key),
       )
     : {};
+  editorSnapshot.value = JSON.stringify(snapshotPayload(formModel, editorFields.value.map((field) => field.key)));
   modalOpen.value = true;
   await nextTick();
   formRef.value?.clearValidate();
@@ -2049,6 +2413,8 @@ function buildPayload() {
       }
       return buildChangedPayload(initial, payload);
     }
+  } else if (props.resource === 'user-group' && editingRecord.value) {
+    return buildUserGroupChanges(initialEditorValues.value, payload);
   } else if (editingRecord.value) {
     return buildChangedPayload(initialEditorValues.value, payload);
   }
@@ -2056,32 +2422,45 @@ function buildPayload() {
 }
 
 async function submitEditor() {
-  if (submitting.value) return;
+  if (submitting.value || !modalOpen.value) return;
+  const currentEditor = editorRequest;
   try {
     await formRef.value?.validate();
   } catch {
     // Field errors are rendered by the form; keep the editor open.
     return;
   }
-  if (submitting.value) return;
+  if (submitting.value || !modalOpen.value || !active || currentEditor !== editorRequest) return;
   const payload = buildPayload();
   if (editingRecord.value && Object.keys(payload).length === 0) {
     message.info($t('system.messages.noChanges'));
+    closeEditorPanel(true);
     return;
   }
   submitting.value = true;
+  editorError.value = '';
   try {
+    let saved: SystemRecord;
     if (editingRecord.value) {
-      await config.value.api.update(editingRecord.value.id, payload);
+      saved = await config.value.api.update(editingRecord.value.id, payload);
       message.success($t('system.messages.updated'));
     } else {
       idempotencyKey.value ||= newIdempotencyKey();
-      await config.value.api.create(idempotencyKey.value, payload);
+      saved = await config.value.api.create(idempotencyKey.value, payload);
       message.success($t('system.messages.created'));
     }
+    if (!active || currentEditor !== editorRequest) return;
+    // A saved record may no longer match the list filters. Keep its details open.
+    selectedRecord.value = null;
+    await refreshAll();
+    if (!active || currentEditor !== editorRequest) return;
+    detailGroupID = undefined;
+    selectedRecord.value = records.value.find((record) => record.id === saved.id) ?? saved;
     modalOpen.value = false;
-    await loadData();
+    detailsOpen.value = canRead.value;
+    formModel.password = '';
   } catch (error) {
+    if (!active || currentEditor !== editorRequest) return;
     const status =
       typeof error === 'object' &&
       error !== null &&
@@ -2095,7 +2474,7 @@ async function submitEditor() {
     if (!editingRecord.value && status !== undefined && status !== 409) {
       idempotencyKey.value = newIdempotencyKey();
     }
-    throw error;
+    editorError.value = error instanceof Error ? error.message : $t('system-editor.saveError');
   } finally {
     submitting.value = false;
   }
@@ -2140,7 +2519,7 @@ async function submitApproval() {
         : $t('system.messages.rejected'),
     );
     approvalModalOpen.value = false;
-    await loadData();
+    await refreshAll();
   } finally {
     approvalSubmitting.value = false;
   }
@@ -2182,7 +2561,7 @@ async function submitLock() {
     });
     message.success($t('system.messages.locked'));
     lockModalOpen.value = false;
-    await loadData();
+    await refreshAll();
   } finally {
     lockSubmitting.value = false;
   }
@@ -2193,7 +2572,7 @@ async function unlockUser(record: Recordable<any>) {
   delete metadata.lock_expired_at;
   await updateUser(Number(record.id), { metadata, status: 1 });
   message.success($t('system.messages.unlocked'));
-  await loadData();
+  await refreshAll();
 }
 
 async function unlockPasswordChange(record: Recordable<any>) {
@@ -2201,7 +2580,7 @@ async function unlockPasswordChange(record: Recordable<any>) {
   delete metadata.password_change_failures;
   await updateUser(Number(record.id), { metadata });
   message.success($t('system.messages.passwordUnlocked'));
-  await loadData();
+  await refreshAll();
 }
 
 async function removeRecords(ids: number[]) {
@@ -2210,32 +2589,197 @@ async function removeRecords(ids: number[]) {
   if (records.value.length === ids.length && pagination.current > 1) {
     pagination.current -= 1;
   }
-  await loadData();
+  await refreshAll();
 }
 
 function removeSelected() {
-  if (selectedRowKeys.value.length === 0) return;
+  const ids = [...selectedRowKeys.value];
+  if (ids.length === 0 || loading.value || !canDelete.value) return;
   Modal.confirm({
-    content: $t('system.confirm.deleteDescription', {
-      count: selectedRowKeys.value.length,
-    }),
-    onOk: () => removeRecords([...selectedRowKeys.value]),
+    content: $t('system.confirm.deleteDescription', { count: ids.length }),
+    onOk: () => removeRecords(ids),
     title: $t('system.confirm.deleteSelected'),
   });
 }
 
+watch(defaultPageSize, (value) => {
+  pagination.pageSize = value;
+  pagination.current = 1;
+  void loadData();
+});
 onMounted(loadInitialData);
+onDeactivated(() => {
+  active = false;
+  ++editorRequest;
+  modalOpen.value = false;
+  ++listRequest;
+  ++summaryRequest;
+  cancelFilterSearch();
+  detailsOpen.value = false;
+  selectedRecord.value = null;
+});
+onActivated(() => {
+  if (!active) {
+    active = true;
+    void refreshAll();
+  }
+});
+onBeforeUnmount(() => {
+  active = false;
+  ++editorRequest;
+  ++listRequest;
+  ++summaryRequest;
+  cancelFilterSearch();
+});
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page>
     <div
       ref="tableContainerRef"
-      class="flex h-full flex-col gap-4"
+      class="system-management-page flex flex-col gap-4"
       :class="{ 'bg-background p-4': isFullscreen }"
     >
-      <ManagementCard class="system-section-card shrink-0">
-        <ManagementSearch :model="filters" @finish="search">
+      <header class="system-page-heading">
+        <div>
+          <h1>{{ config.title }}</h1>
+        </div>
+      </header>
+      <SystemOverview
+        v-if="canRead && props.resource !== 'dictionary' && props.resource !== 'whitelist'"
+        :resource="props.resource"
+        :summary="summary"
+        :loading="summaryLoading"
+        :error="summaryError"
+        :days="summaryDays"
+        :selected-status="selectedStatus"
+        :selected-enabled="filters.enabled"
+        :selected-category="filters.category"
+        :selected-groups="selectedRoleGroups"
+        :selected-has-permissions="filters.has_permissions"
+        :selected-has-members="filters.has_members"
+        :selected-day="selectedDayKind === 'created' ? selectedDay : undefined"
+        :selected-login-day="
+          selectedDayKind === 'login' ? selectedDay : undefined
+        "
+        @retry="loadOverview"
+        @days="summaryDays = $event"
+        @filter="quickFilter"
+        @day="selectDay"
+        @login-day="(day) => selectDay(day, 'login')"
+        @group="selectUserGroup"
+        @permission-group="toggleRolePermissionGroup"
+      />
+      <Result
+        v-if="!canRead"
+        status="403"
+        :title="$t('system-insights.noAccess')"
+        :sub-title="$t('system-insights.noAccessHint')"
+      >
+        <template #extra>
+          <Button v-if="canCreate" type="primary" @click="openEditor()">
+            <IconifyIcon icon="lucide:plus" />{{ $t('system.common.create') }}
+          </Button>
+        </template>
+      </Result>
+      <ManagementCard v-if="canRead" class="system-section-card shrink-0">
+        <div
+          v-if="
+            selectedDay ||
+            selectedPermissionGroups.length ||
+            selectedRolePermissionLabel || filters.has_members === false
+          "
+          class="system-active-scope"
+          data-testid="management-active-filters"
+        >
+          <Tag
+            color="blue"
+            v-if="selectedRolePermissionLabel"
+            closable
+            data-testid="management-role-permission-filter"
+            :aria-label="$t('system-insights.clearPermissionFilter')"
+            @close.prevent="
+              quickFilter({ key: 'has_permissions', value: undefined })
+            "
+          >
+            <template #closeIcon>
+              <button
+                type="button"
+                class="system-scope-clear"
+                :aria-label="$t('system-insights.clearPermissionFilter')"
+              >
+                <IconifyIcon icon="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            {{
+              $t('system-insights.permissionFilter', {
+                status: selectedRolePermissionLabel,
+              })
+            }}
+          </Tag>
+          <Tag
+            color="blue"
+            v-if="filters.has_members === false"
+            closable
+            data-testid="management-members-filter"
+            @close.prevent="quickFilter({ key: 'has_members', value: undefined })"
+          >
+            {{ $t('system-insights.withoutMembers') }}
+          </Tag>
+          <Tag
+            color="blue"
+            v-if="selectedDay"
+            class="system-day-filter"
+            data-testid="management-day-filter"
+          >
+            {{
+              $t(
+                selectedDayKind === 'login'
+                  ? 'system-insights.loginDayFilter'
+                  : 'system-insights.dayFilter',
+                { date: selectedDay },
+              )
+            }}
+            <button
+              type="button"
+              class="system-scope-clear"
+              :aria-label="$t('system-insights.clearDay')"
+              @click="clearDay"
+            >
+              <IconifyIcon icon="lucide:x" aria-hidden="true" />
+            </button>
+          </Tag>
+          <Tag
+            color="blue"
+            v-for="group in selectedPermissionGroups"
+            :key="group"
+            closable
+            data-testid="management-group-filter"
+            :aria-label="clearPermissionGroupLabel(group)"
+            @close.prevent="clearPermissionGroup(group)"
+          >
+            <template #closeIcon>
+              <button
+                type="button"
+                class="system-scope-clear"
+                :aria-label="clearPermissionGroupLabel(group)"
+              >
+                <IconifyIcon icon="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            {{
+              $t(
+                props.resource === 'role'
+                  ? 'system-insights.roleGroupFilter'
+                  : 'system-insights.groupFilter',
+                {
+                  name: group || $t('system-insights.ungrouped'),
+                },
+              )
+            }}
+          </Tag>
+        </div>
+        <ManagementSearch data-testid="management-search" :model="filters" @finish="search">
           <FormItem
             v-for="field in visibleFilters"
             :key="field.key"
@@ -2316,7 +2860,8 @@ onMounted(loadInitialData);
               @focus="handleFilterFocus"
               @search="searchBackendFilterSuggestions(field.key, $event)"
               @update:value="updateMultiFilterValue(field.key, $event)"
-            >
+            :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, !!filterSuggestionsLoading[filterHistoryKey(field.key)])"
+>
               <template
                 v-if="field.splitLines"
                 #tagRender="{ closable, label, onClose }"
@@ -2407,6 +2952,7 @@ onMounted(loadInitialData);
               </template>
             </Select>
             <AutoComplete
+:not-found-content="!!filterSuggestionsLoading[filterHistoryKey(field.key)] ? ' ' : null"
               v-else
               :value="filters[field.key]"
               allow-clear
@@ -2423,7 +2969,8 @@ onMounted(loadInitialData);
               @focus="handleFilterFocus"
               @search="searchBackendFilterSuggestions(field.key, $event)"
               @update:value="updateTextFilterValue(field.key, $event)"
-            >
+            :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, !!filterSuggestionsLoading[filterHistoryKey(field.key)])"
+>
               <template #option="{ label, source, value }">
                 <div
                   v-if="source === 'history'"
@@ -2465,7 +3012,7 @@ onMounted(loadInitialData);
             <Button v-if="canRead" html-type="button" @click="resetSearch">
               {{ $t('system.common.reset') }}
             </Button>
-            <Button v-if="canRead" html-type="submit" type="primary">
+            <Button v-if="canRead" html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
               {{ $t('system.common.search') }}
             </Button>
             <Button
@@ -2488,8 +3035,52 @@ onMounted(loadInitialData);
         </ManagementSearch>
       </ManagementCard>
 
-      <div class="min-h-0 flex-1">
-        <ManagementCard class="system-section-card h-full">
+      <div
+        v-if="canRead"
+        class="system-results-layout"
+        :class="{ 'with-group-nav': props.resource === 'action' }"
+      >
+        <nav
+          v-if="props.resource === 'action'"
+          class="system-group-nav"
+          v-skeleton="summaryLoading"
+          :aria-label="$t('system-insights.businessGroups')"
+          data-testid="management-permission-groups"
+        >
+          <h2>{{ $t('system-insights.businessGroups') }}</h2>
+          <button
+            type="button"
+            :aria-pressed="selectedExactGroups.length === 0"
+            @click="selectPermissionGroup()"
+          >
+            <span>{{ $t('system-insights.allGroups') }}</span><b v-if="summary">{{ summary.total }}</b>
+          </button>
+          <button
+            v-for="group in summary?.groups ?? []"
+            :key="group.name"
+            type="button"
+            :aria-pressed="selectedExactGroups.includes(group.name)"
+            :aria-label="
+              $t('system-insights.selectGroup', {
+                name: group.name || $t('system-insights.ungrouped'),
+              })
+            "
+            @click="selectPermissionGroup(group.name)"
+          >
+            <span>{{ group.name || $t('system-insights.ungrouped') }}</span><b>{{ group.count }}</b>
+          </button>
+        </nav>
+        <ManagementCard
+          class="system-section-card system-results-card"
+        >
+          <div v-if="props.resource !== 'user'" class="system-result-caption" data-testid="management-result-caption">
+            <ManagementViewSwitch
+              v-model="viewMode"
+              class="system-view-switch"
+              test-id="management-view"
+              :options="viewOptions"
+            />
+          </div>
           <div class="mb-4 flex flex-wrap items-center gap-3">
             <Space wrap>
               <Button v-if="canCreate" type="primary" @click="openEditor()">
@@ -2498,6 +3089,7 @@ onMounted(loadInitialData);
               </Button>
               <Button
                 v-if="canDelete && selectedRowKeys.length > 0"
+                :disabled="loading"
                 danger
                 @click="removeSelected"
               >
@@ -2505,7 +3097,41 @@ onMounted(loadInitialData);
               </Button>
             </Space>
 
+            <div
+              v-if="viewMode === 'cards'"
+              class="ml-auto flex items-center gap-2"
+            >
+              <Button
+                v-if="canRead"
+                size="small"
+                class="management-tool-button"
+                :aria-label="$t('system.common.refresh')"
+                :title="$t('system.common.refresh')"
+                :disabled="loading" v-skeleton="loading" :aria-busy="loading"
+                @click="refreshAll"
+              >
+                <IconifyIcon icon="lucide:refresh-cw" />
+              </Button>
+              <Button
+                size="small"
+                class="management-tool-button"
+                :aria-label="$t('system.table.fullscreen')"
+                :title="
+                  $t(
+                    isFullscreen
+                      ? 'system.table.exitFullscreen'
+                      : 'system.table.fullscreen',
+                  )
+                "
+                @click="toggleFullscreen()"
+              >
+                <IconifyIcon
+                  :icon="isFullscreen ? 'lucide:minimize' : 'lucide:maximize'"
+                />
+              </Button>
+            </div>
             <ManagementToolbar
+              v-else
               v-model:size="tableSize"
               v-model:bordered="tableSettings.bordered"
               v-model:striped="tableSettings.striped"
@@ -2513,7 +3139,7 @@ onMounted(loadInitialData);
               :can-read="canRead"
               :loading="loading"
               :is-fullscreen="isFullscreen"
-              @refresh="loadData"
+              @refresh="refreshAll"
               @fullscreen="toggleFullscreen()"
             >
               <template #columns>
@@ -2539,7 +3165,65 @@ onMounted(loadInitialData);
             </ManagementToolbar>
           </div>
 
+          <LoadWarning
+            v-if="loadError"
+            data-testid="management-load-error"
+          >
+            <template #action>
+              <Button size="small" @click="loadData">
+                {{ $t('system-insights.retry') }}
+              </Button>
+            </template>
+          </LoadWarning>
+          <template v-if="viewMode === 'cards'">
+            <div class="system-card-selection">
+              <Checkbox
+                :checked="records.length > 0 && selectedRowKeys.length === records.length"
+                :indeterminate="
+                  selectedRowKeys.length > 0 &&
+                  selectedRowKeys.length < records.length
+                "
+                :disabled="loading"
+                :aria-label="$t('system-insights.selectAllPage')"
+                @change="selectAllCards($event.target.checked)"
+              />
+              <span v-if="selectedRowKeys.length">{{
+                $t('system-insights.selected', {
+                  count: selectedRowKeys.length,
+                })
+              }}</span>
+            </div>
+            <SystemResourceCards
+              :resource="props.resource"
+              :records="records"
+              :selected-keys="selectedRowKeys"
+              :selectable="true"
+              :can-update="canUpdate"
+              :can-delete="canDelete"
+              :loading="loading"
+              @detail="openDetail"
+              @edit="openEditor"
+              @remove="confirmRemove"
+              @selection="selectedRowKeys = $event"
+            />
+            <Pagination
+              class="system-card-pagination"
+              :current="pagination.current"
+              :page-size="pagination.pageSize"
+              :total="pagination.total"
+              show-size-changer
+              :show-total="
+                (total: number) => $t('system.table.total', { count: total })
+              "
+              @change="
+                (current, pageSize) => handleTableChange({ current, pageSize })
+              "
+            />
+          </template>
           <Table
+            v-else
+            ref="managementTableRef"
+            data-testid="management-table"
             :bordered="tableSettings.bordered"
             :columns="tableColumns"
             :data-source="records"
@@ -2558,11 +3242,26 @@ onMounted(loadInitialData);
             :scroll="{ x: tableScrollWidth }"
             :size="tableSize"
             :sticky="tableSettings.sticky"
+            :style="
+              !contentTableColumns.some((column) => column.key !== 'operation')
+                ? { maxWidth: `${tableScrollWidth}px` }
+                : undefined
+            "
             @change="handleTableChange"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'operation'">
-                <Space>
+                <Space
+                  class="system-operation-actions"
+                >
+                  <Button
+                    v-if="canRead"
+                    size="small"
+                    type="link"
+                    @click="openDetail(record)"
+                  >
+                    {{ $t('system-insights.details') }}
+                  </Button>
                   <Button
                     v-if="
                       canUpdate &&
@@ -2642,8 +3341,63 @@ onMounted(loadInitialData);
                   </Popconfirm>
                 </Space>
               </template>
+              <template
+                v-else-if="
+                  props.resource === 'user' && column.key === 'username'
+                "
+              >
+                <div class="system-user-identity">
+                  <Avatar :size="30">
+                    {{ record.username?.slice(0, 1).toUpperCase() }}
+                  </Avatar>
+                  <div>
+                    <Button
+                      type="link"
+                      size="small"
+                      @click="openDetail(record)"
+                    >
+                      {{ record.username }}
+</Button><span>{{ record.code }}</span>
+                  </div>
+                </div>
+              </template>
+              <template
+                v-else-if="
+                  props.resource === 'action' &&
+                  viewMode === 'matrix' &&
+                  column.key === 'name'
+                "
+              >
+                <strong>{{ record.name }}</strong>
+                <div class="system-matrix-word">
+                  {{ record.word }}
+                </div>
+              </template>
+              <template
+                v-else-if="
+                  props.resource === 'action' &&
+                  viewMode === 'matrix' &&
+                  (column.key === 'menu' || column.key === 'button')
+                "
+              >
+                <Tag
+                  v-if="String(record[column.key] || '').trim()"
+                  color="green"
+                >
+                  {{ $t('system-insights.configured') }} ({{
+                    resourceRules(record[column.key]).length
+                  }})
+</Tag><span v-else class="text-muted-foreground">{{
+                  $t('system-insights.notConfigured')
+                }}</span>
+              </template>
               <template v-else-if="columnDisplay(column) === 'date'">
-                {{ formatDate(columnValue(record, column)) }}
+                {{
+                  column.key === 'last_logged_in_at' &&
+                  !columnValue(record, column)
+                    ? $t('system-insights.neverLoggedIn')
+                    : formatDate(columnValue(record, column))
+                }}
               </template>
               <template v-else-if="columnDisplay(column) === 'resource-rules'">
                 <Space
@@ -2685,9 +3439,9 @@ onMounted(loadInitialData);
                 <span v-else>-</span>
               </template>
               <template v-else-if="columnDisplay(column) === 'users'">
-                <Space v-if="record.users?.length" wrap>
+                <Space v-if="memberPreview(record).length" wrap>
                   <RouterLink
-                    v-for="item in record.users"
+                    v-for="item in memberPreview(record)"
                     :key="item.id"
                     :to="{
                       name: 'SystemUser',
@@ -2698,6 +3452,7 @@ onMounted(loadInitialData);
                   </RouterLink>
                 </Space>
                 <span v-else>-</span>
+                <Button v-if="memberCount(record)" type="link" size="small" @click="openDetail(record)">{{ $t('system-members.viewAll', { count: memberCount(record) }) }}</Button>
               </template>
               <template v-else-if="columnDisplay(column) === 'role'">
                 <RouterLink
@@ -2718,7 +3473,14 @@ onMounted(loadInitialData);
                 </Tag>
               </template>
               <template v-else-if="columnDisplay(column) === 'json'">
-                <div class="flex max-w-72 flex-col gap-2">
+                <div
+                  class="flex min-w-0 flex-col"
+                  :class="
+                    props.resource === 'user'
+                      ? 'w-full gap-1'
+                      : 'max-w-72 gap-2'
+                  "
+                >
                   <div
                     v-if="props.resource === 'user' && record.status === 2"
                     class="flex items-center gap-1"
@@ -2745,7 +3507,16 @@ onMounted(loadInitialData);
                       {{ $t('system.common.unknown') }}
                     </Tag>
                   </div>
-                  <pre class="m-0 max-h-40 overflow-auto whitespace-pre-wrap">{{
+                  <pre
+                    class="m-0 overflow-auto whitespace-pre-wrap"
+                    :class="
+                      props.resource === 'user'
+                        ? 'max-h-[60px] leading-5'
+                        : 'max-h-40'
+                    "
+                    tabindex="0"
+                    :aria-label="String(column.title)"
+                  >{{
                     formatJSON(columnValue(record, column))
                   }}</pre>
                 </div>
@@ -2774,57 +3545,50 @@ onMounted(loadInitialData);
       </div>
     </div>
 
-    <Modal
-      v-model:open="modalOpen"
-      :confirm-loading="submitting"
-      :title="
-        $t(
-          editingRecord
-            ? 'system.common.editTitle'
-            : 'system.common.createTitle',
-          { entity: config.entity },
-        )
-      "
-      width="680px"
-      @ok="submitEditor"
+    <ManagementDrawer
+      :open="detailsOpen || modalOpen"
+      :title="drawerTitle"
+      :entity="config.entity"
+      :record-id="modalOpen ? editingRecord?.id : selectedRecord?.id"
+      :mode="modalOpen ? (editingRecord ? 'edit' : 'create') : 'detail'"
+      :busy="submitting"
+      :wide="props.resource === 'dictionary' || props.resource === 'action'"
+      @close="closeEditorPanel()"
     >
-      <ManagementForm ref="formRef" :model="formModel" :rules="formRules">
+      <SystemRecordDetail
+        v-if="!modalOpen"
+        :record="selectedRecord"
+        :resource="props.resource"
+        :loading="detailLoading"
+        :error="detailError"
+        @retry="loadGroupDetail"
+      />
+      <ManagementForm v-else ref="formRef" :model="formModel" :rules="formRules" :disabled="submitting" vertical data-testid="management-editor">
+        <SystemRecordDetail :record="editingRecord" :resource="props.resource" editing>
+        <template v-for="field in editorFields" :key="field.key" #[`field-${field.key}`]>
         <FormItem
-          v-for="field in editorFields"
-          :key="field.key"
-          :extra="
-            field.type === 'action-group'
-              ? $t('system.hints.actionGroup')
-              : field.type === 'action-select'
-                ? $t('system.hints.action')
-                : field.type === 'role-select'
-                  ? $t('system.hints.role')
-                  : field.type === 'user-select'
-                    ? $t('system.hints.user')
-                    : undefined
-          "
+          :class="{ 'editor-code': field.type === 'json' || ['resource', 'menu', 'button'].includes(field.key) }"
           :label="
             editingRecord && field.editLabel ? field.editLabel : field.label
           "
           :name="field.key"
+          :html-for="`editor-${props.resource}-${field.key}`"
         >
           <AutoComplete
             v-if="field.type === 'action-group'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             allow-clear
             autocomplete="off"
             :filter-option="false"
-            :not-found-content="
-              actionGroupOptionsLoading
-                ? $t('system.suggestions.searching')
-                : null
-            "
+            :not-found-content="actionGroupOptionsLoading ? ' ' : null"
             :options="actionGroupOptions"
             :placeholder="$t('system.suggestions.actionGroup')"
             :show-action="['focus']"
             @dropdown-visible-change="handleActionGroupDropdownVisibleChange"
             @search="searchActionGroupOptions"
-          >
+          :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, actionGroupOptionsLoading)"
+>
             <template #option="{ isNew, label }">
               <span v-if="isNew" class="text-muted-foreground">{{
                 $t('system.hints.createGroup', { name: label })
@@ -2843,12 +3607,21 @@ onMounted(loadInitialData);
               </template>
             </template>
           </AutoComplete>
+          <RuleListEditor
+            v-else-if="['resource', 'menu', 'button'].includes(field.key)"
+            v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
+            :label="field.label"
+            :disabled="submitting"
+            :placeholder="field.placeholder || $t('system.common.enter', { field: field.label })"
+          />
           <Textarea
             v-else-if="field.type === 'textarea' || field.type === 'json'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             :auto-size="
               field.type === 'json'
-                ? { minRows: 8, maxRows: 18 }
+                ? { minRows: 8, maxRows: 12 }
                 : { minRows: 2, maxRows: 6 }
             "
             :placeholder="
@@ -2859,6 +3632,7 @@ onMounted(loadInitialData);
           <InputPassword
             v-else-if="field.type === 'password'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             :placeholder="
               (editingRecord && field.editPlaceholder) ||
               field.placeholder ||
@@ -2868,62 +3642,48 @@ onMounted(loadInitialData);
           <Select
             v-else-if="field.type === 'category'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             :options="[
               { label: $t('system.category.permission'), value: 0 },
               { label: $t('system.category.jwt'), value: 1 },
             ]"
           />
-          <Switch
-            v-else-if="field.type === 'enabled'"
-            v-model:checked="formModel[field.key]"
-          />
+          <div v-else-if="field.type === 'enabled'" class="editor-switch">
+            <Switch v-model:checked="formModel[field.key]" :aria-label="field.label" />
+            <span>{{ $t(formModel[field.key] ? 'system.enabled.yes' : 'system.enabled.no') }}</span>
+          </div>
           <Select
             v-else-if="field.type === 'status'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             :options="[
               { label: $t('system.status.pending'), value: 0 },
               { label: $t('system.status.active'), value: 1 },
               { label: $t('system.status.locked'), value: 2 },
             ]"
           />
-          <Select
+          <AssociationEditor
             v-else-if="field.type === 'action-select'"
             v-model:value="formModel[field.key]"
-            allow-clear
-            :filter-option="false"
-            :loading="actionOptionsLoading"
-            mode="multiple"
-            :options="actionOptions"
-            :placeholder="$t('system.suggestions.action')"
-            show-search
-            @dropdown-visible-change="handleActionDropdownVisibleChange"
-            @search="searchActionOptions"
-          >
-            <template #option="{ label }">
-              <span
-                v-for="(segment, index) in matchingSegments(
-                  String(label),
-                  actionOptionsQuery,
-                )"
-                :key="index"
-                :class="{ 'font-bold text-red-500': segment.matched }"
-              >
-                {{ segment.text }}
-              </span>
-            </template>
-          </Select>
+            :id="`editor-${props.resource}-${field.key}`"
+            kind="action"
+            :disabled="submitting"
+            :records="editingRecord && 'actions' in editingRecord ? editingRecord.actions ?? [] : []"
+          />
           <Select
             v-else-if="field.type === 'role-select'"
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             allow-clear
             :filter-option="false"
-            :loading="roleOptionsLoading"
+            :loading="false"
             :options="roleOptions"
             :placeholder="$t('system.suggestions.role')"
             show-search
             @dropdown-visible-change="handleRoleDropdownVisibleChange"
             @search="searchRoleOptions"
-          >
+          :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, roleOptionsLoading)"
+>
             <template #option="{ label }">
               <span
                 v-for="(segment, index) in matchingSegments(
@@ -2937,43 +3697,56 @@ onMounted(loadInitialData);
               </span>
             </template>
           </Select>
-          <Select
+          <GroupMembers
+            v-else-if="field.type === 'user-select' && editingRecord"
+            :key="editingRecord.id"
+            v-model:value="formModel[field.key]"
+            :group-id="editingRecord.id"
+            :count="memberCount(editingRecord)"
+            editable
+            :disabled="submitting"
+          />
+          <AssociationEditor
             v-else-if="field.type === 'user-select'"
             v-model:value="formModel[field.key]"
-            allow-clear
-            :filter-option="false"
-            :loading="userOptionsLoading"
-            mode="multiple"
-            :options="userOptions"
-            :placeholder="$t('system.suggestions.user')"
-            show-search
-            @dropdown-visible-change="handleUserDropdownVisibleChange"
-            @search="searchUserOptions"
-          >
-            <template #option="{ label }">
-              <span
-                v-for="(segment, index) in matchingSegments(
-                  String(label),
-                  userOptionsQuery,
-                )"
-                :key="index"
-                :class="{ 'font-bold text-red-500': segment.matched }"
-              >
-                {{ segment.text }}
-              </span>
-            </template>
-          </Select>
+            :id="`editor-${props.resource}-${field.key}`"
+            kind="user"
+            :disabled="submitting"
+            :records="editingRecord && 'users' in editingRecord ? editingRecord.users : []"
+          />
           <Input
             v-else
             v-model:value="formModel[field.key]"
+            :id="`editor-${props.resource}-${field.key}`"
             :placeholder="
               field.placeholder ||
               $t('system.common.enter', { field: field.label })
             "
           />
         </FormItem>
+        </template>
+        </SystemRecordDetail>
+        <Alert v-if="editorError" class="mt-5" type="error" show-icon :message="editorError" />
       </ManagementForm>
-    </Modal>
+      <template #footer>
+        <template v-if="modalOpen">
+          <Button :disabled="submitting" @click="closeEditorPanel(Boolean(editingRecord))">
+            {{ $t(editingRecord ? 'system-editor.cancelEdit' : 'system-editor.cancel') }}
+          </Button>
+          <span v-if="editorDirty" class="editor-dirty">{{ $t('system-editor.unsaved') }}</span>
+          <Button type="primary" :loading="submitting" :aria-busy="submitting" data-testid="management-save" @click="submitEditor">
+            <IconifyIcon :icon="editingRecord ? 'lucide:check' : 'lucide:plus'" />
+            {{ editingRecord ? $t('system-editor.save') : $t('system.common.createTitle', { entity: config.entity }) }}
+          </Button>
+        </template>
+        <template v-else>
+          <Button @click="closeEditorPanel()">{{ $t('system-cards.backToList') }}</Button>
+          <Button v-if="canUpdate && selectedRecord" type="primary" :disabled="detailLoading || detailError" @click="editDetail(selectedRecord)">
+            <IconifyIcon icon="lucide:pencil" />{{ $t('system.common.edit') }}
+          </Button>
+        </template>
+      </template>
+    </ManagementDrawer>
 
     <Modal
       v-model:open="lockModalOpen"
@@ -3056,6 +3829,250 @@ onMounted(loadInitialData);
 </template>
 
 <style scoped>
+.system-management-page:fullscreen {
+  overflow: auto;
+}
+.system-operation-actions {
+  width: max-content;
+  white-space: nowrap;
+}
+.system-management-page {
+  min-width: 0;
+  padding: 3px 0 8px;
+}
+.system-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 2px;
+}
+.system-page-heading h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 650;
+}
+.system-results-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.system-results-layout.with-group-nav {
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+.system-results-card {
+  min-width: 0;
+}
+.system-results-card :deep(.ant-card-body) {
+  padding: 18px;
+}
+.system-result-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.system-view-switch {
+  margin-left: auto;
+}
+.system-group-nav {
+  max-height: calc(clamp(360px, 52vh, 620px) + 150px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 12px;
+  min-width: 0;
+}
+.system-group-nav h2 {
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  margin: 7px 9px 12px;
+}
+.system-group-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 9px;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.75);
+  cursor: pointer;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  line-height: 1.6;
+}
+.system-group-nav button span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.system-group-nav button b {
+  font-size: 11px;
+  font-weight: 500;
+  background: hsl(var(--muted));
+  border-radius: calc(var(--radius) * 0.5);
+  padding: 0 5px;
+}
+.system-group-nav button:hover,
+.system-group-nav button[aria-pressed='true'] {
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+}
+.system-group-nav button:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.system-card-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin: 4px 0 14px;
+}
+.system-card-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.system-day-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.system-scope-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.375);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.system-scope-clear :deep(svg) {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+.system-scope-clear:hover {
+  background: hsl(var(--muted));
+}
+.system-scope-clear:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+.system-active-scope {
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.system-active-scope :deep(.ant-tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 6px;
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.system-active-scope :deep(.ant-tag-close-icon) {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-inline-start: 0;
+  line-height: 1;
+}
+.system-user-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.system-user-identity :deep(.ant-avatar) {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+.system-user-identity > div {
+  min-width: 0;
+}
+.system-user-identity :deep(.ant-btn) {
+  max-width: 100%;
+  padding: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  height: auto;
+  text-align: left;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+.system-user-identity > div > span {
+  font-size: 11px;
+}
+.system-user-identity > div > span {
+  display: block;
+  color: hsl(var(--muted-foreground));
+  margin-top: 2px;
+}
+.system-matrix-word {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.8;
+}
+@media (max-width: 1000px) {
+  .system-results-layout.with-group-nav {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+  .system-group-nav {
+    padding: 8px;
+  }
+}
+@media (max-width: 700px) {
+  .system-results-layout.with-group-nav {
+    grid-template-columns: 1fr;
+  }
+  .system-group-nav {
+    display: flex;
+    align-items: center;
+    overflow: auto;
+    gap: 6px;
+  }
+  .system-group-nav h2 {
+    display: none;
+  }
+  .system-group-nav button {
+    width: auto;
+    white-space: nowrap;
+  }
+  .system-page-heading h1 {
+    font-size: 22px;
+  }
+  .system-card-pagination {
+    justify-content: flex-start;
+  }
+}
+
 :deep(.system-table-row-striped > td) {
   background-color: rgb(127 127 127 / 6%) !important;
 }

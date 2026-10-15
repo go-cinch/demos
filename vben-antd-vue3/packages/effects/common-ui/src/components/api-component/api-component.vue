@@ -6,8 +6,6 @@ import type {
 
 import { computed, nextTick, ref, unref, useAttrs, watch } from 'vue';
 
-import { LoaderCircle } from '@vben/icons';
-
 import { cloneDeep, get, isEqual, isFunction } from '@vben-core/shared/utils';
 
 import { objectOmit } from '@vueuse/core';
@@ -267,7 +265,11 @@ defineExpose({
       <slot :name="item" v-bind="data || {}"></slot>
     </template>
     <template v-if="loadingSlot && loading" #[loadingSlot]>
-      <LoaderCircle class="animate-spin" />
+      <span class="api-option-skeleton" aria-hidden="true"></span>
     </template>
   </component>
 </template>
+
+<style scoped>
+.api-option-skeleton { display: inline-block; width: 14px; height: 14px; border-radius: calc(var(--radius) * 0.375); background: hsl(var(--muted)); }
+</style>

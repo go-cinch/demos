@@ -19,6 +19,7 @@ interface Props {
   sloganImage?: string;
   toolbar?: boolean;
   copyright?: boolean;
+  illustrationFullBleed?: boolean;
   toolbarList?: ToolbarType[];
   clickLogo?: () => void;
 }
@@ -26,6 +27,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   appName: '',
   copyright: true,
+  illustrationFullBleed: false,
   logo: '',
   logoDark: '',
   pageDescription: '',
@@ -112,29 +114,40 @@ const logoSrc = computed(() => {
       <div
         class="absolute inset-0 size-full bg-background-deep dark:bg-[#070709]"
       >
-        <div class="login-background absolute top-0 left-0 size-full"></div>
+        <div
+          v-if="!illustrationFullBleed"
+          class="login-background absolute top-0 left-0 size-full"
+        ></div>
         <div
           :key="authPanelLeft ? 'left' : authPanelRight ? 'right' : 'center'"
-          class="mr-20 flex-col-center h-full"
+          class="h-full"
           :class="{
-            'enter-x': authPanelLeft,
-            '-enter-x': authPanelRight,
+            'mr-20 flex-col-center': !illustrationFullBleed,
+            'relative overflow-hidden': illustrationFullBleed,
+            'enter-x': authPanelLeft && !illustrationFullBleed,
+            '-enter-x': authPanelRight && !illustrationFullBleed,
           }"
         >
-          <template v-if="sloganImage">
-            <img
+          <slot name="illustration">
+            <template v-if="sloganImage">
+              <img
+                :alt="appName"
+                :src="sloganImage"
+                class="h-64 w-2/5 animate-float"
+              />
+            </template>
+            <SloganIcon
+              v-else
               :alt="appName"
-              :src="sloganImage"
               class="h-64 w-2/5 animate-float"
             />
-          </template>
-          <SloganIcon v-else :alt="appName" class="h-64 w-2/5 animate-float" />
-          <div class="text-1xl mt-6 font-sans text-foreground lg:text-2xl">
-            {{ pageTitle }}
-          </div>
-          <div class="mt-2 dark:text-muted-foreground">
-            {{ pageDescription }}
-          </div>
+            <div class="text-1xl mt-6 font-sans text-foreground lg:text-2xl">
+              {{ pageTitle }}
+            </div>
+            <div class="mt-2 dark:text-muted-foreground">
+              {{ pageDescription }}
+            </div>
+          </slot>
         </div>
       </div>
     </div>

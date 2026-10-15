@@ -139,14 +139,14 @@ defineExpose({
 <template>
   <CollapsibleRoot
     v-model:open="open"
-    class="border rounded-[0.5rem] flex flex-col w-full overflow-hidden"
+    class="border rounded-lg flex flex-col w-full overflow-hidden"
     :class="[b()]"
     :unmount-on-hide="false"
   >
     <div class="wrapper w-full relative flex flex-col overflow-x-auto">
       <div class="w-full min-w-fit">
         <div
-          class="header bg-accent w-full flex-none flex items-center rounded-t-[0.5rem] border-b"
+          class="header bg-accent w-full flex-none flex items-center rounded-t-lg border-b"
         >
           <div
             class="header-cell pt-2 pb-2 px-5 leading-[1.5rem] flex items-center flex-nowrap"
@@ -200,7 +200,7 @@ defineExpose({
       v-if="!open && collapsibleRows.length > 0"
     ></div>
     <div
-      class="trigger-bar flex min-h-[2rem] border-t px-5 pt-1 pb-1 rounded-b-[0.5rem] z-1"
+      class="trigger-bar flex min-h-[2rem] border-t px-5 pt-1 pb-1 rounded-b-lg z-1"
       :class="{
         'collapsed absolute bottom-px left-px right-px border-t-0 pt-6': !open,
       }"

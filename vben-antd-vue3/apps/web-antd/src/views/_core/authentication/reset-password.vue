@@ -75,7 +75,7 @@ async function submit() {
           :disabled="submitting"
         />
       </FormItem>
-      <Button type="primary" html-type="submit" block :loading="submitting">
+      <Button type="primary" html-type="submit" block :loading="submitting" :aria-busy="submitting">
         {{ $t('app.resetPassword.submit') }}
       </Button>
       <Button

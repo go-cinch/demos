@@ -5,6 +5,7 @@ import { IconifyIcon } from '@vben/icons';
 
 import { Button, Popover, Space, Switch, Tooltip } from 'ant-design-vue';
 
+import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 withDefaults(
   defineProps<{
@@ -28,12 +29,13 @@ const densityOptions = computed(() => [
 ]);
 </script>
 <template>
-  <Space class="ml-auto" size="small" wrap>
+  <Space class="ml-auto" data-testid="management-toolbar" size="small" wrap>
     <Tooltip :title="$t('system.common.refresh')">
       <Button
+        class="management-tool-button"
         v-if="canRead"
         :aria-label="$t('system.common.refresh')"
-        :loading="loading"
+        :disabled="loading" v-skeleton="loading" :aria-busy="loading"
         size="small"
         @click="emit('refresh')"
       >
@@ -60,7 +62,11 @@ const densityOptions = computed(() => [
           </Button>
         </div>
       </template>
-      <Button :aria-label="$t('system.table.density')" size="small">
+      <Button
+        class="management-tool-button"
+        :aria-label="$t('system.table.density')"
+        size="small"
+      >
         <IconifyIcon icon="lucide:rows-3" />
       </Button>
     </Popover>
@@ -73,6 +79,7 @@ const densityOptions = computed(() => [
       "
     >
       <Button
+        class="management-tool-button"
         :aria-label="$t('system.table.fullscreen')"
         size="small"
         @click="emit('fullscreen')"
@@ -91,7 +98,11 @@ const densityOptions = computed(() => [
       <template #content>
         <slot name="columns"></slot>
       </template>
-      <Button :aria-label="$t('system.table.columns')" size="small">
+      <Button
+        class="management-tool-button"
+        :aria-label="$t('system.table.columns')"
+        size="small"
+      >
         <IconifyIcon icon="lucide:columns-3" />
       </Button>
     </Popover>
@@ -108,19 +119,36 @@ const densityOptions = computed(() => [
           <Switch v-model:checked="bordered" size="small" />
           <span>{{ $t('system.table.striped') }}</span>
           <Switch v-model:checked="striped" size="small" />
-          <Tooltip :title="$t('system.table.stickyHint')">
-            <span class="cursor-help">{{ $t('system.table.sticky') }}</span>
-          </Tooltip>
+          <span>{{ $t('system.table.sticky') }}</span>
           <Switch v-model:checked="sticky" size="small" />
         </div>
       </template>
-      <Button :aria-label="$t('system.table.style')" size="small">
+      <Button
+        class="management-tool-button"
+        :aria-label="$t('system.table.style')"
+        size="small"
+      >
         <IconifyIcon icon="lucide:settings-2" />
       </Button>
     </Popover>
   </Space>
 </template>
 <style>
+.management-tool-button.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  line-height: 1;
+}
+.management-tool-button.ant-btn > svg {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
 .system-compact-popover .ant-popover-inner {
   min-width: 0;
   padding: 8px;

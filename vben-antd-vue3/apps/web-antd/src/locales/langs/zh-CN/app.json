@@ -23,7 +23,10 @@
     "start": "点击开始验证"
   },
   "errors": {
-    "failed": "请求失败，请稍后重试。"
+    "failed": "请求失败，请稍后重试。",
+    "serverLost": "服务器迷路啦~",
+    "statisticsLoad": "统计信息加载失败，请重试。",
+    "dataLoad": "数据加载失败，请重试。"
   },
   "resetPassword": {
     "title": "重置密码",
@@ -31,5 +34,10 @@
     "submit": "重置并继续",
     "logout": "退出登录",
     "success": "密码已重置"
+  },
+  "journey": {
+    "title": "欢迎归航",
+    "description": "进入 Go Cinch，继续今天的工作",
+    "entering": "登录成功，正在进入…"
   }
 }

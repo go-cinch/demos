@@ -96,7 +96,7 @@ defineExpose({
         </slot>
       </template>
     </Title>
-    <Form />
+    <Form class="auth-feedback-form" />
 
     <VbenButton
       :class="{
@@ -119,3 +119,15 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Reserve a compact feedback line before validation so controls stay in place. */
+.auth-feedback-form :deep([data-slot='form-item']) {
+  padding-bottom: 28px;
+}
+.auth-feedback-form :deep([data-slot='form-message']) {
+  position: absolute;
+  margin-top: 4px;
+  line-height: 20px;
+}
+</style>

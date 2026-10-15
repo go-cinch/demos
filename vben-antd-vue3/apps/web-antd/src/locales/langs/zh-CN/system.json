@@ -100,7 +100,6 @@
     "bordered": "边框",
     "striped": "斑马纹",
     "sticky": "固定表头",
-    "stickyHint": "滚动时保持表头可见",
     "total": "共 {count} 条"
   },
   "status": {
@@ -127,10 +126,6 @@
     "removeHistory": "从历史记录中移除“{value}”"
   },
   "hints": {
-    "actionGroup": "选择已有权限分组，或输入新分组名称。",
-    "action": "按权限名称或标识（如“查看用户”或 user.read）搜索，也可以展开列表选择。",
-    "role": "按角色名称或标识搜索，也可以展开列表选择。",
-    "user": "按用户名或用户编码搜索，也可以展开列表选择。",
     "createGroup": "创建“{name}”"
   },
   "messages": {

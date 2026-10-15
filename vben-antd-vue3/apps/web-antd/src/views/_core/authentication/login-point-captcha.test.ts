@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import LoginPointCaptcha from './login-point-captcha.vue';
 
+vi.mock('#/locales', () => ({ $t: (key: string) => key }));
+
 const PopoverStub = defineComponent({
-  name: 'Popover',
+  name: 'CaptchaPopoverStub',
   template: '<div><slot name="content" /><slot /></div>',
 });
 
@@ -108,4 +110,18 @@ describe('login-point-captcha', () => {
 
     expect(wrapper.find('.captcha-panel-error').exists()).toBe(false);
   });
+  it('shows gateway downtime without blaming the selected points or issuing another request', async () => {
+    const onVerify = vi.fn().mockRejectedValue({ response: { status: 502 } });
+    const wrapper = mountCaptcha(onVerify);
+    const image = wrapper.find('img');
+    await image.trigger('click', { clientX: 40, clientY: 50 });
+    await image.trigger('click', { clientX: 180, clientY: 120 });
+    await flushPromises();
+    expect(wrapper.text()).toContain('app.errors.serverLost');
+    expect(wrapper.text()).not.toContain('app.captcha.failed');
+    expect(wrapper.props('onRefresh')).not.toHaveBeenCalled();
+    expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual([]);
+    wrapper.unmount();
+  });
+
 });

@@ -1,0 +1,6 @@
+{
+  "viewAll": "查看全部 {count} 人",
+  "remove": "移除",
+  "changes": "待保存：新增 {added} 人，移除 {removed} 人",
+  "count": "共 {count} 人"
+}

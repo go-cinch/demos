@@ -6,7 +6,7 @@ import {
   authPublicRequestClient,
   authRequestClient,
   authSessionRequestClient,
-  authSilentPublicRequestClient,
+  authVerificationRequestClient,
 } from '#/api/request';
 
 import appEnglish from '../../locales/langs/en-US/app.json';
@@ -14,6 +14,7 @@ import appChinese from '../../locales/langs/zh-CN/app.json';
 import {
   changePasswordApi,
   createSliderCaptchaChallengeApi,
+  getLoginVerificationApi,
   loginApi,
   logoutApi,
   refreshPasswordChangeCaptchaApi,
@@ -62,7 +63,7 @@ vi.mock('#/api/request', () => ({
   authSessionRequestClient: {
     post: vi.fn(),
   },
-  authSilentPublicRequestClient: {
+  authVerificationRequestClient: {
     get: vi.fn(),
     post: vi.fn(),
   },
@@ -233,8 +234,17 @@ describe('changePasswordApi', () => {
     );
   });
 
-  it('verifies login captcha points with the silent public client', async () => {
-    vi.mocked(authSilentPublicRequestClient.post).mockResolvedValue({
+  it('checks the username with the gateway-notifying verification client', async () => {
+    vi.mocked(authVerificationRequestClient.get).mockResolvedValue({ captcha_required: false });
+    await getLoginVerificationApi('example');
+    expect(authVerificationRequestClient.get).toHaveBeenCalledWith(
+      '/auth/pub/login/verification',
+      { params: { username: 'example' } },
+    );
+  });
+
+  it('verifies login captcha points with the gateway-notifying verification client', async () => {
+    vi.mocked(authVerificationRequestClient.post).mockResolvedValue({
       verified: false,
     });
 
@@ -243,7 +253,7 @@ describe('changePasswordApi', () => {
       { x: 30, y: 40 },
     ]);
 
-    expect(authSilentPublicRequestClient.post).toHaveBeenCalledWith(
+    expect(authVerificationRequestClient.post).toHaveBeenCalledWith(
       '/auth/pub/captcha/verify',
       {
         captcha_id: 'captcha-id',
@@ -257,12 +267,12 @@ describe('changePasswordApi', () => {
   });
 
   it('creates and verifies a server-backed slider challenge', async () => {
-    vi.mocked(authSilentPublicRequestClient.post).mockResolvedValue({
+    vi.mocked(authVerificationRequestClient.post).mockResolvedValue({
       proof: 'one-time-proof',
     });
 
     await createSliderCaptchaChallengeApi('login', 'readonly');
-    expect(authSilentPublicRequestClient.post).toHaveBeenCalledWith(
+    expect(authVerificationRequestClient.post).toHaveBeenCalledWith(
       '/auth/pub/slider/challenge',
       { purpose: 'login', username: 'readonly' },
     );
@@ -281,7 +291,7 @@ describe('changePasswordApi', () => {
       width: 200,
     };
     await verifySliderCaptchaApi(verification);
-    expect(authSilentPublicRequestClient.post).toHaveBeenLastCalledWith(
+    expect(authVerificationRequestClient.post).toHaveBeenLastCalledWith(
       '/auth/pub/slider/verify',
       verification,
     );
