@@ -3,6 +3,7 @@ package msg
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/authn"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	"encoding/json"
@@ -65,7 +66,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "create message failed: "+err.Error(), "operation", "create_message", "outcome", "failure", "error", err, "sender_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -94,7 +95,7 @@ func (m *Module) getInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "get inbox message failed: "+err.Error(), "operation", "get_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -118,7 +119,7 @@ func (m *Module) getSent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "get sent message failed: "+err.Error(), "operation", "get_sent_message", "outcome", "failure", "error", err, "message_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -164,7 +165,7 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "mark message read failed: "+err.Error(), "operation", "mark_message_read", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -193,7 +194,7 @@ func (m *Module) deleteInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "delete inbox message failed: "+err.Error(), "operation", "delete_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -217,7 +218,7 @@ func (m *Module) deleteSent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "delete sent message failed: "+err.Error(), "operation", "delete_sent_message", "outcome", "failure", "error", err, "message_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -240,7 +241,7 @@ func (m *Module) readAll(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "mark all inbox messages read failed: "+err.Error(), "operation", "mark_all_inbox_messages_read", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -263,7 +264,7 @@ func (m *Module) unreadCount(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "count unread messages failed: "+err.Error(), "operation", "count_unread_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -286,7 +287,7 @@ func (m *Module) recipientOptions(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "list message recipient options failed: "+err.Error(), "operation", "list_message_recipient_options", "outcome", "failure", "error", err)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -306,7 +307,16 @@ func (m *Module) listInbox(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	input := ListInput{Type: query.Get("type"), Scope: query.Get("scope")}
+	fields, fieldErr := report.ParseFields(query, listFields...)
+	if fieldErr != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := ListInput{Fields: fields, Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
+	if values, provided := query["q"]; provided && len(values) != 1 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
 	for _, key := range []string{"type", "scope"} {
 		if values, provided := query[key]; provided && (len(values) != 1 || values[0] == "") {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
@@ -356,7 +366,7 @@ func (m *Module) listInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "list inbox messages failed: "+err.Error(), "operation", "list_inbox_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -371,7 +381,12 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	input := ListInput{Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
+	fields, fieldErr := report.ParseFields(query, listFields...)
+	if fieldErr != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := ListInput{Fields: fields, Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
 	if len(query["q"]) > 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
@@ -416,7 +431,7 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "list sent messages failed: "+err.Error(), "operation", "list_sent_messages", "outcome", "failure", "error", err)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -427,13 +442,24 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 func (m *Module) sentSummary(w http.ResponseWriter, r *http.Request) {
 
 	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil || len(query) != 0 {
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	value, err := m.SentSummary(r.Context())
+	for key := range query {
+		if key != "f" {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+	}
+	fields, err := report.ParseFields(query, "total", "counts")
 	if err != nil {
-		slog.ErrorContext(r.Context(), "summarize msg failed: "+err.Error())
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	value, err := m.SentSummary(r.Context(), fields...)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "summarize sent messages failed: "+err.Error(), "operation", "summarize_sent_messages", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

@@ -1,9 +1,13 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"testing"
+	"time"
 
+	"auth/internal/common/logging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -56,5 +60,26 @@ func TestClientTracePropagation(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+	if err := logging.Init(&output, "info"); err != nil {
+		t.Fatal(err)
+	}
+	err = clientUnary("remote", time.Second)(parent, "/remote.v1.UserService/GetUser", nil, nil, nil,
+		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+			return status.Error(codes.Unavailable, "offline")
+		})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("client error: %v", err)
+	}
+	entries := readRPCLogs(t, &output)
+	if len(entries) != 1 || entries[0]["trace_id"] != parentSpan.SpanContext().TraceID().String() {
+		t.Fatalf("client log trace: %#v", entries)
+	}
+	assertRPCLogFields(t, entries[0], "/remote.v1.UserService/GetUser", codes.Unavailable)
+	if spanID, ok := entries[0]["span_id"].(string); !ok || spanID == "" || spanID == parentSpan.SpanContext().SpanID().String() {
+		t.Fatalf("client log span: %#v", entries[0])
 	}
 }

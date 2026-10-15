@@ -3,6 +3,7 @@ package audit
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	"encoding/csv"
@@ -46,11 +47,15 @@ func kind(r *http.Request) string {
 }
 
 func parse(r *http.Request) (Filter, error) {
-	f := Filter{Kind: kind(r)}
-	q, err := url.ParseQuery(r.URL.RawQuery)
+	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
-		return f, ErrFilter
+		return Filter{}, ErrFilter
 	}
+	return parseQuery(r, query)
+}
+
+func parseQuery(r *http.Request, q url.Values) (Filter, error) {
+	f := Filter{Kind: kind(r)}
 	for _, key := range []string{"q", "module", "result", "from", "to", "time_zone", "p", "s", "weekday", "hour", "username", "ip", "path", "sort"} {
 		if v, ok := q[key]; ok && (len(v) != 1 || v[0] == "") {
 			return f, ErrFilter
@@ -97,7 +102,7 @@ func replyError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 		public = err
 	default:
-		slog.ErrorContext(r.Context(), "query audit events failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "query audit events failed: "+err.Error(), "operation", "query_audit_events", "outcome", "failure", "error", err)
 	}
 	server.WriteError(w, r, status, public)
 }
@@ -107,6 +112,11 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 	f, err := parse(r)
 	if err != nil {
 		replyError(w, r, err)
+		return
+	}
+	f.Fields, err = report.ParseFields(r.URL.Query(), listFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
 	result, err := m.List(r.Context(), f)
@@ -119,12 +129,22 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 
-	f, err := parse(r)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		replyError(w, r, ErrFilter)
+		return
+	}
+	fields, err := report.ParseFields(query, "metrics", "trend", "heatmap", "modules", "accounts", "sources", "repeated_failures")
+	if err != nil {
+		replyError(w, r, ErrFilter)
+		return
+	}
+	f, err := parseQuery(r, query)
 	if err != nil {
 		replyError(w, r, err)
 		return
 	}
-	result, err := m.Summary(r.Context(), f)
+	result, err := m.Summary(r.Context(), f, fields...)
 	if err != nil {
 		replyError(w, r, err)
 		return

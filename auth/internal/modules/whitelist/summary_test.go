@@ -1,9 +1,11 @@
 package whitelist
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -56,6 +58,9 @@ func TestManagementSummaryHTTP(t *testing.T) {
 		return w.Body.String()
 	}
 	request("/summary?q=x", http.StatusBadRequest)
+	for _, q := range []string{"f=", "f=total&f=counts", "f=unknown", "f=total,total"} {
+		request("/summary?"+q, http.StatusBadRequest)
+	}
 	request("/summary?q=%zz", http.StatusBadRequest)
 	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"total", "permission", "jwt"}).AddRow(int64(0), int64(0), int64(0)))
 	body := request("/summary", http.StatusOK)
@@ -64,4 +69,20 @@ func TestManagementSummaryHTTP(t *testing.T) {
 	}
 	mock.ExpectQuery("SELECT COUNT").WillReturnError(sqlmock.ErrCancelled)
 	request("/summary", http.StatusInternalServerError)
+}
+
+func TestSelectedSummaryTotalOnly(t *testing.T) {
+	m, mock := newSummaryTestModule(t)
+	mock.ExpectQuery("^" + regexp.QuoteMeta("SELECT COUNT(*) FROM t_whitelist") + "$").WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(0))
+	value, err := m.Summary(t.Context(), "total")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(value)
+	if err != nil || string(data) != `{"total":0}` {
+		t.Fatal(string(data), err)
+	}
+	if _, err := m.Summary(t.Context(), "unknown"); err == nil {
+		t.Fatal("accepted unknown field")
+	}
 }

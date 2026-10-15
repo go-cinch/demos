@@ -2,6 +2,7 @@ package user
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	authmodule "auth/internal/modules/auth"
@@ -71,7 +72,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "get user "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "get_user", "outcome", "failure", "error", err, "user_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -100,7 +101,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "decrypt user creation credential failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "decrypt user creation credential failed: "+err.Error(), "operation", "decrypt_user_creation_credential", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -125,7 +126,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "create user failed: "+err.Error(), "operation", "create_user", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -175,7 +176,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			slog.ErrorContext(r.Context(), "decrypt user update credential failed: "+err.Error())
+			slog.ErrorContext(r.Context(), "decrypt user update credential failed: "+err.Error(), "operation", "decrypt_user_update_credential", "outcome", "failure", "error", err, "user_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 			return
 		}
@@ -203,7 +204,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "update user "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "update_user", "outcome", "failure", "error", err, "user_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -241,7 +242,7 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "delete "+strconv.Itoa(len(ids))+" users failed: "+err.Error(), "operation", "delete_users", "outcome", "failure", "error", err, "count", len(ids))
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -255,7 +256,29 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	input := ListUsersInput{Username: query.Get("username"), Code: query.Get("code")}
+	if values, provided := query["q"]; provided && len(values) != 1 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, fieldErr := report.ParseFields(query, listFields...)
+	if fieldErr != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := ListUsersInput{Fields: fields, Q: query.Get("q"), Username: query.Get("username"), Code: query.Get("code")}
+	if values, provided := query["exclude_user_group_id"]; provided {
+		if len(values) != 1 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		id, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil || id <= 0 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		input.ExcludeUserGroupID = &id
+	}
+
 	if values, provided := query["created_from"]; provided {
 		if len(values) != 1 {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
@@ -348,7 +371,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "list users failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "list users failed: "+err.Error(), "operation", "list_users", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -380,9 +403,14 @@ func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	input := SummaryInput{}
+	fields, err := report.ParseFields(query, "total", "counts", "trend")
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := SummaryInput{Fields: fields}
 	for key := range query {
-		if key != "days" && key != "time_zone" {
+		if key != "days" && key != "time_zone" && key != "f" {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 			return
 		}
@@ -411,7 +439,7 @@ func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "summarize users failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "summarize users failed: "+err.Error(), "operation", "summarize_users", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

@@ -2,6 +2,7 @@ package whitelist
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	"encoding/json"
@@ -51,7 +52,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "get whitelist entry "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "get_whitelist_entry", "outcome", "failure", "error", err, "whitelist_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -77,7 +78,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "create whitelist entry failed: "+err.Error(), "operation", "create_whitelist_entry", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -113,7 +114,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "update whitelist entry "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "update_whitelist_entry", "outcome", "failure", "error", err, "whitelist_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -147,7 +148,7 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), r.Method+" "+r.URL.Path+" failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "delete "+strconv.Itoa(len(ids))+" whitelist entries failed: "+err.Error(), "operation", "delete_whitelist_entries", "outcome", "failure", "error", err, "count", len(ids))
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -161,7 +162,12 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	input := ListWhitelistsInput{Resource: query.Get("resource")}
+	fields, fieldErr := report.ParseFields(query, listFields...)
+	if fieldErr != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := ListWhitelistsInput{Fields: fields, Resource: query.Get("resource")}
 	if values, provided := query["category"]; provided {
 		if len(values) != 1 {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.CategoryType)
@@ -203,7 +209,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 	}
 	value, err := m.List(r.Context(), input)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "list whitelist entries failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "list whitelist entries failed: "+err.Error(), "operation", "list_whitelist_entries", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -213,13 +219,24 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 
 	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil || len(query) != 0 {
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	value, err := m.Summary(r.Context())
+	for key := range query {
+		if key != "f" {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+	}
+	fields, err := report.ParseFields(query, "total", "counts")
 	if err != nil {
-		slog.ErrorContext(r.Context(), "summarize whitelist failed: "+err.Error())
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	value, err := m.Summary(r.Context(), fields...)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "summarize whitelist failed: "+err.Error(), "operation", "summarize_whitelist", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

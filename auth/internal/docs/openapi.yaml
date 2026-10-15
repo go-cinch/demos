@@ -64,6 +64,11 @@ paths:
             x-pagination: p
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
         - name: resource
           in: query
           required: false
@@ -83,13 +88,58 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,code,name,group,word,resource,menu,button. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListActionsResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        button:
+                          type: string
+                        code:
+                          type: string
+                        created_at:
+                          type: integer
+                          format: int64
+                        group:
+                          type: string
+                        id:
+                          type: integer
+                          format: int64
+                        menu:
+                          type: string
+                        name:
+                          type: string
+                        resource:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                        word:
+                          type: string
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -202,6 +252,13 @@ paths:
       tags: ["Action"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts,groups"
       responses:
         "200":
           description: "OK"
@@ -464,13 +521,92 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Page"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        duration_ms:
+                          type: integer
+                          format: int64
+                        error_code:
+                          type: string
+                        id:
+                          type: integer
+                          format: int64
+                        ip:
+                          type: string
+                        kind:
+                          type: string
+                        method:
+                          type: string
+                        module:
+                          type: string
+                        occurred_at:
+                          type: integer
+                          format: int64
+                        operation:
+                          type: string
+                        path:
+                          type: string
+                        request_params:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
+                        resource_id:
+                          type: string
+                        resource_type:
+                          type: string
+                        response_params:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
+                        status:
+                          type: integer
+                          format: int32
+                        trace_id:
+                          type: string
+                        user_agent:
+                          type: string
+                        user_id:
+                          type: integer
+                          format: int64
+                        username:
+                          type: string
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -825,6 +961,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "metrics,trend,heatmap,accounts,sources"
       responses:
         "200":
           description: "OK"
@@ -946,13 +1088,92 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Page"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        duration_ms:
+                          type: integer
+                          format: int64
+                        error_code:
+                          type: string
+                        id:
+                          type: integer
+                          format: int64
+                        ip:
+                          type: string
+                        kind:
+                          type: string
+                        method:
+                          type: string
+                        module:
+                          type: string
+                        occurred_at:
+                          type: integer
+                          format: int64
+                        operation:
+                          type: string
+                        path:
+                          type: string
+                        request_params:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
+                        resource_id:
+                          type: string
+                        resource_type:
+                          type: string
+                        response_params:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
+                        status:
+                          type: integer
+                          format: int32
+                        trace_id:
+                          type: string
+                        user_agent:
+                          type: string
+                        user_id:
+                          type: integer
+                          format: int64
+                        username:
+                          type: string
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -1307,6 +1528,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "metrics,trend,modules"
       responses:
         "200":
           description: "OK"
@@ -2011,13 +2238,61 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,key,name,description,enabled. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListDictionariesResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        created_at:
+                          type: integer
+                          format: int64
+                        description:
+                          type: string
+                        enabled:
+                          type: boolean
+                        id:
+                          type: integer
+                          format: int64
+                        key:
+                          type: string
+                        name:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                        value:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -2086,6 +2361,13 @@ paths:
       tags: ["Dictionary"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts"
       responses:
         "200":
           description: "OK"
@@ -2345,6 +2627,11 @@ paths:
             x-pagination: p
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
         - name: read
           in: query
           required: false
@@ -2369,13 +2656,78 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        content:
+                          type: string
+                        created_at:
+                          type: integer
+                          format: int64
+                        expired_at:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        published_at:
+                          type: integer
+                          format: int64
+                        read_at:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        recipient_ids:
+                          type: array
+                          items:
+                            type: integer
+                            format: int64
+                        recipients:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/Recipient"
+                        scope:
+                          type: string
+                        sender_id:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        summary:
+                          type: string
+                        title:
+                          type: string
+                        type:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -2669,13 +3021,78 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        content:
+                          type: string
+                        created_at:
+                          type: integer
+                          format: int64
+                        expired_at:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        published_at:
+                          type: integer
+                          format: int64
+                        read_at:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        recipient_ids:
+                          type: array
+                          items:
+                            type: integer
+                            format: int64
+                        recipients:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/Recipient"
+                        scope:
+                          type: string
+                        sender_id:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        summary:
+                          type: string
+                        title:
+                          type: string
+                        type:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -2707,6 +3124,13 @@ paths:
       tags: ["Msg"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts"
       responses:
         "200":
           description: "OK"
@@ -2897,6 +3321,11 @@ paths:
             x-pagination: p
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
         - name: s
           in: query
           required: false
@@ -2911,13 +3340,56 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListRolesResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        action_codes:
+                          type: array
+                          items:
+                            type: string
+                        actions:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/ActionView"
+                        created_at:
+                          type: integer
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        name:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                        word:
+                          type: string
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -2998,6 +3470,13 @@ paths:
       tags: ["Role"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts,groups"
       responses:
         "200":
           description: "OK"
@@ -3195,6 +3674,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: exclude_user_group_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
         - name: last_logged_in_from
           in: query
           required: false
@@ -3216,6 +3701,11 @@ paths:
             x-pagination: p
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
         - name: s
           in: query
           required: false
@@ -3235,13 +3725,79 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListUsersResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        action_codes:
+                          type: array
+                          items:
+                            type: string
+                        actions:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/ActionView"
+                        code:
+                          type: string
+                        created_at:
+                          type: integer
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        last_logged_in_at:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        login_count:
+                          type: integer
+                          format: int64
+                        metadata:
+                          type: object
+                          additionalProperties:
+                            type: object
+                        role:
+                          $ref: "#/components/schemas/RoleView"
+                        role_id:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        status:
+                          type: integer
+                          format: int32
+                        updated_at:
+                          type: integer
+                          format: int64
+                        username:
+                          type: string
+                        wrong:
+                          type: integer
+                          format: int64
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request; invalid user"
           content:
@@ -3366,13 +3922,69 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. The associations actions,users,member_count,member_preview may also be selected. Association-only selections preserve existing base metadata; selections containing scalar fields return exactly the selected fields."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListUserGroupsResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        action_codes:
+                          type: array
+                          items:
+                            type: string
+                        actions:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/ActionView"
+                        created_at:
+                          type: integer
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        member_count:
+                          type: integer
+                          nullable: true
+                          format: int64
+                        member_preview:
+                          type: array
+                          nullable: true
+                          items:
+                            $ref: "#/components/schemas/UserSummary"
+                        name:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                        users:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/UserSummary"
+                        word:
+                          type: string
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -3398,6 +4010,12 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "actions,member_count,member_preview"
         - name: X-Idempotent
           in: header
           required: false
@@ -3411,7 +4029,7 @@ paths:
               $ref: "#/components/schemas/CreateUserGroupInput"
       responses:
         "200":
-          description: "OK"
+          description: "Base fields always returned: id, created_at, updated_at, name, word, action_codes; lists also return items,t,p,s. f selects actions, users (all members), member_count, member_preview (at most five, ordered by user id). Omitted f preserves legacy actions and users. Unselected associations are omitted and not queried."
           content:
             application/json:
               schema:
@@ -3453,6 +4071,13 @@ paths:
       tags: ["Usergroup"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts,groups"
       responses:
         "200":
           description: "OK"
@@ -3532,9 +4157,15 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "actions,member_count,member_preview"
       responses:
         "200":
-          description: "OK"
+          description: "Base fields always returned: id, created_at, updated_at, name, word, action_codes; lists also return items,t,p,s. f selects actions, users (all members), member_count, member_preview (at most five, ordered by user id). Omitted f preserves legacy actions and users. Unselected associations are omitted and not queried."
           content:
             application/json:
               schema:
@@ -3576,6 +4207,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "actions,member_count,member_preview"
       requestBody:
         required: true
         content:
@@ -3584,7 +4221,7 @@ paths:
               $ref: "#/components/schemas/UpdateUserGroupInput"
       responses:
         "200":
-          description: "OK"
+          description: "Base fields always returned: id, created_at, updated_at, name, word, action_codes; lists also return items,t,p,s. f selects actions, users (all members), member_count, member_preview (at most five, ordered by user id). Omitted f preserves legacy actions and users. Unselected associations are omitted and not queried."
           content:
             application/json:
               schema:
@@ -3603,6 +4240,74 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: "user group not found; user group member not found; user group action not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /user-group/{id}/member:
+    get:
+      summary: "GET /user-group/{id}/member"
+      operationId: getUserGroupIdMember
+      tags: ["Usergroup"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: p
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: p
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: s
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            x-pagination: s
+            description: "Values outside 1..10000 return an empty list."
+            default: 1
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMembersResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Not Found"
           content:
             application/json:
               schema:
@@ -3632,6 +4337,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts,trend"
       responses:
         "200":
           description: "OK"
@@ -3841,13 +4552,49 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,category,resource. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListWhitelistsResult"
+                type: object
+                required: [items, p, s, t]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category:
+                          type: integer
+                          format: int32
+                        created_at:
+                          type: integer
+                          format: int64
+                        id:
+                          type: integer
+                          format: int64
+                        resource:
+                          type: string
+                        updated_at:
+                          type: integer
+                          format: int64
+                  p:
+                    type: integer
+                    format: int32
+                  s:
+                    type: integer
+                    format: int32
+                  t:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request"
           content:
@@ -3922,6 +4669,13 @@ paths:
       tags: ["Whitelist"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "total,counts"
       responses:
         "200":
           description: "OK"
@@ -4510,6 +5264,23 @@ components:
         t:
           type: integer
           format: int64
+    ListMembersResult:
+      type: object
+      required: [items, p, s, t]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        p:
+          type: integer
+          format: int32
+        s:
+          type: integer
+          format: int32
+        t:
+          type: integer
+          format: int64
     ListResult:
       type: object
       required: [items, p, s, t]
@@ -4660,7 +5431,6 @@ components:
           format: int64
     ManagementSummary:
       type: object
-      required: [counts, groups, total, trend]
       properties:
         counts:
           type: object
@@ -4706,12 +5476,18 @@ components:
           items:
             type: integer
             format: int64
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Recipient"
         scope:
           type: string
         sender_id:
           type: integer
           nullable: true
           format: int64
+        summary:
+          type: string
         title:
           type: string
         type:
@@ -4809,6 +5585,17 @@ components:
         n:
           type: string
         use:
+          type: string
+    Recipient:
+      type: object
+      required: [code, id, username]
+      properties:
+        code:
+          type: string
+        id:
+          type: integer
+          format: int64
+        username:
           type: string
     RecipientOption:
       type: object
@@ -4939,7 +5726,7 @@ components:
           type: string
     Summary:
       type: object
-      required: [accounts, average_ms, bucket_ms, failed, from, heatmap, heatmap_granularity, modules, p95_ms, repeated_failures, sources, success, success_rate, to, total, trend, unique_ips, unique_users]
+      required: [from, to]
       properties:
         accounts:
           type: array
@@ -5060,9 +5847,21 @@ components:
           nullable: true
           items:
             type: string
+        add_user_ids:
+          type: array
+          nullable: true
+          items:
+            type: integer
+            format: int64
         name:
           type: string
           nullable: true
+        remove_user_ids:
+          type: array
+          nullable: true
+          items:
+            type: integer
+            format: int64
         user_ids:
           type: array
           nullable: true
@@ -5164,7 +5963,7 @@ components:
           format: int64
     UserGroup:
       type: object
-      required: [action_codes, actions, created_at, id, name, updated_at, users, word]
+      required: [action_codes, created_at, id, name, updated_at, word]
       properties:
         action_codes:
           type: array
@@ -5180,6 +5979,15 @@ components:
         id:
           type: integer
           format: int64
+        member_count:
+          type: integer
+          nullable: true
+          format: int64
+        member_preview:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/UserSummary"
         name:
           type: string
         updated_at:

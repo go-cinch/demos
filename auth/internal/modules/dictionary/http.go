@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"auth/internal/common/apperror"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	"github.com/go-chi/chi/v5"
@@ -51,7 +52,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "get dictionary failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "get dictionary failed: "+err.Error(), "operation", "get_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -73,7 +74,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "create dictionary failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "create dictionary failed: "+err.Error(), "operation", "create_dictionary", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -105,7 +106,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "update dictionary failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "update dictionary failed: "+err.Error(), "operation", "update_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -156,7 +157,7 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "delete dictionaries failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "delete dictionaries failed: "+err.Error(), "operation", "delete_dictionaries", "outcome", "failure", "error", err, "count", len(ids))
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -170,7 +171,12 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	input := ListDictionariesInput{Key: query.Get("key"), Name: query.Get("name")}
+	fields, fieldErr := report.ParseFields(query, listFields...)
+	if fieldErr != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	input := ListDictionariesInput{Fields: fields, Key: query.Get("key"), Name: query.Get("name")}
 	if values, provided := query["enabled"]; provided {
 		if len(values) != 1 {
 			server.WriteError(w, r, http.StatusBadRequest, apperror.DictionaryEnabled)
@@ -211,7 +217,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 	}
 	value, err := m.List(r.Context(), input)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "list dictionaries failed: "+err.Error())
+		slog.ErrorContext(r.Context(), "list dictionaries failed: "+err.Error(), "operation", "list_dictionaries", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -221,13 +227,24 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 
 	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil || len(query) != 0 {
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	value, err := m.Summary(r.Context())
+	for key := range query {
+		if key != "f" {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+	}
+	fields, err := report.ParseFields(query, "total", "counts")
 	if err != nil {
-		slog.ErrorContext(r.Context(), "summarize dictionary failed: "+err.Error())
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	value, err := m.Summary(r.Context(), fields...)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "summarize dictionary failed: "+err.Error(), "operation", "summarize_dictionary", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

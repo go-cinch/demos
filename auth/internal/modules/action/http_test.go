@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -114,5 +115,24 @@ func TestActionMultipleExactGroupsHTTP(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/?groups_exact=%5B%5D", nil))
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+func TestActionKeywordHTTP(t *testing.T) {
+	m, mock := newTestModule(t)
+	handler := m.HTTP()
+	for _, query := range []string{"q=one&q=two", "q=%zz"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/?"+query, nil))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("invalid keyword %q: %d", query, recorder.Code)
+		}
+	}
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*) FROM t_action WHERE (LOWER(name) LIKE LOWER($1) ESCAPE '!' OR LOWER(word) LIKE LOWER($1) ESCAPE '!' OR LOWER(code) LIKE LOWER($1) ESCAPE '!')")).WithArgs("%Mixed!%!_!!%").
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(0))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/?q=+Mixed%25_!+", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("keyword: %d %s", recorder.Code, recorder.Body.String())
 	}
 }

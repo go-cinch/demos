@@ -100,7 +100,8 @@ func authenticationMiddleware(authenticator *authn.Manager, authorizer modules.H
 		if authorizer != nil && request.URL.Path != permissionEndpoint {
 			allowed, err := authorizer.AuthorizeHTTP(request.Context(), request.Method, request.URL.Path)
 			if err != nil {
-				slog.ErrorContext(request.Context(), "authorize http request failed: "+err.Error())
+				slog.ErrorContext(request.Context(), "authorize http request failed: "+err.Error(),
+					"operation", "authorize_http_request", "outcome", "failure", "method", request.Method, "error", err)
 				WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 				return
 			}
