@@ -39,7 +39,7 @@ func (a *recordedAudit) RecordHTTP(ctx context.Context, e auditctx.Event) error 
 func auditHandler(recorder *recordedAudit, handler http.HandlerFunc) http.Handler {
 	policy := redact.New("tenantSecret")
 
-	return Audit(recorder, policy)(Recoverer()(handler))
+	return ClientIP()(Audit(recorder, policy)(Recoverer()(handler)))
 
 }
 
@@ -122,8 +122,8 @@ func TestAuditRequestHeaders(t *testing.T) {
 			if !ok || len(forwarded) != 2 || forwarded[0] != "192.0.2.99" || forwarded[1] != "203.0.113.5" {
 				t.Fatalf("repeated header values lost: %v", headers)
 			}
-			if strings.Contains(string(event.Header), "never-store") || event.IP != "127.0.0.1" {
-				t.Fatalf("secret captured or diagnostic headers trusted: %s, %s", event.Header, event.IP)
+			if strings.Contains(string(event.Header), "never-store") || event.IP != "203.0.113.5" {
+				t.Fatalf("secret captured or resolved IP changed after snapshot: %s, %s", event.Header, event.IP)
 			}
 			if kind == "login" && (event.RequestParams != nil || event.ResponseParams != nil) {
 				t.Fatal("login bodies must remain uncaptured")
