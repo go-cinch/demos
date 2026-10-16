@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditEvent } from '#/api/audit';
+import type { AuditPreview } from '#/api/audit';
 
 import { computed } from 'vue';
 
@@ -22,7 +22,7 @@ import { $t } from '#/locales';
 import AuditParams from './audit-params.vue';
 import { clientLabel, operationLabel, successful } from './audit-utils';
 const props = defineProps<{
-  event?: AuditEvent;
+  event?: AuditPreview;
   loading: boolean;
   error: boolean;
   expanded?: boolean;
@@ -153,7 +153,7 @@ async function copy(value: string) {
           type="text"
           size="small"
           :aria-label="$t('audit.copyPath')"
-          @click="copy(event.path)"
+          @click="copy(event.path ?? '')"
           >
 <IconifyIcon icon="lucide:copy" />
 </Button>
@@ -201,12 +201,12 @@ async function copy(value: string) {
           <Button
             :disabled="!event.username"
             size="small"
-            @click="emit('related', 'username', event.username)"
+            @click="emit('related', 'username', event.username ?? '')"
             >
 <IconifyIcon icon="lucide:user-round" class="mr-1" />{{
               $t('audit.sameActor')
             }}
-</Button><Button size="small" @click="emit('related', 'path', event.path)">
+</Button><Button size="small" @click="emit('related', 'path', event.path ?? '')">
 <IconifyIcon icon="lucide:link" class="mr-1" />{{
               $t('audit.samePath')
             }}

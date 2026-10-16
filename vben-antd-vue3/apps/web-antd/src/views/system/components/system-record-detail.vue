@@ -56,7 +56,7 @@ const hasPermissions = computed(() =>
 );
 const actionCodes = computed(() =>
   record.value && 'action_codes' in record.value
-    ? record.value.action_codes
+    ? record.value.action_codes ?? []
     : [],
 );
 const unresolvedCodes = computed(() =>

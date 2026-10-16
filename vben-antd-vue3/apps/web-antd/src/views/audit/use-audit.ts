@@ -1,5 +1,6 @@
 import type {
   AuditEvent,
+  AuditPreview,
   AuditHeatCell,
   AuditKind,
   AuditParams,
@@ -53,7 +54,10 @@ export function useAudit(kind: AuditKind) {
   const overview = ref<AuditSummary>();
     const scope = ref<AuditSummary>();
   const page = ref(1);
-    const rows = shallowRef<AuditEvent[]>([]);
+    const rows = shallowRef<AuditPreview[]>([]);
+  const listFields = ref(kind === 'login'
+    ? 'id,occurred_at,username,status,ip,user_agent'
+    : 'id,occurred_at,module,method,path,username,status,duration_ms');
   const defaultPageSize = useDefaultPageSize();
   const size = ref(defaultPageSize.value);
     const total = ref(0);
@@ -65,7 +69,7 @@ export function useAudit(kind: AuditKind) {
     const scopeError = ref(false);
   const detailError = ref(false);
     const detailLoading = ref(false);
-    const selected = shallowRef<AuditEvent>();
+    const selected = shallowRef<AuditPreview>();
     const selectedID = ref<number>();
   const optionsLoading = ref(false);
   const history = ref<string[]>([]);
@@ -165,11 +169,12 @@ export function useAudit(kind: AuditKind) {
     try {
       const data = await auditApi.list(kind, {
         ...filters,
+        f: listFields.value,
         p: page.value,
         s: size.value,
       });
       if (run !== listRun || !active.value) return;
-      rows.value = data.items;
+      rows.value = data.items as AuditPreview[];
       total.value = data.t;
       displayedFilters = filters;
       if (
@@ -328,6 +333,7 @@ export function useAudit(kind: AuditKind) {
     delete exact.value[field];
     void applyFilters();
   }
+  function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
   function suggest(value: string) {
     const run = ++optionRun;
     clearTimeout(optionTimer);
@@ -426,6 +432,7 @@ export function useAudit(kind: AuditKind) {
     closeDetail();
     if (active.value && mounted) void refresh();
   });
+  watch(listFields, () => { void loadRecords(); });
   watch(defaultPageSize, (value) => {
     size.value = value;
     page.value = 1;
@@ -465,6 +472,7 @@ export function useAudit(kind: AuditKind) {
     scope,
     context,
     rows,
+    listFields,
     page,
     size,
     total,
@@ -498,6 +506,7 @@ export function useAudit(kind: AuditKind) {
     related,
     removeExact,
     suggest,
+    removeHistory,
     exportEvents,
   };
 }

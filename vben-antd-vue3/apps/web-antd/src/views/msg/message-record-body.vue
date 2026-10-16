@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Msg } from '#/api/msg';
+import type { MsgPreview } from '#/api/msg';
 
 import { computed } from 'vue';
 
@@ -12,7 +12,7 @@ import { $t } from '#/locales';
 
 import MessageRecipients from './message-recipients.vue';
 const props = defineProps<{
-  record?: Msg;
+  record?: MsgPreview;
   editing?: boolean;
   targeted?: boolean;
 }>();
@@ -20,7 +20,7 @@ const timezone = useTimezoneStore();
 const targeted = computed(() =>
   props.editing ? props.targeted : props.record?.scope === 'targeted',
 );
-function time(value: number) {
+function time(value?: number) {
   void timezone.timezone;
   return formatDateTime(value);
 }

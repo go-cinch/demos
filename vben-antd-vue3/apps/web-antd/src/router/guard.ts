@@ -17,18 +17,24 @@ import { generateAccess } from './access';
 function setupCommonGuard(router: Router) {
   // 记录已经加载的页面
   const loadedPaths = new Set<string>();
+  let progressDeadline: ReturnType<typeof setTimeout> | undefined;
 
   router.beforeEach((to) => {
+    clearTimeout(progressDeadline);
+    stopProgress();
     to.meta.loaded = loadedPaths.has(to.path);
 
     // 页面加载进度条
     if (!to.meta.loaded && preferences.transition.progress) {
       startProgress();
+      progressDeadline = setTimeout(stopProgress, 10_000);
     }
     return true;
   });
 
+  router.onError(() => { clearTimeout(progressDeadline); stopProgress(); });
   router.afterEach((to) => {
+    clearTimeout(progressDeadline);
     // 记录页面是否加载,如果已经加载，后续的页面切换动画等效果不在重复执行
 
     loadedPaths.add(to.path);

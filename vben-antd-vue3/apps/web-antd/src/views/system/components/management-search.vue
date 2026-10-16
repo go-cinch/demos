@@ -17,7 +17,7 @@ defineOptions({ inheritAttrs: false });
   </Form>
 </template>
 <style scoped>
-:deep(.system-filter-control.ant-select) {
+:deep(.system-filter-control:is(.ant-select, .search-autocomplete-wrapper)) {
   width: var(--filter-width, 208px);
   min-width: var(--filter-width, 208px);
   flex-shrink: 0;
@@ -49,7 +49,7 @@ defineOptions({ inheritAttrs: false });
     flex: 1;
     min-width: 0;
   }
-  :deep(.system-filter-control.ant-select) {
+  :deep(.system-filter-control:is(.ant-select, .search-autocomplete-wrapper)) {
     width: 100%;
     min-width: 0;
   }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Msg } from '#/api/msg';
+import type { MsgPreview } from '#/api/msg';
 
 import { computed } from 'vue';
 
@@ -25,8 +25,8 @@ const props = defineProps<{
   detailLoading: boolean;
   loading: boolean;
   page: number;
-  rows: Msg[];
-  selected?: Msg;
+  rows: MsgPreview[];
+  selected?: MsgPreview;
   selectedId?: number;
   size: number;
   sticky: boolean;
@@ -38,12 +38,12 @@ const emit = defineEmits<{
   check: [id: number, checked: boolean];
   checkAll: [checked: boolean];
   page: [page: number, size: number];
-  remove: [row: Msg];
+  remove: [row: MsgPreview];
   retry: [];
-  select: [row: Msg];
-  view: [row: Msg];
+  select: [row: MsgPreview];
+  view: [row: MsgPreview];
 }>();
-const displayRows = computed<Msg[]>(() => props.loading && !props.rows.length
+const displayRows = computed<MsgPreview[]>(() => props.loading && !props.rows.length
   ? Array.from({ length: props.size }, (_, index) => ({ id: -index - 1, title: '────────', content: '────────', type: 'notice', scope: 'all', sender_id: null, published_at: 0, expired_at: null, read_at: null }))
   : props.rows);
 const selected = computed(() => props.selected ?? (props.loading ? displayRows.value[0] : undefined));
@@ -54,7 +54,7 @@ const allChecked = computed(
 const partialChecked = computed(
   () => !allChecked.value && props.rows.some((row) => props.checkedKeys.includes(row.id)),
 );
-function displayTime(value: number) {
+function displayTime(value?: number) {
   void timezone.timezone;
   return formatDateTime(value);
 }

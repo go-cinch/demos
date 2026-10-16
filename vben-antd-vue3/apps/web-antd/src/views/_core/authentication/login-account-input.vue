@@ -142,7 +142,7 @@ const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
         <div class="flex min-w-0 items-center justify-between gap-2">
           <button
             type="button"
-            class="min-w-0 flex-1 cursor-pointer break-all text-start"
+            class="min-w-0 cursor-pointer break-all rounded border bg-muted px-2 py-0.5 text-start"
             @mousedown.prevent
             @click.stop="selectAccount(value)"
             @keydown.enter.stop

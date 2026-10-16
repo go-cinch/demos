@@ -25,8 +25,19 @@ async function viteInjectAppLoadingPlugin(
   // 保证黑暗主题下，刷新页面时，loading也是黑暗主题
   const injectScript = `
   <script data-app-loading="inject-js">
-  var theme = localStorage.getItem(${cacheName});
-  document.documentElement.classList.toggle('dark', /dark/.test(theme));
+  (function () {
+    var deadline = setTimeout(function () {
+      document.getElementById('__app-loading__')?.remove();
+      document.querySelectorAll('[data-app-loading^="inject"]').forEach(function (element) { element.remove(); });
+      window.removeEventListener('vben:app-ready', ready);
+    }, 10000);
+    function ready() { clearTimeout(deadline); }
+    window.addEventListener('vben:app-ready', ready, { once: true });
+  })();
+  try {
+    var theme = localStorage.getItem(${cacheName});
+    document.documentElement.classList.toggle('dark', /dark/.test(theme));
+  } catch {}
 </script>
 `;
 

@@ -268,3 +268,53 @@ describe('useContentSpinner', () => {
     }
   });
 });
+
+describe('content loading deadline', () => {
+  it('reveals the page after ten seconds even when the route never finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = createRouterMock();
+      const spinning = mountSpinner(mock.router);
+      const { beforeGuard, afterHook } = mock.getHooks();
+      const route = makeRoute();
+      await runBefore(beforeGuard, route);
+      vi.advanceTimersByTime(9999);
+      expect(spinning()).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(spinning()).toBe(false);
+      await runAfter(afterHook, route);
+      vi.advanceTimersByTime(20000);
+      expect(spinning()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+  it('cancels an old deadline on the next navigation and cleans up on unmount', async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = createRouterMock();
+      const spinning = mountSpinner(mock.router);
+      const { beforeGuard } = mock.getHooks();
+      await runBefore(beforeGuard, makeRoute());
+      vi.advanceTimersByTime(9000);
+      await runBefore(beforeGuard, makeRoute());
+      vi.advanceTimersByTime(1000);
+      expect(spinning()).toBe(true);
+      cleanup();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+  it('releases a pending mask when navigating back to an already loaded page', async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = createRouterMock();
+      const spinning = mountSpinner(mock.router);
+      const { beforeGuard } = mock.getHooks();
+      await runBefore(beforeGuard, makeRoute());
+      vi.advanceTimersByTime(500);
+      expect(spinning()).toBe(true);
+      await runBefore(beforeGuard, makeRoute({ loaded: true }));
+      expect(spinning()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+});

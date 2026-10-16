@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Msg, MsgInput, MsgSentSummary } from '#/api/msg';
+import type { MsgPreview, MsgInput, MsgSentSummary } from '#/api/msg';
 
 import {
   computed,
@@ -20,7 +20,6 @@ import { formatDateTime, getCurrentTimezone } from '@vben/utils';
 
 import {
   Alert,
-  AutoComplete,
   Button,
   Checkbox,
   DatePicker,
@@ -38,10 +37,11 @@ import dayjs from 'dayjs';
 import { visitMessages } from '#/api/message-attention';
 import { msgApi, msgChanged } from '#/api/msg';
 import LoadWarning from '#/components/load-warning.vue';
-import { renderSkeletonOptions } from '#/components/skeleton-options';
 import Table from '#/components/skeleton-table.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
+import SearchAutocomplete from '#/components/search-autocomplete.vue';
+import { searchSuggestionGroups } from '#/components/search-suggestions';
 import { $t } from '#/locales';
 
 import AssociationEditor from '../system/components/association-editor.vue';
@@ -76,7 +76,7 @@ const rowSelection = computed(() => ({
   onChange: (keys: (number | string)[]) => {
     checkedKeys.value = keys.map(Number);
   },
-  getCheckboxProps: (row: Msg) => ({
+  getCheckboxProps: (row: MsgPreview) => ({
     disabled: loading.value,
     'aria-label': `${$t('msg.select')} ${row.title}`,
   }),
@@ -92,7 +92,7 @@ const rowSelection = computed(() => ({
   }),
 }));
 const page = ref(1);
-const rows = ref<Msg[]>([]);
+const rows = ref<MsgPreview[]>([]);
 const defaultPageSize = useDefaultPageSize();
 const size = ref(defaultPageSize.value);
 const total = ref(0);
@@ -117,22 +117,12 @@ const detailError = ref(false);
 const suggestionsLoading = ref(false);
 const suggestionTitles = ref<string[]>([]);
 const queryHistory = ref<string[]>([]);
-const suggestionOptions = computed(() => {
-  const current = queryDraft.value.trim().toLocaleLowerCase();
-  const history = queryHistory.value.filter(
-    (value) => !current || value.toLocaleLowerCase().includes(current),
-  );
-  return [
-    ...history.map((value) => ({ value, label: value, source: 'history' })),
-    ...suggestionTitles.value
-      .filter((value) => !history.includes(value))
-      .map((value) => ({ value, label: value, source: 'backend' })),
-  ].slice(0, 10);
-});
+const suggestionOptions = computed(() => searchSuggestionGroups(queryDraft.value.trim() ? suggestionTitles.value : [], queryHistory.value));
+function removeQueryHistory(value: string) { queryHistory.value = queryHistory.value.filter((item) => item !== value); }
 const detailLoading = ref(false);
 const detailOpen = ref(false);
-const selected = ref<Msg>();
-const panelMessage = ref<Msg>();
+const selected = ref<MsgPreview>();
+const panelMessage = ref<MsgPreview>();
 const attempted = ref(false);
 const compose = ref(false);
 const sendError = ref('');
@@ -169,6 +159,12 @@ const messageActionWidth = computed(() => {
     (width, character) => width + ((character.codePointAt(0) ?? 0) > 255 ? 14 : 8), 0,
   ) + 16, 32 + Math.max(0, labels.length - 1) * 8);
 });
+const listFields = computed(() => [...new Set([
+  'id', 'title', ...visible.value,
+  ...(sent.value ? ['expired_at'] : []),
+  ...(sent.value && sentView.value === 'split' ? ['summary'] : []),
+  ...(!sent.value ? ['read_at'] : []),
+])].join(','));
 const fields = computed(() => [
   // The title absorbs spare space; the actions keep their explicit width.
   { title: $t('msg.title'), key: 'title', dataIndex: 'title' },
@@ -208,7 +204,7 @@ const issues = computed(() => ({
       ? $t('msg.expiryError')
       : '',
 }));
-function displayTime(value: number) {
+function displayTime(value?: number) {
   void timezone.timezone;
   return formatDateTime(value);
 }
@@ -258,16 +254,7 @@ function searchSuggestions(value: string) {
     }
   }, 250);
 }
-function suggestionSegments(value: string) {
-  const text = queryDraft.value.trim().toLocaleLowerCase();
-  const index = text ? value.toLocaleLowerCase().indexOf(text) : -1;
-  if (index < 0) return [{ text: value, matched: false }];
-  return [
-    { text: value.slice(0, index), matched: false },
-    { text: value.slice(index, index + text.length), matched: true },
-    { text: value.slice(index + text.length), matched: false },
-  ];
-}
+
 function scheduleSearch() {
   clearTimeout(searchTimer);
   // AutoComplete can emit blur after the form's submit event.
@@ -324,6 +311,7 @@ async function load() {
   error.value = false;
   try {
     const result = await msgApi.list(sent.value, {
+      f: listFields.value,
       p: page.value,
       s: size.value,
       ...(type.value ? { type: type.value } : {}),
@@ -336,10 +324,10 @@ async function load() {
       page.value--;
       return;
     }
-    rows.value = result.items;
+    rows.value = result.items as MsgPreview[];
     total.value = result.t;
     if (sent.value && sentView.value === 'split') {
-      const row = result.items.find((item) => item.id === selectedId.value) ?? result.items[0];
+      const row = rows.value.find((item) => item.id === selectedId.value) ?? rows.value[0];
       if (!row) invalidateSentDetail();
       else if (selectedId.value !== row.id || (!selected.value && !detailLoading.value))
         void openDetail(row);
@@ -354,7 +342,7 @@ async function load() {
     if (current === generation) loading.value = false;
   }
 }
-async function openDetail(row: Msg) {
+async function openDetail(row: MsgPreview) {
   const current = ++detailGeneration;
   const inline = sent.value && sentView.value === 'split';
   if (!inline && sent.value) panelMessage.value = row;
@@ -389,7 +377,7 @@ async function openDetail(row: Msg) {
     if (current === detailGeneration) detailLoading.value = false;
   }
 }
-function openSentPanel(row: Msg) {
+function openSentPanel(row: MsgPreview) {
   panelMessage.value = row;
   detailOpen.value = true;
 }
@@ -398,7 +386,7 @@ function closeMessagePanel() {
   if (compose.value) void closeCompose();
   else detailOpen.value = false;
 }
-async function mark(row: Msg) {
+async function mark(row: MsgPreview) {
   busy.value = true;
   try {
     await msgApi.read(row.id);
@@ -449,7 +437,7 @@ function requestBulk(read = false) {
     },
   });
 }
-function remove(row: Msg) {
+function remove(row: MsgPreview) {
   if (busy.value || loading.value || !canDelete.value) return;
   const management = sent.value;
   Modal.confirm({
@@ -596,17 +584,13 @@ const listRevision = ref(0);
 watch([sent, status, type, scope, size, query], () => {
   page.value = 1;
 }, { flush: 'sync' });
-watch([sent, page, size, status, type, scope, query, canRead, listRevision], () => {
+watch([sent, page, size, status, type, scope, query, canRead, listRevision, listFields], () => {
   checkedKeys.value = [];
   detailOpen.value = false;
   invalidateSentDetail();
   void load();
 }, { immediate: true });
 watch([sent, canRead], () => { void loadSummary(); }, { immediate: true });
-watch(sentView, () => {
-  invalidateSentDetail();
-  if (sentView.value === 'split' && rows.value[0]) void openDetail(rows.value[0]);
-});
 let timer: ReturnType<typeof setInterval>;
 function refreshVisible() {
   if (active.value && !document.hidden && !busy.value) void refresh();
@@ -661,35 +645,22 @@ onBeforeUnmount(() => {
     <ManagementCard class="shrink-0">
       <ManagementSearch @submit.prevent="search">
         <FormItem v-if="sent" :label="$t('msg.keyword')" class="w-full sm:w-auto">
-          <AutoComplete
+          <SearchAutocomplete
             v-model:value="queryDraft"
-            allow-clear
-            autocomplete="off"
             class="system-filter-control"
             style="--filter-width: 280px"
             data-testid="message-search"
             :aria-label="$t('msg.keyword')"
             :placeholder="$t('msg.searchMessages')"
-            :filter-option="false"
-            :default-active-first-option="false"
-            :show-action="['focus']"
             :options="suggestionOptions"
-            :not-found-content="suggestionsLoading ? ' ' : null"
-            :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, suggestionsLoading)"
+            :loading="suggestionsLoading"
             @search="searchSuggestions"
             @select="chooseSuggestion"
+            @submit="search"
             @focus="cancelScheduledSearch"
             @blur="scheduleSearch"
-          >
-            <template #option="{ label, source }">
-              <span
-                v-for="(segment, index) in suggestionSegments(String(label))"
-                :key="index"
-                :class="{ 'font-semibold text-primary': segment.matched }"
-                >{{ segment.text }}</span>
-              <Tag v-if="source === 'history'" class="ml-2">{{ $t('msg.searchHistory') }}</Tag>
-            </template>
-          </AutoComplete>
+            @remove-history="removeQueryHistory"
+          />
         </FormItem>
         <FormItem v-if="!sent" :label="$t('msg.read')" class="w-full sm:w-auto">
           <Select
@@ -845,7 +816,7 @@ onBeforeUnmount(() => {
         :bordered="bordered"
         :sticky="sticky"
         :row-class-name="
-          (_record: Msg, index: number) =>
+          (_record: MsgPreview, index: number) =>
             striped && index % 2 === 1 ? 'system-table-row-striped' : ''
         "
         :scroll="{ x: 320 + 48 + fields.reduce((total, field) => total + (field.width ?? 0), 0) }"
@@ -866,7 +837,7 @@ onBeforeUnmount(() => {
         <template #emptyText><Empty :description="$t('msg.empty')" /></template>
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">
-            <Button size="small" type="link" class="msg-title" @click="openDetail(record as Msg)">
+            <Button size="small" type="link" class="msg-title" @click="openDetail(record as MsgPreview)">
               {{ record.title }}
 </Button><Tag v-if="record.expired_at && record.expired_at <= Date.now()">
               {{ $t('msg.expired') }}
@@ -885,14 +856,14 @@ onBeforeUnmount(() => {
             {{ displayTime(record.published_at) }}
           </template>
           <Space v-else-if="column.key === 'actions'" class="whitespace-nowrap">
-            <Button size="small" type="link" @click="openDetail(record as Msg)">
+            <Button size="small" type="link" @click="openDetail(record as MsgPreview)">
               {{ $t('msg.view') }}
 </Button><Button
               v-if="!sent && !record.read_at"
               size="small"
               type="link"
               :disabled="busy"
-              @click="mark(record as Msg)"
+              @click="mark(record as MsgPreview)"
             >
               {{ $t('msg.markRead') }}
 </Button><Button
@@ -900,7 +871,7 @@ onBeforeUnmount(() => {
               size="small"
               danger
               type="link"
-              @click="remove(record as Msg)"
+              @click="remove(record as MsgPreview)"
             >
               {{ $t(sent ? 'msg.deleteGlobal' : 'msg.delete') }}
             </Button>

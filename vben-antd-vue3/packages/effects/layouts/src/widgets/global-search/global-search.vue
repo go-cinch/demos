@@ -128,7 +128,7 @@ defineExpose({
         </div>
       </template>
 
-      <SearchPanel :keyword="keyword" :menus="menus" @close="handleClose" />
+      <SearchPanel :active="open" :keyword="keyword" :menus="menus" @close="handleClose" />
       <template #footer>
         <div class="flex w-full justify-start text-xs">
           <div class="mr-2 flex items-center">

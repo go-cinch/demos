@@ -78,7 +78,7 @@ describe.each(['login', 'operation'] as const)('%s summary selection', (kind) =>
       expect(auditApi.summary).toHaveBeenLastCalledWith(kind, expect.objectContaining({
         f: kind === 'login' ? 'metrics,heatmap,accounts,sources' : 'modules',
       }));
-      expect(vi.mocked(auditApi.list).mock.calls.at(-1)?.[1]).not.toHaveProperty('f');
+      expect(vi.mocked(auditApi.list).mock.calls.at(-1)?.[1].f).toBe(kind === 'login' ? 'id,occurred_at,username,status,ip,user_agent' : 'id,occurred_at,module,method,path,username,status,duration_ms');
     } finally { wrapper.unmount(); }
   });
 });

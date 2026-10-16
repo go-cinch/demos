@@ -87,7 +87,7 @@ describe('association editor', () => {
     await wrapper.get('.association-search input').setValue('abc');
     await vi.advanceTimersByTimeAsync(250); await flushPromises();
     expect(listActions).toHaveBeenCalledTimes(2); // Initial load and one keyword request.
-    expect(listActions).toHaveBeenLastCalledWith({ p: 1, s: 20, q: 'abc' });
+    expect(listActions).toHaveBeenLastCalledWith({ f: 'id,code,name,group,word,resource,menu,button', p: 1, s: 20, q: 'abc' });
     resolveOld(result(['STALE'])); await flushPromises();
     expect(wrapper.text()).not.toContain('Permission STALE');
     expect(wrapper.text()).toContain('Permission B');
@@ -103,7 +103,7 @@ describe('association editor', () => {
   it('loads later pages without dropping first-page results', async () => {
     vi.mocked(listActions).mockResolvedValueOnce(result(['A'], 1, 21)).mockResolvedValueOnce(result(['B'], 2, 21));
     setup(); await open(); await wrapper.get('.association-results > button').trigger('click'); await flushPromises();
-    expect(listActions).toHaveBeenLastCalledWith({ p: 2, q: undefined, s: 20 });
+    expect(listActions).toHaveBeenLastCalledWith({ f: 'id,code,name,group,word,resource,menu,button', p: 2, q: undefined, s: 20 });
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(2);
   });
   it('searches members once with a trimmed keyword', async () => {
@@ -122,8 +122,8 @@ describe('association editor', () => {
     await vi.advanceTimersByTimeAsync(250); await flushPromises();
     await wrapper.get('.association-results > button').trigger('click'); await flushPromises();
     expect(listActions).toHaveBeenCalledTimes(2);
-    expect(listActions).toHaveBeenNthCalledWith(1, { p: 1, q: 'match', s: 20 });
-    expect(listActions).toHaveBeenNthCalledWith(2, { p: 2, q: 'match', s: 20 });
+    expect(listActions).toHaveBeenNthCalledWith(1, { f: 'id,code,name,group,word,resource,menu,button', p: 1, q: 'match', s: 20 });
+    expect(listActions).toHaveBeenNthCalledWith(2, { f: 'id,code,name,group,word,resource,menu,button', p: 2, q: 'match', s: 20 });
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(2);
     expect(wrapper.find('.association-results > button').exists()).toBe(false);
   });
@@ -142,4 +142,22 @@ it('filters already joined members on the server without loading their IDs', asy
   await wrapper.setProps({ groupId: 7 });
   await open();
   expect(listUsers).toHaveBeenLastCalledWith({ f: 'id,username,code', p: 1, s: 20, q: undefined, exclude_user_group_id: 7 });
+});
+
+it('Escape dismisses suggestions without clearing the member query or results', async () => {
+  vi.mocked(listUsers).mockResolvedValue({ items: [{ id: 42, username: 'member42', code: 'MEMBER42', action_codes: [], actions: [], created_at: 0, updated_at: 0, status: 1, metadata: {}, login_count: 0, wrong: 0 }], p: 1, s: 20, t: 1 });
+  setup([], 'user');
+  await open();
+  const input = wrapper.get('.association-search input');
+  await input.setValue('member42');
+  await vi.advanceTimersByTimeAsync(250);
+  await flushPromises();
+  const calls = vi.mocked(listUsers).mock.calls.length;
+  await input.trigger('keydown', { key: 'Escape' });
+  await vi.advanceTimersByTimeAsync(300);
+  await flushPromises();
+  expect((input.element as HTMLInputElement).value).toBe('member42');
+  expect(wrapper.find('.association-picker').exists()).toBe(true);
+  expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(1);
+  expect(listUsers).toHaveBeenCalledTimes(calls);
 });

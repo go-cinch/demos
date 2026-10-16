@@ -1,9 +1,9 @@
 import type { AuditEvent } from '#/api/audit';
 import { $t } from '#/locales';
-export function successful(event: AuditEvent) {
-  return event.status >= 200 && event.status < 400;
+export function successful(event: Partial<Pick<AuditEvent, 'status'>>) {
+  return (event.status ?? 0) >= 200 && (event.status ?? 0) < 400;
 }
-export function operationLabel(event: AuditEvent) {
+export function operationLabel(event: Partial<Pick<AuditEvent, 'method' | 'module'>>) {
   const key =
     event.method === 'POST'
       ? 'create'
@@ -15,7 +15,7 @@ export function operationLabel(event: AuditEvent) {
     module: $t(`audit.modules.${event.module}`),
   });
 }
-export function clientLabel(agent: string) {
+export function clientLabel(agent = '') {
   const browser = /Edg\//.test(agent)
     ? 'Edge'
     : /Firefox\//.test(agent)

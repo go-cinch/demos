@@ -72,7 +72,6 @@
   "deleteSelectedGlobalConfirm": "Delete selected messages for every recipient?",
   "keyword": "Keyword",
   "searchMessages": "Search message titles or content",
-  "searchHistory": "Recent search",
   "allScopes": "All audiences",
   "splitView": "Split view",
   "tableView": "Table view",
@@ -104,5 +103,10 @@
   "feedLoadMore": "Scroll down or load more",
   "feedEnd": "All messages loaded",
   "feedShown": "Showing {count} of {total}",
-  "feedOrder": "Newest first"
+  "feedOrder": "Newest first",
+  "activeFilters": "Active filters",
+  "clearMessageFilter": "Clear message filter",
+  "focusUnavailable": "This message is unavailable or does not match the current filters.",
+  "messageFilter": "Message: {title}",
+  "selectedMessage": "Selected message"
 }

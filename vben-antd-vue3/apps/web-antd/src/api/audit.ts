@@ -29,6 +29,12 @@ export interface AuditEvent {
   duration_ms: number;
   occurred_at: number;
 }
+// List rows contain only the fields needed by the current view. Details remain complete.
+export type AuditPreview = Pick<AuditEvent, 'id' | 'occurred_at'> & Partial<AuditEvent>;
+export const auditProfileFields = {
+  login: 'id,occurred_at,username,status,user_agent,ip,duration_ms',
+  operation: 'id,occurred_at,username,status,user_agent,ip,duration_ms,module,method,path,operation,resource_id',
+} as const;
 export interface AuditBreakdown {
   name: string;
   total: number;

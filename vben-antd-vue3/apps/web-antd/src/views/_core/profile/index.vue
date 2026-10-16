@@ -25,6 +25,13 @@ const user = computed(
 const tab = ref('overview');
 const unread = ref<number>();
 const inboxOpen = ref(false);
+const inboxMessageId = ref<number>();
+const inboxMessageTitle = ref('');
+function openInbox(id?: number, title = '') {
+  inboxMessageId.value = id;
+  inboxMessageTitle.value = title;
+  inboxOpen.value = true;
+}
 const scope = computed(() =>
   $t(
     accessStore.accessCodes.includes('*')
@@ -97,7 +104,7 @@ async function moveTab(event: KeyboardEvent) {
               class="identity-inbox"
               data-testid="profile-open-inbox"
               :aria-label="$t('profile-center.openInbox')"
-              @click="inboxOpen = true"
+              @click="openInbox()"
             >
               <IconifyIcon icon="lucide:mail" />{{ $t('msg.inbox') }}
               <Badge
@@ -155,7 +162,7 @@ async function moveTab(event: KeyboardEvent) {
           >
             <ProfileMessages
               @count="unread = $event"
-              @inbox="inboxOpen = true"
+              @inbox="openInbox"
             />
             <ProfileActivity />
           </section>
@@ -189,7 +196,7 @@ async function moveTab(event: KeyboardEvent) {
           </section>
         </div>
       </div>
-      <MessageHistory v-model:open="inboxOpen" />
+      <MessageHistory v-model:open="inboxOpen" v-model:message-id="inboxMessageId" :message-title="inboxMessageTitle" />
     </div>
   </Page>
 </template>

@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, onScopeDispose, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { preferences } from '@vben/preferences';
@@ -18,6 +18,7 @@ function useContentSpinner() {
   const enableLoading = computed(() => preferences.transition.loading);
 
   let hideTimer: null | ReturnType<typeof setTimeout> = null;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
   let navSeq = 0;
   const routeSeq = new WeakMap<object, number>();
   let showTimer: null | {
@@ -26,6 +27,8 @@ function useContentSpinner() {
   } = null;
 
   const clearTimers = () => {
+    clearTimeout(maxTimer);
+    maxTimer = undefined;
     if (hideTimer) {
       clearTimeout(hideTimer);
       hideTimer = null;
@@ -41,6 +44,8 @@ function useContentSpinner() {
     if (!enableLoading.value || seq !== navSeq) {
       return;
     }
+    clearTimeout(maxTimer);
+    maxTimer = undefined;
     if (showTimer?.seq === seq) {
       clearTimeout(showTimer.id);
       showTimer = null;
@@ -61,14 +66,20 @@ function useContentSpinner() {
   };
 
   // 路由前置守卫
-  router.beforeEach((to) => {
-    if (to.meta.loaded || !enableLoading.value || to.meta.iframeSrc) {
-      return true;
-    }
+  const removeBefore = router.beforeEach((to) => {
     clearTimers();
     navSeq += 1;
+    if (to.meta.loaded || !enableLoading.value || to.meta.iframeSrc) {
+      spinning.value = false;
+      return true;
+    }
     const seq = navSeq;
     routeSeq.set(to, seq);
+    maxTimer = setTimeout(() => {
+      if (seq !== navSeq) return;
+      clearTimers();
+      spinning.value = false;
+    }, 10_000);
     const id = setTimeout(() => {
       if (showTimer?.seq === seq) {
         showTimer = null;
@@ -84,7 +95,7 @@ function useContentSpinner() {
   });
 
   // 路由后置守卫
-  router.afterEach((to) => {
+  const removeAfter = router.afterEach((to) => {
     if (to.meta.loaded || !enableLoading.value || to.meta.iframeSrc) {
       return true;
     }
@@ -92,6 +103,14 @@ function useContentSpinner() {
     return true;
   });
 
+  const removeError = router.onError?.(() => { clearTimers(); spinning.value = false; });
+  onScopeDispose(() => {
+    ++navSeq;
+    clearTimers();
+    removeBefore?.();
+    removeAfter?.();
+    removeError?.();
+  });
   return { spinning };
 }
 

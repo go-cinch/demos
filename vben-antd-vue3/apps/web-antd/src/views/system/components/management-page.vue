@@ -6,19 +6,14 @@ import type { Recordable } from '@vben/types';
 
 import type {
   ActionPayload,
-  ActionRecord,
   DictionaryPayload,
-  DictionaryRecord,
   PageParams,
   PageResult,
   RolePayload,
-  RoleRecord,
   UserGroupPayload,
-  UserGroupRecord,
   UserPayload,
   UserRecord,
   WhitelistPayload,
-  WhitelistRecord,
 } from '#/api';
 import type {
   SystemSummary,
@@ -86,6 +81,7 @@ import {
   deleteUserGroups,
   deleteUsers,
   deleteWhitelists,
+  getSystemRecord,
   listActionGroups,
   listActions,
   listDictionaries,
@@ -100,8 +96,9 @@ import {
   updateUserGroup,
   updateWhitelist,
 } from '#/api';
-import { getSummaryUserGroup, getSystemSummary } from '#/api/system/insights';
+import { getSystemSummary } from '#/api/system/insights';
 import LoadWarning from '#/components/load-warning.vue';
+import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { renderSkeletonOptions } from '#/components/skeleton-options';
 import Table from '#/components/skeleton-table.vue';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
@@ -138,13 +135,7 @@ type ResourceKind =
   | 'whitelist';
 type LockMode = 'permanent' | 'until';
 type TableSize = 'large' | 'middle' | 'small';
-type SystemRecord =
-  | ActionRecord
-  | DictionaryRecord
-  | RoleRecord
-  | UserGroupRecord
-  | UserRecord
-  | WhitelistRecord;
+type SystemRecord = import('./system-record-format').SystemRecord;
 type FormModel = Recordable<any>;
 type FilterHistory = Record<string, string[]>;
 type FilterSuggestionSource = 'backend' | 'history';
@@ -984,7 +975,7 @@ const detailsOpen = ref(false);
 const detailLoading = ref(false);
 const detailError = ref(false);
 let detailRequest = 0;
-let detailGroupID: number | undefined;
+let detailRecordID: number | undefined;
 watch(detailsOpen, (open) => {
   if (!open) {
     ++detailRequest;
@@ -1143,20 +1134,23 @@ function clearPermissionGroupLabel(name: string) {
     : $t('system-insights.clearGroup');
 }
 async function selectUserGroup(group: SystemSummaryGroup) {
-  detailGroupID = group.id;
-  await loadGroupDetail();
+  detailRecordID = group.id;
+  await loadRecordDetail();
 }
-async function loadGroupDetail() {
-  if (!detailGroupID || !canRead.value || !active) return;
+async function loadRecordDetail() {
+  if (!detailRecordID || !canRead.value || !active) return;
   const request = ++detailRequest;
-  selectedRecord.value = records.value.find((record) => record.id === detailGroupID) ?? selectedRecord.value;
+  selectedRecord.value = records.value.find((record) => record.id === detailRecordID)
+    ?? (selectedRecord.value?.id === detailRecordID ? selectedRecord.value : { id: detailRecordID });
   detailLoading.value = true;
   detailError.value = false;
   detailsOpen.value = true;
   try {
-    const record = await getSummaryUserGroup(detailGroupID);
-    if (request === detailRequest && active && canRead.value)
+    const record = await getSystemRecord<SystemRecord>(props.resource, detailRecordID);
+    if (request === detailRequest && active && canRead.value) {
       selectedRecord.value = record;
+      return record;
+    }
   } catch {
     if (request === detailRequest && active) detailError.value = true;
   } finally {
@@ -1168,15 +1162,12 @@ function selectAllCards(checked: boolean) {
     ? records.value.map((record) => record.id)
     : [];
 }
-function openDetail(record: Recordable<any>) {
-  ++detailRequest;
-  detailLoading.value = false;
-  detailError.value = false;
-  detailGroupID = undefined;
-  selectedRecord.value =
-    records.value.find((item) => item.id === record.id) ?? null;
-  detailsOpen.value = selectedRecord.value !== null;
+async function openDetail(record: Recordable<any>) {
+  if (loading.value) return;
+  detailRecordID = record.id;
+  return loadRecordDetail();
 }
+
 function editDetail(record: SystemRecord) {
   void openEditor(record);
 }
@@ -1277,6 +1268,29 @@ const visibleColumnKeys = ref<string[]>([
       ]
     : config.value.columns.map((column) => column.key)),
 ]);
+const listFields = computed(() => {
+  const base: Record<ResourceKind, string[]> = {
+    user: ['id', 'username', 'code', 'status', 'metadata'],
+    action: ['id', 'name', 'word'],
+    role: ['id', 'name', 'word'],
+    'user-group': ['id', 'name', 'word'],
+    dictionary: ['id', 'name', 'key'],
+    whitelist: ['id', 'resource', 'category'],
+  };
+  const cards: Partial<Record<ResourceKind, string[]>> = {
+    role: ['action_summaries', 'created_at', 'updated_at'],
+    'user-group': ['action_summaries', 'member_count', 'member_preview', 'created_at', 'updated_at'],
+    dictionary: ['enabled', 'description', 'value', 'created_at', 'updated_at'],
+    whitelist: ['created_at', 'updated_at'],
+  };
+  const columns = viewMode.value === 'cards' ? cards[props.resource] ?? []
+    : config.value.columns.filter((column) => visibleColumnKeys.value.includes(column.key)
+      && (viewMode.value !== 'matrix' || ['name', 'resource', 'menu', 'button'].includes(column.key)))
+      .flatMap((column) => column.display === 'role' ? ['role_summary']
+        : column.display === 'users' ? ['member_count', 'member_preview'] : [column.dataIndex]);
+  return [...new Set([...base[props.resource], ...columns])].join(',');
+});
+watch(listFields, () => { void loadData(); });
 const { isFullscreen, toggle: toggleFullscreen } =
   useFullscreen(tableContainerRef);
 const { start: scheduleFilterSearch, stop: cancelFilterSearch } = useTimeoutFn(
@@ -1763,6 +1777,7 @@ function newIdempotencyKey() {
 
 function buildListParams(pageNumber = pagination.current): PageParams {
   const params: PageParams = {
+    f: listFields.value,
     p: pageNumber,
     s: pagination.pageSize,
   };
@@ -1809,16 +1824,10 @@ async function loadData() {
     const result = await config.value.api.list(params);
     if (request !== listRequest || !active) return;
     lastLoadedQuery = key;
-    records.value = result.items;
+    records.value = result.items.map((item) => 'role_summary' in item
+      ? { ...item, role: item.role_summary ?? undefined } as SystemRecord : item);
     pagination.total = result.t;
     selectedRowKeys.value = [];
-    if (selectedRecord.value && detailGroupID === undefined) {
-      const updated = result.items.find(
-        (record) => record.id === selectedRecord.value?.id,
-      );
-      if (updated) selectedRecord.value = updated;
-      else detailsOpen.value = false;
-    }
   } catch {
     if (request === listRequest && active) {
       lastLoadedQuery = '';
@@ -2326,8 +2335,14 @@ function handleRoleDropdownVisibleChange(open: boolean) {
 }
 
 async function openEditor(record?: Recordable<any>) {
-  ++editorRequest;
+  if (loading.value || detailLoading.value) return;
+  const request = ++editorRequest;
   editorError.value = '';
+  if (record) {
+    const full = await openDetail(record);
+    if (request !== editorRequest || !full || !detailsOpen.value) return;
+    record = full;
+  }
   selectedRecord.value = (record as SystemRecord | undefined) ?? null;
   detailsOpen.value = Boolean(record);
   editingRecord.value = (record as SystemRecord | undefined) ?? null;
@@ -2454,8 +2469,8 @@ async function submitEditor() {
     selectedRecord.value = null;
     await refreshAll();
     if (!active || currentEditor !== editorRequest) return;
-    detailGroupID = undefined;
-    selectedRecord.value = records.value.find((record) => record.id === saved.id) ?? saved;
+    detailRecordID = undefined;
+    selectedRecord.value = saved;
     modalOpen.value = false;
     detailsOpen.value = canRead.value;
     formModel.password = '';
@@ -2951,62 +2966,22 @@ onBeforeUnmount(() => {
                 <span v-else>{{ label }}</span>
               </template>
             </Select>
-            <AutoComplete
-:not-found-content="!!filterSuggestionsLoading[filterHistoryKey(field.key)] ? ' ' : null"
+            <SearchAutocomplete
               v-else
               :value="filters[field.key]"
-              allow-clear
-              autocomplete="off"
               class="system-filter-control"
               :data-testid="`system-filter-${field.key}`"
-              :default-active-first-option="false"
               :dropdown-match-select-width="true"
-              :filter-option="false"
               :options="filterSuggestionOptions(field.key)"
+              :loading="!!filterSuggestionsLoading[filterHistoryKey(field.key)]"
               :placeholder="$t('system.common.enter', { field: field.label })"
-              :show-action="['focus']"
               @blur="handleFilterBlur()"
               @focus="handleFilterFocus"
               @search="searchBackendFilterSuggestions(field.key, $event)"
               @update:value="updateTextFilterValue(field.key, $event)"
-            :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, !!filterSuggestionsLoading[filterHistoryKey(field.key)])"
->
-              <template #option="{ label, source, value }">
-                <div
-                  v-if="source === 'history'"
-                  class="flex w-full min-w-0 items-center justify-between gap-2"
-                >
-                  <Tag class="m-0 min-w-0 truncate">{{ value }}</Tag>
-                  <button
-                    :aria-label="
-                      $t('system.suggestions.removeHistory', { value })
-                    "
-                    class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    tabindex="-1"
-                    type="button"
-                    @click.prevent.stop="
-                      removeFilterHistory(field.key, String(value))
-                    "
-                    @mousedown.prevent.stop
-                  >
-                    <IconifyIcon class="size-3.5" icon="lucide:x" />
-                  </button>
-                </div>
-                <span v-else-if="source === 'backend'">
-                  <span
-                    v-for="(segment, index) in filterSuggestionSegments(
-                      String(label),
-                      field.key,
-                    )"
-                    :key="index"
-                    :class="{ 'font-bold text-red-500': segment.matched }"
-                  >
-                    {{ segment.text }}
-                  </span>
-                </span>
-                <span v-else>{{ label }}</span>
-              </template>
-            </AutoComplete>
+              @submit="search"
+              @remove-history="removeFilterHistory(field.key, $event)"
+            />
           </FormItem>
           <template #actions>
             <Button v-if="canRead" html-type="button" @click="resetSearch">
@@ -3561,7 +3536,7 @@ onBeforeUnmount(() => {
         :resource="props.resource"
         :loading="detailLoading"
         :error="detailError"
-        @retry="loadGroupDetail"
+        @retry="loadRecordDetail"
       />
       <ManagementForm v-else ref="formRef" :model="formModel" :rules="formRules" :disabled="submitting" vertical data-testid="management-editor">
         <SystemRecordDetail :record="editingRecord" :resource="props.resource" editing>

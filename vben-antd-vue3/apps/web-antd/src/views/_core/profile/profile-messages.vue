@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Msg } from '#/api/msg';
+import type { MsgFeedPreview } from '#/api/msg';
 
 import {
   onActivated,
@@ -10,35 +10,29 @@ import {
   watch,
 } from 'vue';
 
-import { IconifyIcon } from '@vben/icons';
 import { preferences } from '@vben/preferences';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
-import { Button, Card, Drawer, Empty, Skeleton, Tag } from 'ant-design-vue';
+import { Button, Card, Empty, Skeleton, Tag } from 'ant-design-vue';
 
 import { msgApi, msgChanged } from '#/api/msg';
 import LoadWarning from '#/components/load-warning.vue';
 import MessageTypeIcon from '#/components/message-type-icon.vue';
 import { $t } from '#/locales';
 
-const emit = defineEmits<{ count: [number | undefined]; inbox: [] }>();
+const emit = defineEmits<{ count: [number | undefined]; inbox: [messageId?: number, title?: string] }>();
 const user = useUserStore();
 const timezone = useTimezoneStore();
-const rows = ref<Msg[]>([]);
+const rows = ref<MsgFeedPreview[]>([]);
 const unread = ref<number>();
 const loading = ref(true);
 const error = ref(false);
 const busy = ref(false);
-const selected = ref<Msg>();
-const detailOpen = ref(false);
-const detailLoading = ref(false);
-const detailError = ref(false);
 let active = true;
 let generation = 0;
-let detailGeneration = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
-function time(value: number) {
+function time(value?: number) {
   void timezone.timezone;
   return formatDateTime(value);
 }
@@ -49,7 +43,7 @@ async function load() {
   error.value = false;
   try {
     const [messages, status] = await Promise.all([
-      msgApi.list(false, { f: 'id,title,type,scope,sender_id,published_at,expired_at,read_at', p: 1, s: 3 }),
+      msgApi.list(false, { f: 'id,title,type,published_at,read_at', p: 1, s: 3 }),
       msgApi.count(Number(user.userInfo.userId)),
     ]);
     if (run !== generation || !active) return;
@@ -66,34 +60,8 @@ async function load() {
     if (run === generation) loading.value = false;
   }
 }
-async function openMessage(row: Msg) {
-  if (busy.value) return;
-  const run = ++detailGeneration;
-  selected.value = row;
-  detailOpen.value = true;
-  detailError.value = false;
-  detailLoading.value = true;
-  try {
-    const record = await msgApi.get(row.id, false);
-    if (run !== detailGeneration || !active) return;
-    selected.value = record;
-    if (!record.read_at) {
-      await msgApi.read(record.id);
-      msgChanged();
-      if (run !== detailGeneration || !active) return;
-      selected.value = { ...record, read_at: Date.now() };
-    }
-  } catch {
-    if (run === detailGeneration && active) detailError.value = true;
-  } finally {
-    if (run === detailGeneration) detailLoading.value = false;
-  }
-}
-function closeDetail() {
-  ++detailGeneration;
-  detailOpen.value = false;
-  selected.value = undefined;
-  detailLoading.value = false;
+function openMessage(row: MsgFeedPreview) {
+  if (!busy.value) emit('inbox', row.id, row.title);
 }
 async function readAll() {
   if (busy.value || !unread.value) return;
@@ -113,13 +81,11 @@ function refreshVisible() {
 function deactivate() {
   active = false;
   ++generation;
-  closeDetail();
 }
 watch(
   () => user.userInfo?.userId,
   () => {
     ++generation;
-    closeDetail();
     rows.value = [];
     unread.value = undefined;
     emit('count', undefined);
@@ -234,57 +200,8 @@ onBeforeUnmount(() => {
 </Button>
     </div>
   </Card>
-  <Drawer
-    :open="detailOpen"
-    :closable="false"
-    width="min(520px, 100vw)"
-    destroy-on-close
-    @close="closeDetail"
-  >
-    <section data-testid="profile-message-detail" role="dialog" aria-modal="true" :aria-label="$t('msg.detail')" :aria-busy="detailLoading">
-      <header class="message-detail-heading">
-        <h2>{{ $t('msg.detail') }}</h2>
-        <Button type="text" :aria-label="$t('msg.close')" @click="closeDetail">
-          <IconifyIcon icon="lucide:x" />
-        </Button>
-      </header>
-      <LoadWarning v-if="detailError">
-<template #action>
-<Button
-            v-if="selected"
-            size="small"
-            @click="openMessage(selected)"
-            >
-{{ $t('msg.retry') }}
-</Button>
-</template>
-</LoadWarning>
-      <Skeleton v-else-if="detailLoading" active :paragraph="{ rows: 5 }" />
-      <article v-else-if="selected" class="message-detail">
-        <Tag color="blue">{{ $t(`msg.${selected.type}`) }}</Tag>
-        <h2>{{ selected.title }}</h2>
-        <time>{{ time(selected.published_at) }}</time>
-        <p>{{ selected.content }}</p>
-        <Tag :color="selected.read_at ? 'success' : 'blue'">
-{{
-          $t(selected.read_at ? 'msg.read' : 'msg.unread')
-        }}
-</Tag>
-      </article>
-    </section>
-  </Drawer>
 </template>
 <style scoped>
-.message-detail-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 18px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid hsl(var(--border));
-}
-.message-detail-heading h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .message-heading {
   display: flex;
   align-items: center;
@@ -366,24 +283,6 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   padding: 12px 24px;
   border-top: 1px solid hsl(var(--border));
-}
-.message-detail h2 {
-  margin: 18px 0 10px;
-  font-size: 21px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.message-detail time {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-}
-.message-detail p {
-  padding-top: 24px;
-  margin: 24px 0;
-  border-top: 1px solid hsl(var(--border));
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.8;
 }
 @media (max-width: 760px) {
   .message-list {

@@ -145,7 +145,10 @@
       "close": "关闭",
       "noResults": "未找到搜索结果",
       "noRecent": "没有搜索历史",
-      "recent": "搜索历史"
+      "recent": "搜索历史",
+      "results": "搜索结果",
+      "history": "历史记录",
+      "removeHistory": "从历史记录移除 {value}"
     },
     "lockScreen": {
       "title": "锁定屏幕",

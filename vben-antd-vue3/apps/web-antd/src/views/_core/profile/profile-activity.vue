@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditEvent, AuditKind } from '#/api/audit';
+import type { AuditPreview, AuditKind } from '#/api/audit';
 
 import {
   computed,
@@ -21,7 +21,7 @@ import { formatDateTime } from '@vben/utils';
 
 import { Button, Card, Empty, Segmented, Skeleton, Tag } from 'ant-design-vue';
 
-import { auditApi } from '#/api/audit';
+import { auditApi, auditProfileFields } from '#/api/audit';
 import LoadWarning from '#/components/load-warning.vue';
 import { $t } from '#/locales';
 
@@ -44,7 +44,7 @@ const kind = ref<AuditKind>('login');
 const options = computed(() =>
   kinds.value.map((value) => ({ value, label: $t(`profile-center.${value}`) })),
 );
-const rows = shallowRef<AuditEvent[]>([]);
+const rows = shallowRef<AuditPreview[]>([]);
 const loading = ref(false);
 const error = ref(false);
 let active = true;
@@ -53,8 +53,8 @@ function time(value: number) {
   void timezone.timezone;
   return formatDateTime(value);
 }
-function title(event: AuditEvent) {
-  if (event.kind === 'login')
+function title(event: AuditPreview) {
+  if (kind.value === 'login')
     return $t(
       successful(event)
         ? 'profile-center.loginSuccess'
@@ -78,6 +78,7 @@ async function load() {
   const to = Date.now();
   try {
     const data = await auditApi.list(kind.value, {
+      f: auditProfileFields[kind.value],
       username: user.userInfo.username,
       from: to - 30 * 86_400_000,
       to,

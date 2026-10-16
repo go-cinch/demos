@@ -21,13 +21,14 @@ export type ResourceKind =
   | 'user-group'
   | 'whitelist';
 
+type Preview<T extends { id: number }> = Pick<T, 'id'> & Partial<T>;
 export type SystemRecord =
-  | ActionRecord
-  | DictionaryRecord
-  | RoleRecord
-  | UserGroupRecord
-  | UserRecord
-  | WhitelistRecord;
+  | Preview<ActionRecord>
+  | Preview<DictionaryRecord>
+  | Preview<RoleRecord>
+  | Preview<UserGroupRecord>
+  | Preview<UserRecord>
+  | Preview<WhitelistRecord>;
 
 export interface ResourceRule {
   method: string;
@@ -36,8 +37,8 @@ export interface ResourceRule {
 }
 
 export function recordLabel(record: SystemRecord) {
-  if ('name' in record) return record.name;
-  if ('username' in record) return record.username;
+  if ('name' in record) return record.name ?? '';
+  if ('username' in record) return record.username ?? '';
   return $t('system-cards.whitelistEntry', { id: record.id });
 }
 
@@ -69,14 +70,14 @@ export function jsonStructure(value: unknown) {
   return $t('system-cards.scalar');
 }
 
-export function splitLines(value: string) {
+export function splitLines(value = '') {
   return value
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
-export function resourceRules(value: string): ResourceRule[] {
+export function resourceRules(value = ''): ResourceRule[] {
   return splitLines(value).map((raw) => {
     const separator = raw.indexOf('|');
     return separator === -1
@@ -105,21 +106,25 @@ export function recordActions(record: SystemRecord): ActionRecord[] {
   return 'actions' in record ? record.actions ?? [] : [];
 }
 
+export function recordActionSummaries(record: SystemRecord) {
+  return 'action_summaries' in record ? record.action_summaries ?? [] : recordActions(record);
+}
+
 export function permissionCount(record: SystemRecord) {
-  return recordActions(record).length;
+  return recordActionSummaries(record).length;
 }
 
 export function permissionGroups(record: SystemRecord) {
   return [
     ...new Set(
-      recordActions(record)
+      recordActionSummaries(record)
         .map((item) => item.group)
         .filter(Boolean),
     ),
   ];
 }
 
-export function userStatus(status: number) {
+export function userStatus(status = -1) {
   return {
     color: (
       { 0: 'warning', 1: 'success', 2: 'error' } as Record<number, string>

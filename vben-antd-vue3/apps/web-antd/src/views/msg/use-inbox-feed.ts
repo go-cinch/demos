@@ -1,4 +1,6 @@
-import type { Msg } from '#/api/msg';
+import type { Ref } from 'vue';
+
+import type { MsgFeedPreview } from '#/api/msg';
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -8,15 +10,16 @@ import { useUserStore } from '@vben/stores';
 import { Modal } from 'ant-design-vue';
 
 import { visitMessages } from '#/api/message-attention';
-import { msgApi, msgChanged } from '#/api/msg';
+import { msgApi, msgChanged, msgPreviewFields } from '#/api/msg';
+import { searchSuggestionGroups } from '#/components/search-suggestions';
 import { $t } from '#/locales';
 
 const PAGE_SIZE = 10;
 type Filter = 'all' | 'notice' | 'read' | 'system' | 'unread';
 
-export function useInboxFeed() {
+export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
   const user = useUserStore();
-  const rows = ref<Msg[]>([]);
+  const rows = ref<MsgFeedPreview[]>([]);
   const total = ref(0);
   const unread = ref<number>();
   const filter = ref<Filter>('all');
@@ -44,19 +47,14 @@ export function useInboxFeed() {
   let suggestionGeneration = 0;
   let detailGeneration = 0;
   let needsRebase = false;
+  let pendingMessageId = messageId.value;
   let latest: null | number | undefined;
   let timer: ReturnType<typeof setInterval>;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
   const hasMore = computed(() => !exhausted.value && rows.value.length < total.value);
-  const options = computed(() => {
-    const text = draft.value.trim().toLocaleLowerCase();
-    const recent = history.value.filter((value) => value.toLocaleLowerCase().includes(text));
-    return [
-      ...recent.map((value) => ({ value, source: 'history' })),
-      ...suggestions.value.filter((value) => !recent.includes(value)).map((value) => ({ value, source: 'backend' })),
-    ].slice(0, 8);
-  });
+  const options = computed(() => searchSuggestionGroups(draft.value.trim() ? suggestions.value : [], history.value));
+  function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
   const filters = computed(() => [
     { value: 'all', label: $t('msg.feedAll') },
     { value: 'unread', label: $t('msg.unread') },
@@ -66,6 +64,7 @@ export function useInboxFeed() {
   ]);
   function params() {
     return {
+      ...(messageId.value === undefined ? {} : { id: messageId.value }),
       ...(query.value ? { q: query.value } : {}),
       ...(['notice', 'system'].includes(filter.value) ? { type: filter.value } : {}),
       ...(['read', 'unread'].includes(filter.value) ? { read: filter.value === 'read' } : {}),
@@ -104,12 +103,12 @@ export function useInboxFeed() {
       viewport.value?.scrollTo({ top: 0 });
     }
     try {
-      const collected = new Map<number, Msg>();
+      const collected = new Map<number, MsgFeedPreview>();
       let loaded = 0;
       let available = 0;
       let ended = false;
       for (let page = 1; page <= depth; page++) {
-        const result = await msgApi.list(false, { ...criteria, p: page, s: PAGE_SIZE });
+        const result = await msgApi.list(false, { ...criteria, f: msgPreviewFields, p: page, s: PAGE_SIZE });
         if (disposed || run !== generation) return;
         available = result.t;
         loaded = page;
@@ -134,7 +133,15 @@ export function useInboxFeed() {
       if (run === generation && viewport.value) viewport.value.scrollTop = scrollTop;
     } catch { if (run === generation && !disposed) error.value = true; }
     finally { if (run === generation && !disposed) loading.value = false; }
-    if (!disposed && run === generation) void count();
+    if (!disposed && run === generation) {
+      void count();
+      const target = pendingMessageId;
+      if (!error.value && target !== undefined && target === messageId.value) {
+        pendingMessageId = undefined;
+        const row = rows.value.find((item) => item.id === target);
+        if (row) await toggle(row);
+      }
+    }
   }
   async function more(): Promise<void> {
     if (disposed || loading.value || loadingMore.value || busy.value || error.value || !hasMore.value) return;
@@ -147,7 +154,7 @@ export function useInboxFeed() {
     loadingMore.value = true;
     moreError.value = false;
     try {
-      const result = await msgApi.list(false, { ...params(), p: pages.value + 1, s: PAGE_SIZE });
+      const result = await msgApi.list(false, { ...params(), f: msgPreviewFields, p: pages.value + 1, s: PAGE_SIZE });
       if (disposed || run !== generation) return;
       if (result.t < total.value) {
         await refresh();
@@ -183,7 +190,7 @@ export function useInboxFeed() {
     if (!text.trim()) { search(); return; }
     suggestionTimer = setTimeout(async () => {
       try {
-        const result = await msgApi.list(false, { f: 'title', p: 1, s: 8, q: text.trim() });
+        const result = await msgApi.list(false, { ...params(), f: 'title', p: 1, s: 8, q: text.trim() });
         if (!disposed && run === suggestionGeneration) suggestions.value = [...new Set(result.items.map((row) => row.title))];
       } catch { /* The request client reports failures; keep query history available. */ }
       finally { if (!disposed && run === suggestionGeneration) suggesting.value = false; }
@@ -216,7 +223,7 @@ export function useInboxFeed() {
       busy.value = false;
     }
   }
-  async function toggle(row: Msg) {
+  async function toggle(row: MsgFeedPreview) {
     if (busy.value || loading.value || detailLoading.value !== undefined) return;
     if (expanded.value.includes(row.id)) {
       expanded.value = expanded.value.filter((id) => id !== row.id);
@@ -249,7 +256,7 @@ export function useInboxFeed() {
       busy.value = false;
     }
   }
-  function mark(row: Msg) { return mutate(() => msgApi.read(row.id)); }
+  function mark(row: MsgFeedPreview) { return mutate(() => msgApi.read(row.id)); }
   function readAll() { return mutate(() => msgApi.readAll()); }
   function confirmAction(read: boolean, ids: number[], bulk = false) {
     if (busy.value || loading.value || !ids.length) return;
@@ -292,7 +299,14 @@ export function useInboxFeed() {
     if ((viewport.value?.scrollTop ?? 0) > 0 || expanded.value.length || selected.value.length) void count(true);
     else void refresh();
   }
-  watch(filter, () => { void refresh(true); });
+  watch([filter, messageId], ([, id], [, previousId]) => {
+    if (id !== previousId) pendingMessageId = id;
+    suggestionGeneration++;
+    clearTimeout(suggestionTimer);
+    suggestions.value = [];
+    suggesting.value = false;
+    void refresh(true);
+  });
   watch(() => preferences.app.locale, () => {
     suggestionGeneration++;
     clearTimeout(suggestionTimer);
@@ -333,6 +347,6 @@ export function useInboxFeed() {
   });
   return { rows, total, unread, filter, filters, draft, query, loading, loadingMore, error, moreError,
     busy, expanded, detailLoading, detailError, selecting, selected, viewport, newMessages, hasMore,
-    options, suggesting, refresh, more, onScroll, search, suggest, scheduleSearch, cancelSearch,
+    options, suggesting, removeHistory, refresh, more, onScroll, search, suggest, scheduleSearch, cancelSearch,
     choose, segments, toggle, mark, readAll, confirmAction, check };
 }

@@ -3,9 +3,11 @@ import type { UserSummary } from '#/api';
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
-import { Avatar, Button, FormItemRest, Input, Pagination } from 'ant-design-vue';
+import { Avatar, Button, FormItemRest, Pagination } from 'ant-design-vue';
 
 import { listUserGroupMembers } from '#/api';
+import SearchAutocomplete from '#/components/search-autocomplete.vue';
+import { searchSuggestionGroups } from '#/components/search-suggestions';
 import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
@@ -22,6 +24,8 @@ const page = ref(1);
 const total = ref(0);
 const query = ref('');
 const history = ref<string[]>([]);
+const searchOptions = computed(() => searchSuggestionGroups(query.value.trim() ? members.value.flatMap((member) => [member.username, member.code]).filter((value) => value.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())).slice(0, 8) : [], history.value));
+function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
 const loading = ref(false);
 const failed = ref(false);
 let generation = 0;
@@ -75,11 +79,20 @@ onBeforeUnmount(() => { ++generation; clearTimeout(timer); });
   <FormItemRest>
     <div class="group-members" data-testid="group-members">
       <header><strong v-if="!editable">{{ $t('system.fields.members') }}</strong><span>{{ $t('system-members.count', { count: displayedCount }) }}</span></header>
-      <Input :value="query" :disabled="disabled" allow-clear :placeholder="$t('system-editor.searchMember')" :aria-label="$t('system-editor.searchMember')" @update:value="search" @blur="rememberSearch" @press-enter="rememberSearch" />
-      <div v-if="history.length && !query" class="member-history">
-        <span>{{ $t('system.suggestions.history') }}</span>
-        <Button v-for="item in history" :key="item" type="text" size="small" :disabled="disabled" @click="search(item, true)">{{ item }}</Button>
-      </div>
+      <SearchAutocomplete
+        :value="query"
+        :options="searchOptions"
+        :loading="loading"
+        :disabled="disabled"
+        class="w-full"
+        :placeholder="$t('system-editor.searchMember')"
+        :aria-label="$t('system-editor.searchMember')"
+        @search="search"
+        @select="search($event, true); rememberSearch()"
+        @submit="rememberSearch"
+        @blur="rememberSearch"
+        @remove-history="removeHistory"
+      />
       <LoadWarning v-if="failed"><template #action><Button :disabled="disabled" @click="load()">{{ $t('system-cards.retry') }}</Button></template></LoadWarning>
       <div v-skeleton="loading" class="member-page" :aria-busy="loading">
         <article v-for="member in members" :key="member.id" class="member-row" :class="{ removed: value.removed.includes(member.id) }">
@@ -104,7 +117,7 @@ onBeforeUnmount(() => { ++generation; clearTimeout(timer); });
 <style scoped>
 .group-members { display: grid; gap: 12px; min-width: 0; }
 .group-members header { display: flex; align-items: center; gap: 8px; }
-.group-members header > span, .member-identity > span, .member-changes, .member-history { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.group-members header > span, .member-identity > span, .member-changes { color: hsl(var(--muted-foreground)); font-size: 12px; }
 .member-page { max-height: 360px; overflow: auto; scrollbar-gutter: stable; }
 .member-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid hsl(var(--border)); }
 .member-identity { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -112,7 +125,6 @@ onBeforeUnmount(() => { ++generation; clearTimeout(timer); });
 .member-row :deep(.ant-avatar) { flex: none; color: hsl(var(--primary)); background: hsl(var(--primary) / 10%); }
 .removed .member-identity { opacity: .55; text-decoration: line-through; }
 .member-placeholder { min-height: 160px; padding: 16px; }
-.member-history { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .matched { color: hsl(var(--primary)); font-weight: 600; }
 p { margin: 0; }
 </style>

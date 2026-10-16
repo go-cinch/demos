@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { Msg } from '#/api/msg';
+import type { MsgFeedPreview } from '#/api/msg';
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { VbenIconButton } from '@vben/common-ui';
 import { CircleCheckBig, CircleX } from '@vben/icons';
@@ -12,26 +12,23 @@ import { formatDateTime } from '@vben/utils';
 import { Button, Modal } from 'ant-design-vue';
 
 import { messageAttention, visitMessages } from '#/api/message-attention';
-import { msgApi, msgChanged } from '#/api/msg';
+import { msgApi, msgChanged, msgPreviewFields } from '#/api/msg';
 import MessageTypeIcon from '#/components/message-type-icon.vue';
-import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 import MessageHistory from '#/views/msg/history.vue';
 
 const userStore = useUserStore();
 const historyOpen = ref(false);
+const historyMessageId = ref<number>();
+const historyMessageTitle = ref('');
 const popup = ref<InstanceType<typeof Notification>>();
 const count = ref<null | number>(null);
-const rows = ref<Msg[]>([]);
+const rows = ref<MsgFeedPreview[]>([]);
 const open = ref(false);
 const loading = ref(false);
 const error = ref(false);
 const busy = ref(false);
-const selected = ref<Msg>();
-const detailOpen = ref(false);
-const detailLoading = ref(false);
 let generation = 0;
-let detailGeneration = 0;
 let disposed = false;
 function syncSeen() { count.value = messageAttention.count(Number(userStore.userInfo?.userId)); }
 let timer: ReturnType<typeof setInterval>;
@@ -65,7 +62,7 @@ async function refresh() {
     ...(loadList
       ? [
           msgApi
-            .list(false, { p: 1, s: 5 })
+            .list(false, { f: msgPreviewFields, p: 1, s: 5 })
             .then((result) => {
               if (current === generation) {
                 rows.value = result.items.slice(0, 5);
@@ -125,27 +122,13 @@ function confirmRemove(ids: number[], clear = false) {
       }),
   });
 }
-async function openDetail(id: number | string) {
+function openHistory(id?: number | string) {
   if (busy.value || loading.value) return;
-  const current = ++detailGeneration;
   popup.value?.close();
-  selected.value = rows.value.find((row) => row.id === Number(id));
-  detailOpen.value = true;
-  detailLoading.value = true;
-  try {
-    const item = await msgApi.get(Number(id), false);
-    if (disposed || current !== detailGeneration || !detailOpen.value) return;
-    selected.value = item;
-    if (item.read_at === null) await mutate(() => msgApi.read(item.id));
-  } catch {
-    if (current === detailGeneration) detailOpen.value = false;
-  } finally {
-    if (current === detailGeneration) detailLoading.value = false;
-  }
+  historyMessageId.value = id === undefined ? undefined : Number(id);
+  historyMessageTitle.value = rows.value.find((row) => row.id === historyMessageId.value)?.title ?? '';
+  historyOpen.value = true;
 }
-watch(detailOpen, (value) => {
-  if (!value) detailGeneration++;
-});
 onMounted(() => {
   void refresh();
   timer = setInterval(refresh, 30000);
@@ -157,7 +140,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true;
   generation++;
-  detailGeneration++;
   clearInterval(timer);
   window.removeEventListener('cinch-msg-seen', syncSeen);
   window.removeEventListener('storage', syncSeen);
@@ -182,8 +164,8 @@ onBeforeUnmount(() => {
         true,
       )
     "
-    @on-click="(item) => openDetail(item.id)"
-    @view-all="historyOpen = true"
+    @on-click="(item) => openHistory(item.id)"
+    @view-all="openHistory()"
   >
     <template #avatar="{ item }">
       <MessageTypeIcon :type="item.type" />
@@ -212,25 +194,5 @@ onBeforeUnmount(() => {
       </VbenIconButton>
     </template>
   </Notification>
-  <MessageHistory v-model:open="historyOpen" />
-  <Modal v-model:open="detailOpen" :title="$t('msg.detail')" :width="560" :footer="null">
-    <div v-if="selected" v-skeleton="detailLoading" class="message-detail-viewport">
-      <h3 class="mb-2 text-base font-semibold break-words">
-        {{ selected.title }}
-      </h3>
-      <p class="mb-4 text-xs text-muted-foreground">
-        {{ formatDateTime(selected.published_at) }}
-      </p>
-      <p class="max-h-96 overflow-auto whitespace-pre-wrap break-words">
-        {{ selected.content }}
-      </p>
-    </div>
-    <div class="mt-4 flex justify-end">
-      <Button @click="detailOpen = false">{{ $t('msg.close') }}</Button>
-    </div>
-  </Modal>
+  <MessageHistory v-model:open="historyOpen" v-model:message-id="historyMessageId" :message-title="historyMessageTitle" />
 </template>
-
-<style scoped>
-.message-detail-viewport { height: min(420px, 60vh); overflow: auto; scrollbar-gutter: stable; }
-</style>

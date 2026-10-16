@@ -6,7 +6,7 @@ import { Tag } from 'ant-design-vue';
 import { $t } from '#/locales';
 
 import { resourceRules, ruleColor, splitLines } from './system-record-format';
-defineProps<{ permission?: ActionRecord; code: string }>();
+defineProps<{ permission?: Omit<ActionRecord, 'created_at' | 'updated_at'>; code: string }>();
 </script>
 <template>
   <article class="permission-card" :aria-label="permission?.name || code">

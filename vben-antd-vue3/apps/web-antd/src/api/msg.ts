@@ -23,6 +23,8 @@ export interface Msg {
   recipient_ids?: number[];
   recipients?: MsgRecipient[];
 }
+export type MsgFeedPreview = Pick<Msg, 'id' | 'title' | 'type' | 'published_at' | 'read_at' | 'summary' | 'content'>;
+export type MsgPreview = Pick<Msg, 'id' | 'title'> & Partial<Msg>;
 export interface MsgPage<T = Msg> {
   items: T[];
   t: number;
@@ -55,13 +57,13 @@ export function msgChanged() {
   window.dispatchEvent(new Event('cinch-msg-changed'));
 }
 
-export const msgListFields = 'id,title,summary,type,scope,sender_id,published_at,expired_at,read_at';
+export const msgPreviewFields = 'id,title,summary,type,published_at,read_at';
 interface MsgListApi {
   <F extends string>(sent: boolean, params: Record<string, boolean | number | string> & { f: F }): Promise<MsgPage<SelectedRecord<Msg, F>>>;
-  (sent: boolean, params: Record<string, boolean | number | string>): Promise<MsgPage>;
+  (sent: boolean, params: Record<string, boolean | number | string> & { f: string }): Promise<MsgPage<MsgPreview>>;
 }
 const listMessages: MsgListApi = (sent: boolean, params: Record<string, boolean | number | string>) =>
-  client.get<MsgPage>(sent ? '/msg/sent' : '/msg/inbox', { params: { f: msgListFields, ...params } });
+  client.get<MsgPage>(sent ? '/msg/sent' : '/msg/inbox', { params });
 const rawMsgApi = {
   list: listMessages,
   sentSummary: () => client.get<MsgSentSummary>('/msg/sent/summary', { params: { f: 'total,counts' } }),

@@ -18,6 +18,8 @@ import {
 
 import { listActions, listUsers } from '#/api';
 import { msgApi } from '#/api/msg';
+import SearchAutocomplete from '#/components/search-autocomplete.vue';
+import { searchSuggestionGroups } from '#/components/search-suggestions';
 import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
@@ -26,7 +28,8 @@ import PermissionCard from './permission-card.vue';
 import { splitLines } from './system-record-format';
 
 type Key = number | string;
-type Entry = ActionRecord | MsgUser | UserSummary;
+type ActionOption = Omit<ActionRecord, 'created_at' | 'updated_at'>;
+type Entry = ActionOption | MsgUser | UserSummary;
 defineOptions({ inheritAttrs: false });
 const props = withDefaults(
   defineProps<{
@@ -42,7 +45,7 @@ const emit = defineEmits<{ 'update:value': [value: Key[]] }>();
 const formItem = Form.useInjectFormItemContext();
 const open = ref(false);
 const query = ref('');
-const searchInput = ref<{ focus: () => void }>();
+const searchInput = ref<InstanceType<typeof SearchAutocomplete>>();
 const addButton = ref<InstanceType<typeof Button>>();
 const loading = ref(false);
 const failed = ref(false);
@@ -50,6 +53,8 @@ const results = ref<Entry[]>([]);
 const cache = ref(new Map<Key, Entry>());
 const pending = ref<Key[]>([]);
 const history = ref<string[]>([]);
+const searchOptions = computed(() => searchSuggestionGroups(query.value.trim() ? results.value.map(name).slice(0, 8) : [], history.value));
+function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
 const page = ref(1);
 const more = ref(false);
 const removed = ref<{ index: number; key: Key }>();
@@ -78,7 +83,7 @@ function secondary(item: Entry) {
       ? item.code
       : `#${item.id}`;
 }
-function permissionDetails(item: ActionRecord) {
+function permissionDetails(item: ActionOption) {
   return [
     { key: 'resource', label: 'system.fields.resourceRules', color: 'cyan', values: splitLines(item.resource) },
     { key: 'menu', label: 'system.fields.menuPaths', color: 'blue', values: splitLines(item.menu) },
@@ -118,7 +123,7 @@ async function load(request: number, append = false) {
       const params = { p: page.value, q: text || undefined, s: 20 };
       const result =
         props.kind === 'action'
-          ? await listActions(params)
+          ? await listActions({ ...params, f: 'id,code,name,group,word,resource,menu,button' })
           : await listUsers({ ...params, f: 'id,username,code', ...(props.groupId ? { exclude_user_group_id: props.groupId } : {}) });
       items = result.items;
       hasMore = result.p * result.s < result.t;
@@ -310,38 +315,26 @@ onBeforeUnmount(() => {
 </Button>
         </header>
         <div class="association-search">
-          <Input
+          <SearchAutocomplete
             ref="searchInput"
             :value="query"
+            :options="searchOptions"
+            :loading="loading"
             :disabled="disabled"
-            allow-clear
-            :aria-label="
-              $t('system-editor.searchAssociation', { entity: label })
-            "
-            :placeholder="
-              $t(
-                kind === 'action'
-                  ? 'system-editor.searchPermission'
-                  : kind === 'recipient'
-                    ? 'system-editor.searchRecipient'
-                    : 'system-editor.searchMember',
-              )
-            "
-            @update:value="search"
-            >
-<template #prefix><IconifyIcon icon="lucide:search" /></template>
-</Input>
-        </div>
-        <div v-if="history.length && !query" class="association-history">
-          <span>{{ $t('system.suggestions.history') }}</span><Button
-            v-for="item in history"
-            :key="item"
-            type="text"
-            size="small"
-            @click="search(item, true)"
-            >
-{{ item }}
-</Button>
+            class="w-full"
+            @search="search"
+            @select="search($event, true)"
+            @remove-history="removeHistory"
+          >
+            <template #input>
+              <Input
+                :disabled="disabled"
+                allow-clear
+                :aria-label="$t('system-editor.searchAssociation', { entity: label })"
+                :placeholder="$t(kind === 'action' ? 'system-editor.searchPermission' : kind === 'recipient' ? 'system-editor.searchRecipient' : 'system-editor.searchMember')"
+              ><template #prefix><IconifyIcon icon="lucide:search" /></template></Input>
+            </template>
+          </SearchAutocomplete>
         </div>
         <LoadWarning
           v-if="failed"
@@ -556,15 +549,6 @@ onBeforeUnmount(() => {
 }
 .association-picker .association-warning {
   margin: 0 14px 12px;
-}
-.association-history {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 0 14px 10px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground));
 }
 .association-results {
   max-height: 300px;

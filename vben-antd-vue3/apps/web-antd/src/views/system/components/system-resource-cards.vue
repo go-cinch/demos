@@ -11,7 +11,7 @@ import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
 import {
-  memberCount, memberPreview, jsonStructure, jsonText, jsonType, permissionCount, permissionGroups, recordActions,
+  memberCount, memberPreview, jsonStructure, jsonText, jsonType, permissionCount, permissionGroups, recordActionSummaries,
   recordDate, recordIcon, recordLabel, resourceRules, ruleColor, skeletonRecord,
 } from './system-record-format';
 
@@ -38,7 +38,7 @@ const cards = computed(() => displayRecords.value.map((record) => ({
   record,
   label: recordLabel(record),
   identifier: 'key' in record ? record.key : 'word' in record ? record.word : `#${record.id}`,
-  actions: recordActions(record),
+  actions: recordActionSummaries(record),
   permissions: permissionCount(record),
   groups: permissionGroups(record),
   dictionary: 'value' in record ? record : undefined,

@@ -1,298 +1,89 @@
 <script setup lang="ts">
 import type { MenuRecordRaw } from '@vben/types';
-
-import { nextTick, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-
 import { SearchX, X } from '@vben/icons';
 import { $t } from '@vben/locales';
-import { mapTree, traverseTreeValues, uniqueByField } from '@vben/utils';
-
+import { traverseTreeValues, uniqueByField } from '@vben/utils';
 import { VbenIcon, VbenScrollbar } from '@vben-core/shadcn-ui';
 import { isHttpUrl } from '@vben-core/shared/utils';
+import { onKeyStroke, useLocalStorage } from '@vueuse/core';
 
-import {
-  onKeyStroke,
-  useEventListener,
-  useLocalStorage,
-  useThrottleFn,
-} from '@vueuse/core';
-
-defineOptions({
-  name: 'SearchPanel',
-});
-
-const props = withDefaults(
-  defineProps<{ keyword?: string; menus?: MenuRecordRaw[] }>(),
-  {
-    keyword: '',
-    menus: () => [],
-  },
-);
+defineOptions({ name: 'SearchPanel' });
+const props = withDefaults(defineProps<{ active?: boolean; keyword?: string; menus?: MenuRecordRaw[] }>(), { active: true, keyword: '', menus: () => [] });
 const emit = defineEmits<{ close: [] }>();
-
 const router = useRouter();
-const searchHistory = useLocalStorage<MenuRecordRaw[]>(
-  `__search-history-${location.hostname}__`,
-  [],
-);
-const activeIndex = ref(-1);
-const searchItems = shallowRef<MenuRecordRaw[]>([]);
-const searchResults = ref<MenuRecordRaw[]>([]);
-const isNavigating = ref(false);
-
-const handleSearch = useThrottleFn(search, 200);
-
-// 搜索函数，用于根据搜索关键词查找匹配的菜单项
-function search(searchKey: string) {
-  // 去除搜索关键词的前后空格
-  searchKey = searchKey.trim();
-
-  // 如果搜索关键词为空，清空搜索结果并返回
-  if (!searchKey) {
-    searchResults.value = [];
-    return;
-  }
-  // 将搜索关键词转换为小写，确保大小写不敏感的搜索
-  searchKey = searchKey.toLowerCase();
-
-  // 使用搜索关键词创建正则表达式
-  const reg = createSearchReg(searchKey);
-
-  // 初始化结果数组
-  const results: MenuRecordRaw[] = [];
-
-  // 遍历搜索项
-  traverseTreeValues(searchItems.value, (item) => {
-    // 如果菜单项的名称匹配正则表达式，将其添加到结果数组中
-    if (reg.test(item.name?.toLowerCase())) {
-      results.push(item);
-    }
-  });
-
-  // 更新搜索结果
-  searchResults.value = results;
-
-  // 如果有搜索结果，设置索引为 0
-  if (results.length > 0) {
-    activeIndex.value = 0;
-  }
-
-  // 赋值索引为 0
-  activeIndex.value = 0;
-}
-
-// When the keyboard up and down keys move to an invisible place
-// the scroll bar needs to scroll automatically
-function scrollIntoView() {
-  const element = document.querySelector(
-    `[data-search-item="${activeIndex.value}"]`,
-  );
-
-  if (element) {
-    element.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-// enter keyboard event
-async function handleEnter() {
-  if (searchResults.value.length === 0) {
-    return;
-  }
-  const result = searchResults.value;
-  const index = activeIndex.value;
-  if (result.length === 0 || index < 0) {
-    return;
-  }
-  const to = result[index];
-  if (to) {
-    searchHistory.value = uniqueByField([...searchHistory.value, to], 'path');
-    handleClose();
-    await nextTick();
-    if (isHttpUrl(to.path)) {
-      window.open(to.path, '_blank');
-    } else {
-      router.push({ path: to.path, replace: true });
-    }
-  }
-}
-
-// Arrow key up
-function handleUp() {
-  if (searchResults.value.length === 0) {
-    return;
-  }
-  isNavigating.value = true;
-  activeIndex.value--;
-  if (activeIndex.value < 0) {
-    activeIndex.value = searchResults.value.length - 1;
-  }
-  scrollIntoView();
-}
-
-// Arrow key down
-function handleDown() {
-  if (searchResults.value.length === 0) {
-    return;
-  }
-  isNavigating.value = true;
-  activeIndex.value++;
-  if (activeIndex.value > searchResults.value.length - 1) {
-    activeIndex.value = 0;
-  }
-  scrollIntoView();
-}
-
-// close search modal
-function handleClose() {
-  searchResults.value = [];
-  emit('close');
-}
-
-// Activate when the mouse moves to a certain line
-function handleMouseenter(e: MouseEvent) {
-  if (isNavigating.value) return;
-  const index = (e.target as HTMLElement)?.dataset.index;
-  activeIndex.value = Number(index);
-}
-
-function removeItem(index: number) {
-  if (props.keyword) {
-    searchResults.value.splice(index, 1);
-  } else {
-    searchHistory.value.splice(index, 1);
-  }
-  activeIndex.value = Math.max(activeIndex.value - 1, 0);
-  scrollIntoView();
-}
-
-// 存储所有需要转义的特殊字符
-const code = new Set([
-  '$',
-  '(',
-  ')',
-  '*',
-  '+',
-  '.',
-  '?',
-  '[',
-  '\\',
-  ']',
-  '^',
-  '{',
-  '|',
-  '}',
-]);
-
-// 转换函数，用于转义特殊字符
-function transform(c: string) {
-  // 如果字符在特殊字符列表中，返回转义后的字符
-  // 如果不在，返回字符本身
-  return code.has(c) ? `\\${c}` : c;
-}
-
-// 创建搜索正则表达式
-function createSearchReg(key: string) {
-  // 将输入的字符串拆分为单个字符
-  // 对每个字符进行转义
-  // 然后用'.*'连接所有字符，创建正则表达式
-  const keys = [...key].map((item) => transform(item)).join('.*');
-  // 返回创建的正则表达式
-  return new RegExp(`.*${keys}.*`);
-}
-
-watch(
-  () => props.keyword,
-  (val) => {
-    if (val) {
-      handleSearch(val);
-    } else {
-      searchResults.value = searchHistory.value;
-    }
-  },
-);
-
-onMounted(() => {
-  searchItems.value = mapTree(props.menus, (item) => {
-    return {
-      ...item,
-      name: $t(item?.name),
-    };
-  });
-  if (searchHistory.value.length > 0) {
-    searchResults.value = searchHistory.value;
-  }
-  // enter search
-  onKeyStroke('Enter', handleEnter);
-  // Monitor keyboard arrow keys
-  onKeyStroke('ArrowUp', handleUp);
-  onKeyStroke('ArrowDown', handleDown);
-  // esc close
-  onKeyStroke('Escape', handleClose);
+const searchHistory = useLocalStorage<MenuRecordRaw[]>(`__search-history-${location.hostname}__`, []);
+const activeIndex = ref(0);
+const available = computed(() => {
+  const items: MenuRecordRaw[] = [];
+  traverseTreeValues(props.menus, (item) => { items.push({ ...item, name: $t(item.name) }); });
+  return uniqueByField(items, 'path');
 });
-
-useEventListener('mousemove', () => {
-  isNavigating.value = false;
+const rows = computed(() => {
+  const query = props.keyword.trim().toLocaleLowerCase();
+  const matches = query ? available.value.filter((item) => {
+    let cursor = 0;
+    const name = item.name.toLocaleLowerCase();
+    for (const character of query) { cursor = name.indexOf(character, cursor); if (cursor < 0) return false; cursor++; }
+    return true;
+  }) : [];
+  const paths = new Set(matches.map((item) => item.path));
+  // History is scoped to the current user's accessible menu, with current labels.
+  const history = searchHistory.value.map((saved) => available.value.find((item) => item.path === saved.path))
+    .filter((item): item is MenuRecordRaw => !!item && !paths.has(item.path));
+  return [...matches.map((item) => ({ item, source: 'results' as const })), ...history.map((item) => ({ item, source: 'history' as const }))];
 });
+function close() { emit('close'); }
+async function choose(item: MenuRecordRaw) {
+  searchHistory.value = uniqueByField([item, ...searchHistory.value], 'path').slice(0, 10);
+  close();
+  await nextTick();
+  if (isHttpUrl(item.path)) window.open(item.path, '_blank', 'noopener');
+  else await router.push({ path: item.path, replace: true });
+}
+function remove(item: MenuRecordRaw) {
+  searchHistory.value = searchHistory.value.filter((value) => value.path !== item.path);
+  activeIndex.value = Math.min(activeIndex.value, Math.max(0, rows.value.length - 1));
+}
+async function move(delta: number) {
+  if (!rows.value.length) return;
+  activeIndex.value = (activeIndex.value + delta + rows.value.length) % rows.value.length;
+  await nextTick();
+  document.querySelector(`[data-search-item="${activeIndex.value}"]`)?.scrollIntoView({ block: 'nearest' });
+}
+function highlighted(name: string) {
+  const query = props.keyword.trim().toLocaleLowerCase();
+  const index = query ? name.toLocaleLowerCase().indexOf(query) : -1;
+  return index < 0 ? [{ text: name, match: false }] : [
+    { text: name.slice(0, index), match: false }, { text: name.slice(index, index + query.length), match: true }, { text: name.slice(index + query.length), match: false },
+  ];
+}
+watch(() => props.keyword, () => { activeIndex.value = 0; });
+onKeyStroke('ArrowUp', (event) => { if (!props.active) return; event.preventDefault(); void move(-1); });
+onKeyStroke('ArrowDown', (event) => { if (!props.active) return; event.preventDefault(); void move(1); });
+onKeyStroke('Enter', (event) => { if (!props.active) return; event.preventDefault(); const entry = rows.value[activeIndex.value] ?? rows.value[0]; if (entry) void choose(entry.item); });
+onKeyStroke('Escape', () => { if (props.active) close(); });
 </script>
-
 <template>
   <VbenScrollbar>
-    <div class="flex! h-full justify-center px-2 sm:max-h-112.5">
-      <!-- 无搜索结果 -->
-      <div
-        v-if="keyword && searchResults.length === 0"
-        class="text-center text-muted-foreground"
-      >
-        <SearchX class="mx-auto mt-4 size-12" />
-        <p class="mt-6 mb-10 text-xs">
-          {{ $t('ui.widgets.search.noResults') }}
-          <span class="text-sm font-medium text-foreground">
-            "{{ keyword }}"
-          </span>
-        </p>
+    <div class="px-2 sm:max-h-112.5">
+      <div v-if="!rows.length" class="py-8 text-center text-xs text-muted-foreground">
+        <SearchX v-if="keyword" class="mx-auto mb-3 size-8" />
+        {{ $t(keyword ? 'ui.widgets.search.noResults' : 'ui.widgets.search.noRecent') }}
       </div>
-      <!-- 历史搜索记录 & 没有搜索结果 -->
-      <div
-        v-if="!keyword && searchResults.length === 0"
-        class="text-center text-muted-foreground"
-      >
-        <p class="my-10 text-xs">
-          {{ $t('ui.widgets.search.noRecent') }}
-        </p>
-      </div>
-
-      <ul v-show="searchResults.length > 0" class="w-full">
-        <li
-          v-if="searchHistory.length > 0 && !keyword"
-          class="mb-2 text-xs text-muted-foreground"
-        >
-          {{ $t('ui.widgets.search.recent') }}
-        </li>
-        <li
-          v-for="(item, index) in uniqueByField(searchResults, 'path')"
-          :key="item.path"
-          :class="
-            activeIndex === index
-              ? 'active bg-primary text-primary-foreground'
-              : ''
-          "
-          :data-index="index"
-          :data-search-item="index"
-          class="group mb-3 flex-center w-full cursor-pointer rounded-lg bg-accent p-4"
-          @click="handleEnter"
-          @mouseenter="handleMouseenter"
-        >
-          <VbenIcon :icon="item.icon" class="mr-2 size-5 shrink-0" fallback />
-
-          <span class="flex-1">{{ item.name }}</span>
-          <div
-            class="flex-center rounded-full p-1 hover:scale-110 hover:text-primary-foreground dark:hover:bg-accent"
-            @click.stop="removeItem(index)"
-          >
-            <X class="size-4" />
-          </div>
-        </li>
+      <ul v-else class="w-full" :aria-label="$t('ui.widgets.search.results')">
+        <template v-for="({ item, source }, index) in rows" :key="`${source}:${item.path}`">
+          <li v-if="index === 0 || rows[index - 1]?.source !== source" class="px-3 py-2 text-xs text-muted-foreground">{{ $t(source === 'history' ? 'ui.widgets.search.history' : 'ui.widgets.search.results') }}</li>
+          <li class="mb-1 flex items-center gap-2 rounded-md px-3 py-2" :class="{ 'bg-accent': index === activeIndex }" :data-search-item="index" @mouseenter="activeIndex = index">
+            <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" @click="choose(item)" @keydown.enter.prevent.stop="choose(item)" @keydown.space.prevent.stop="choose(item)">
+              <VbenIcon v-if="source === 'results'" :icon="item.icon" class="size-4 shrink-0" fallback />
+              <span v-if="source === 'history'" class="max-w-full truncate rounded border bg-muted px-2 py-0.5 text-sm">{{ item.name }}</span>
+              <span v-else class="min-w-0 break-words text-sm"><span v-for="(part, partIndex) in highlighted(item.name)" :key="partIndex" :class="{ 'font-semibold text-destructive': part.match }">{{ part.text }}</span></span>
+            </button>
+            <button v-if="source === 'history'" type="button" class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" :aria-label="$t('ui.widgets.search.removeHistory', { value: item.name })" @click.stop="remove(item)" @keydown.enter.prevent.stop="remove(item)" @keydown.space.prevent.stop="remove(item)"><X class="size-3.5" aria-hidden="true" /></button>
+          </li>
+        </template>
       </ul>
     </div>
   </VbenScrollbar>

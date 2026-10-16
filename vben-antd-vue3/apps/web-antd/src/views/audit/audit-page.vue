@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditEvent, AuditHeatCell, AuditKind } from '#/api/audit';
+import type { AuditPreview, AuditHeatCell, AuditKind } from '#/api/audit';
 
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -10,7 +10,6 @@ import { formatDate, formatDateTime } from '@vben/utils';
 import { useFullscreen } from '@vueuse/core';
 import {
   Alert,
-  AutoComplete,
   Avatar,
   Button,
   Card,
@@ -30,10 +29,10 @@ import {
 } from 'ant-design-vue';
 
 import LoadWarning from '#/components/load-warning.vue';
-import { renderSkeletonOptions } from '#/components/skeleton-options';
 import Table from '#/components/skeleton-table.vue';
 import { useStatisticsWarning } from '#/composables/use-statistics-warning';
 import { vSkeleton } from '#/directives/skeleton';
+import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { $t } from '#/locales';
 
 import ManagementCard from '../system/components/management-card.vue';
@@ -210,6 +209,13 @@ const visible = ref(
     ? ['username', 'status', 'ip', 'client']
     : ['username', 'status', 'duration_ms']
 );
+watch(visible, (keys) => {
+  state.listFields.value = [...new Set([
+    'id', 'occurred_at',
+    ...(!isLogin.value ? ['module', 'method', 'path'] : []),
+    ...keys.map((key) => key === 'client' ? 'user_agent' : key),
+  ])].join(',');
+});
 const fieldKeys = computed(() =>
   isLogin.value
     ? ['username', 'status', 'ip', 'client']
@@ -262,8 +268,8 @@ const autoOptions = computed(() => {
   }
   const remote = [...matches.values()].slice(0, 10);
   const recent = history.value
-    .filter((value) => value.toLowerCase().includes(query) && !matches.has(value))
-    .map((value) => ({ value, field: 'history' }));
+    .filter((value) => !matches.has(value))
+    .map((value) => ({ value, source: 'history' }));
   return [
     ...(remote.length ? [{ label: $t('system.suggestions.backend'), options: remote }] : []),
     ...(recent.length ? [{ label: $t('system.suggestions.history'), options: recent }] : []),
@@ -409,7 +415,7 @@ function setSort(value: string) {
   sort.value = value;
   void state.loadRecords(true);
 }
-function openDetail(record: AuditEvent) {
+function openDetail(record: AuditPreview) {
   void state.detail(record.id);
 }
 function related(field: 'ip' | 'path' | 'username', value: string, toggle = false) {
@@ -765,31 +771,29 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
               :label="$t('audit.search')"
               :html-for="`audit-${kind}-search`"
               >
-<AutoComplete
-:not-found-content="state.optionsLoading.value ? ' ' : null"
+<SearchAutocomplete
                 v-model:value="q"
                 :id="`audit-${kind}-search`"
                 :options="autoOptions"
+                :loading="state.optionsLoading.value"
                 :placeholder="$t('audit.searchHint')"
                 class="audit-search"
                 :dropdown-match-select-width="false"
                 :dropdown-style="{ width: 'min(560px, calc(100vw - 32px))', maxWidth: 'calc(100vw - 32px)' }"
                 :virtual="false"
-                allow-clear
                 @search="state.suggest"
                 @blur="state.searchSoon"
                 @select="state.searchSoon"
-                @keydown.enter="state.applyFilters()"
-                :dropdown-render="({ menuNode } = {}) => renderSkeletonOptions(menuNode, state.optionsLoading.value)"
->
-<template #option="{ value, field, label }">
-                  <div v-if="field" class="audit-suggestion" data-testid="audit-search-suggestion">
-                    <span class="audit-suggestion-field">{{ field === 'history' ? $t('system.suggestions.history') : $t(`audit.${field}`) }}</span>
-                    <span class="audit-suggestion-value"><template v-for="(part, index) in highlighted(String(value))" :key="index"><mark v-if="part.matched" :style="{ color: token.colorError }">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
+                @submit="state.applyFilters()"
+                @remove-history="state.removeHistory"
+              >
+                <template #result="{ option }">
+                  <div class="audit-suggestion" data-testid="audit-search-suggestion">
+                    <span class="audit-suggestion-field">{{ $t(`audit.${option.field}`) }}</span>
+                    <span class="audit-suggestion-value"><template v-for="(part, index) in highlighted(String(option.value))" :key="index"><mark v-if="part.matched" :style="{ color: token.colorError }">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
                   </div>
-                  <span v-else>{{ label }}</span>
-                  </template>
-</AutoComplete>
+                </template>
+              </SearchAutocomplete>
 </FormItem>
             <FormItem
               v-if="!isLogin"
@@ -907,7 +911,7 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
                 y: 'var(--audit-table-body-height)',
               }"
               :custom-row="
-                (record: AuditEvent) => ({
+                (record: AuditPreview) => ({
                   'aria-selected': record.id === selectedID,
                   'aria-label': $t('audit.openEvent', { id: record.id }),
                   tabindex: loading ? -1 : 0,
@@ -922,7 +926,7 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
                 })
               "
               :row-class-name="
-                (record: AuditEvent) =>
+                (record: AuditPreview) =>
                   record.id === selectedID ? 'audit-selected-row' : ''
               "
               :pagination="{
@@ -948,7 +952,7 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
                   }}</time>
 </template>
                 <template v-else-if="column.key === 'business'">
-<span class="audit-operation-label">{{ operationLabel(record as AuditEvent) }}</span>
+<span class="audit-operation-label">{{ operationLabel(record as AuditPreview) }}</span>
                   <div class="audit-request-subtitle">
                     {{ record.method }} {{ record.path }}
                   </div>
@@ -964,11 +968,11 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
 </template>
                 <template v-else-if="column.key === 'status'">
 <Tag
-                    :color="successful(record as AuditEvent) ? 'success' : 'error'"
+                    :color="successful(record as AuditPreview) ? 'success' : 'error'"
                     >
 {{
                       $t(
-                        successful(record as AuditEvent)
+                        successful(record as AuditPreview)
                           ? 'audit.success'
                           : 'audit.failure'
                       )

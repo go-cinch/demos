@@ -44,7 +44,10 @@ export interface ActionGroupResult {
   items: string[];
 }
 
+export type ActionSummary = Pick<ActionRecord, 'code' | 'name' | 'group'>;
+
 export interface RoleRecord {
+  action_summaries?: ActionSummary[];
   action_codes: string[];
   actions: ActionRecord[];
   created_at: number;
@@ -64,6 +67,7 @@ export interface UserRecord {
   login_count: number;
   metadata: Record<string, unknown>;
   role?: RoleRecord;
+  role_summary?: Pick<RoleRecord, 'id' | 'name' | 'word'> | null;
   role_id?: number;
   status: 0 | 1 | 2;
   updated_at: number;
@@ -78,6 +82,7 @@ export interface UserSummary {
 }
 
 export interface UserGroupRecord {
+  action_summaries?: ActionSummary[];
   action_codes: string[];
   actions?: ActionRecord[];
   created_at: number;
@@ -280,3 +285,10 @@ export const createDictionary = (
 export const updateDictionary = (id: number, data: DictionaryPayload) =>
   update<DictionaryRecord, DictionaryPayload>('dictionary', id, data);
 export const deleteDictionaries = (ids: number[]) => remove('dictionary', ids);
+
+// Details and editors hydrate independently of a sparse list row.
+export function getSystemRecord<T>(resource: string, id: number) {
+  return authRequestClient.get<T>(`/${resource}/${id}`, {
+    params: resource === 'user-group' ? { f: groupFields } : {},
+  });
+}

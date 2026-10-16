@@ -72,7 +72,6 @@
   "deleteSelectedGlobalConfirm": "为所有接收者删除选中的消息？",
   "keyword": "关键词",
   "searchMessages": "搜索消息标题或正文",
-  "searchHistory": "搜索历史",
   "allScopes": "全部范围",
   "splitView": "分栏视图",
   "tableView": "表格视图",
@@ -104,5 +103,10 @@
   "feedLoadMore": "向下滚动或点击加载更多",
   "feedEnd": "已显示全部消息",
   "feedShown": "已展示 {count} / {total} 条",
-  "feedOrder": "按发布时间倒序"
+  "feedOrder": "按发布时间倒序",
+  "activeFilters": "已选筛选条件",
+  "clearMessageFilter": "清除消息筛选",
+  "focusUnavailable": "该消息已不可用，或不符合当前筛选条件。",
+  "messageFilter": "消息：{title}",
+  "selectedMessage": "指定消息"
 }
