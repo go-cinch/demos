@@ -546,6 +546,15 @@ paths:
                           format: int64
                         error_code:
                           type: string
+                        header:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
                         id:
                           type: integer
                           format: int64
@@ -1113,6 +1122,15 @@ paths:
                           format: int64
                         error_code:
                           type: string
+                        header:
+                          oneOf:
+                            - type: object
+                            - type: array
+                              items: {}
+                            - type: string
+                              nullable: true
+                            - type: number
+                            - type: boolean
                         id:
                           type: integer
                           format: int64
@@ -5141,13 +5159,22 @@ components:
           type: string
     Event:
       type: object
-      required: [duration_ms, error_code, id, ip, kind, method, module, occurred_at, operation, path, request_params, resource_id, resource_type, response_params, status, trace_id, user_agent, user_id, username]
+      required: [duration_ms, error_code, header, id, ip, kind, method, module, occurred_at, operation, path, request_params, resource_id, resource_type, response_params, status, trace_id, user_agent, user_id, username]
       properties:
         duration_ms:
           type: integer
           format: int64
         error_code:
           type: string
+        header:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
         id:
           type: integer
           format: int64

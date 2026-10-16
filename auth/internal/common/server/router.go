@@ -27,10 +27,14 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 		return nil, err
 	}
 
+	clientIPMiddleware, err := ClientIP(cfg.HTTP.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
 	r := chi.NewRouter()
 	policy := redact.New(cfg.Redact.Keys...)
 	r.Use(TraceID(cfg.Server.Name, policy))
-	r.Use(Locale(), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
+	r.Use(clientIPMiddleware, Locale(), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, apperror.NotFound)

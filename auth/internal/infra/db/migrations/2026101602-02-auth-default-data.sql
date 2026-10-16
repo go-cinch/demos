@@ -1,7 +1,7 @@
 -- +migrate Up
 INSERT INTO t_action (id, name, action_group, code, word, resource, menu, btn) VALUES
-    (1, 'All Permissions', 'General', 'REPYWL4N', '*', '*', '*', '*'),
-    (2, 'Default Permissions', 'General', 'QJQCNRWG', 'default', 'POST|/auth/logout|/auth.v1.Auth/Logout
+    (1, 'All Permissions', 'General', 'KHA9W9BQ', '*', '*', '*', '*'),
+    (2, 'Default Permissions', 'General', 'HJ4Y8WLS', 'default', 'POST|/auth/logout|/auth.v1.Auth/Logout
 GET|/auth/info|/auth.v1.Auth/Info
 POST|/auth/challenge|/auth.v1.Auth/Challenge
 POST|/auth/captcha|/auth.v1.Auth/Captcha
@@ -14,71 +14,71 @@ POST|/msg/inbox/read-all
 GET|/msg/unread-count', '/dashboard/overview
 /user/index
 /msg/inbox', ''),
-    (3, 'Dashboard', 'General', 'QW9QBKHY', 'dashboard', '', '/dashboard/overview', ''),
-    (4, 'User Read', 'User', 'CFAM78SW', 'user.read', 'GET|/user|/auth.v1.User/ListUsers
+    (3, 'Dashboard', 'General', 'QKS3RMJ2', 'dashboard', '', '/dashboard/overview', ''),
+    (4, 'User Read', 'User', 'LMN3TMX7', 'user.read', 'GET|/user|/auth.v1.User/ListUsers
 GET|/user/*|/auth.v1.User/GetUser', '/system/user', 'system.user.read'),
-    (5, 'User Create', 'User', '6KA4DPHB', 'user.create', 'POST|/user|/auth.v1.User/CreateUser', '/system/user', 'system.user.create'),
-    (6, 'User Update', 'User', 'BPWVHND3', 'user.update', 'PATCH|/user/*|/auth.v1.User/UpdateUser', '/system/user', 'system.user.update'),
-    (7, 'User Delete', 'User', '599V24GM', 'user.delete', 'DELETE|/user/*|/auth.v1.User/DeleteUser', '/system/user', 'system.user.delete'),
-    (8, 'User Group Read', 'User Group', 'FCJTVPCA', 'user.group.read', 'GET|/user-group|/auth.v1.UserGroup/ListUserGroups
+    (5, 'User Create', 'User', 'XF7QDW6R', 'user.create', 'POST|/user|/auth.v1.User/CreateUser', '/system/user', 'system.user.create'),
+    (6, 'User Update', 'User', 'J5XT3BR4', 'user.update', 'PATCH|/user/*|/auth.v1.User/UpdateUser', '/system/user', 'system.user.update'),
+    (7, 'User Delete', 'User', '4X4LKBQL', 'user.delete', 'DELETE|/user/*|/auth.v1.User/DeleteUser', '/system/user', 'system.user.delete'),
+    (8, 'User Group Read', 'User Group', 'QH358XBX', 'user.group.read', 'GET|/user-group|/auth.v1.UserGroup/ListUserGroups
 GET|/user-group/*|/auth.v1.UserGroup/GetUserGroup', '/system/user-group', 'system.user.group.read'),
-    (9, 'User Group Create', 'User Group', '3PJ2VCWS', 'user.group.create', 'POST|/user-group|/auth.v1.UserGroup/CreateUserGroup', '/system/user-group', 'system.user.group.create'),
-    (10, 'User Group Update', 'User Group', 'C9G2M2K5', 'user.group.update', 'PATCH|/user-group/*|/auth.v1.UserGroup/UpdateUserGroup', '/system/user-group', 'system.user.group.update'),
-    (11, 'User Group Delete', 'User Group', 'FSCRV2XK', 'user.group.delete', 'DELETE|/user-group/*|/auth.v1.UserGroup/DeleteUserGroup', '/system/user-group', 'system.user.group.delete'),
-    (12, 'Role Read', 'Role', 'SR54YGL8', 'role.read', 'GET|/role|/auth.v1.Role/ListRoles
+    (9, 'User Group Create', 'User Group', 'XWD8VPRL', 'user.group.create', 'POST|/user-group|/auth.v1.UserGroup/CreateUserGroup', '/system/user-group', 'system.user.group.create'),
+    (10, 'User Group Update', 'User Group', 'HE2G3J7C', 'user.group.update', 'PATCH|/user-group/*|/auth.v1.UserGroup/UpdateUserGroup', '/system/user-group', 'system.user.group.update'),
+    (11, 'User Group Delete', 'User Group', 'XFC4TDSX', 'user.group.delete', 'DELETE|/user-group/*|/auth.v1.UserGroup/DeleteUserGroup', '/system/user-group', 'system.user.group.delete'),
+    (12, 'Role Read', 'Role', 'N28EE96N', 'role.read', 'GET|/role|/auth.v1.Role/ListRoles
 GET|/role/*|/auth.v1.Role/GetRole', '/system/role', 'system.role.read'),
-    (13, 'Role Create', 'Role', '9NFBQMHC', 'role.create', 'POST|/role|/auth.v1.Role/CreateRole', '/system/role', 'system.role.create'),
-    (14, 'Role Update', 'Role', 'EYVTSFLY', 'role.update', 'PATCH|/role/*|/auth.v1.Role/UpdateRole', '/system/role', 'system.role.update'),
-    (15, 'Role Delete', 'Role', 'NGD8EW75', 'role.delete', 'DELETE|/role/*|/auth.v1.Role/DeleteRole', '/system/role', 'system.role.delete'),
-    (16, 'Action Read', 'Action', 'RATPXTGH', 'action.read', 'GET|/action|/auth.v1.Action/ListActions
+    (13, 'Role Create', 'Role', 'AYSEGDMC', 'role.create', 'POST|/role|/auth.v1.Role/CreateRole', '/system/role', 'system.role.create'),
+    (14, 'Role Update', 'Role', 'TS8F8CGJ', 'role.update', 'PATCH|/role/*|/auth.v1.Role/UpdateRole', '/system/role', 'system.role.update'),
+    (15, 'Role Delete', 'Role', 'VN8BXLS7', 'role.delete', 'DELETE|/role/*|/auth.v1.Role/DeleteRole', '/system/role', 'system.role.delete'),
+    (16, 'Action Read', 'Action', '88TE2ADA', 'action.read', 'GET|/action|/auth.v1.Action/ListActions
 GET|/action/*|/auth.v1.Action/GetAction', '/system/action', 'system.action.read'),
-    (17, 'Action Create', 'Action', '6DMTB3Y8', 'action.create', 'POST|/action|/auth.v1.Action/CreateAction', '/system/action', 'system.action.create'),
-    (18, 'Action Update', 'Action', 'M3HETB4K', 'action.update', 'PATCH|/action/*|/auth.v1.Action/UpdateAction', '/system/action', 'system.action.update'),
-    (19, 'Action Delete', 'Action', '9DG8EYCX', 'action.delete', 'DELETE|/action/*|/auth.v1.Action/DeleteAction', '/system/action', 'system.action.delete'),
-    (20, 'Whitelist Read', 'Whitelist', '4TWYC6Q7', 'whitelist.read', 'GET|/whitelist|/auth.v1.Whitelist/ListWhitelists
+    (17, 'Action Create', 'Action', 'NBHWSJLY', 'action.create', 'POST|/action|/auth.v1.Action/CreateAction', '/system/action', 'system.action.create'),
+    (18, 'Action Update', 'Action', 'CA4JXRJ4', 'action.update', 'PATCH|/action/*|/auth.v1.Action/UpdateAction', '/system/action', 'system.action.update'),
+    (19, 'Action Delete', 'Action', 'FLGG38GF', 'action.delete', 'DELETE|/action/*|/auth.v1.Action/DeleteAction', '/system/action', 'system.action.delete'),
+    (20, 'Whitelist Read', 'Whitelist', 'HAAX3S7T', 'whitelist.read', 'GET|/whitelist|/auth.v1.Whitelist/ListWhitelists
 GET|/whitelist/*|/auth.v1.Whitelist/GetWhitelist', '/system/whitelist', 'system.whitelist.read'),
-    (21, 'Whitelist Create', 'Whitelist', 'P96CCQDN', 'whitelist.create', 'POST|/whitelist|/auth.v1.Whitelist/CreateWhitelist', '/system/whitelist', 'system.whitelist.create'),
-    (22, 'Whitelist Update', 'Whitelist', '9VFS7SHE', 'whitelist.update', 'PATCH|/whitelist/*|/auth.v1.Whitelist/UpdateWhitelist', '/system/whitelist', 'system.whitelist.update'),
-    (23, 'Whitelist Delete', 'Whitelist', 'E3M43EHF', 'whitelist.delete', 'DELETE|/whitelist/*|/auth.v1.Whitelist/DeleteWhitelist', '/system/whitelist', 'system.whitelist.delete'),
-    (24, 'Dictionary Read', 'Dictionary', 'ACKSP4D8', 'dictionary.read', 'GET|/dictionary|/auth.v1.Dictionary/ListDictionaries
+    (21, 'Whitelist Create', 'Whitelist', 'DSAGNJCB', 'whitelist.create', 'POST|/whitelist|/auth.v1.Whitelist/CreateWhitelist', '/system/whitelist', 'system.whitelist.create'),
+    (22, 'Whitelist Update', 'Whitelist', 'PHBM9MHY', 'whitelist.update', 'PATCH|/whitelist/*|/auth.v1.Whitelist/UpdateWhitelist', '/system/whitelist', 'system.whitelist.update'),
+    (23, 'Whitelist Delete', 'Whitelist', '7X5TJQW8', 'whitelist.delete', 'DELETE|/whitelist/*|/auth.v1.Whitelist/DeleteWhitelist', '/system/whitelist', 'system.whitelist.delete'),
+    (24, 'Dictionary Read', 'Dictionary', 'M4GVQJQ5', 'dictionary.read', 'GET|/dictionary|/auth.v1.Dictionary/ListDictionaries
 GET|/dictionary/*|/auth.v1.Dictionary/GetDictionary', '/system/dictionary', 'system.dictionary.read'),
-    (25, 'Dictionary Create', 'Dictionary', 'HN9GN5RH', 'dictionary.create', 'POST|/dictionary|/auth.v1.Dictionary/CreateDictionary', '/system/dictionary', 'system.dictionary.create'),
-    (26, 'Dictionary Update', 'Dictionary', 'C8RMMGGA', 'dictionary.update', 'PATCH|/dictionary/*|/auth.v1.Dictionary/UpdateDictionary', '/system/dictionary', 'system.dictionary.update'),
-    (27, 'Dictionary Delete', 'Dictionary', 'Q4MXA5RJ', 'dictionary.delete', 'DELETE|/dictionary/*|/auth.v1.Dictionary/DeleteDictionary', '/system/dictionary', 'system.dictionary.delete'),
-    (28, 'Message Read', 'Message', '5X8JSKB7', 'msg.read', 'GET|/msg/sent
+    (25, 'Dictionary Create', 'Dictionary', 'T3W6DYH6', 'dictionary.create', 'POST|/dictionary|/auth.v1.Dictionary/CreateDictionary', '/system/dictionary', 'system.dictionary.create'),
+    (26, 'Dictionary Update', 'Dictionary', 'DQTWQ9K4', 'dictionary.update', 'PATCH|/dictionary/*|/auth.v1.Dictionary/UpdateDictionary', '/system/dictionary', 'system.dictionary.update'),
+    (27, 'Dictionary Delete', 'Dictionary', 'RNDWVGNP', 'dictionary.delete', 'DELETE|/dictionary/*|/auth.v1.Dictionary/DeleteDictionary', '/system/dictionary', 'system.dictionary.delete'),
+    (28, 'Message Read', 'Message', 'K5JXEQ8S', 'msg.read', 'GET|/msg/sent
 GET|/msg/sent/*', '/system/msg', 'system.msg.read'),
-    (29, 'Message Send', 'Message', 'T4XL7STF', 'msg.send', 'POST|/msg
+    (29, 'Message Send', 'Message', '6APESQ8T', 'msg.send', 'POST|/msg
 GET|/msg/recipient-option', '/system/msg', 'system.msg.send'),
-    (30, 'Message Delete', 'Message', '47JCXFSX', 'msg.delete', 'DELETE|/msg/sent/*', '/system/msg', 'system.msg.delete');
+    (30, 'Message Delete', 'Message', '9J52ARV6', 'msg.delete', 'DELETE|/msg/sent/*', '/system/msg', 'system.msg.delete');
 
 INSERT INTO t_action (id, name, action_group, code, word, resource, menu, btn) VALUES
-    (31, 'Login Audit Read','Audit','NA5WBAXJ','audit.login.read','GET|/audit/login
+    (31, 'Login Audit Read','Audit','3JWYMX7A','audit.login.read','GET|/audit/login
 GET|/audit/login/summary
 GET|/audit/login/option
 GET|/audit/login/detail/*','/audit/login','audit.login.read'),
-    (32, 'Login Audit Export','Audit','83AACGY6','audit.login.export','GET|/audit/login/export','/audit/login','audit.login.export'),
-    (33, 'Operation Audit Read','Audit','NY2EWTVT','audit.operation.read','GET|/audit/operation
+    (32, 'Login Audit Export','Audit','GQ6EHSP4','audit.login.export','GET|/audit/login/export','/audit/login','audit.login.export'),
+    (33, 'Operation Audit Read','Audit','LKWRFW2L','audit.operation.read','GET|/audit/operation
 GET|/audit/operation/summary
 GET|/audit/operation/option
 GET|/audit/operation/detail/*','/audit/operation','audit.operation.read'),
-    (34, 'Operation Audit Export','Audit','895DLM25','audit.operation.export','GET|/audit/operation/export','/audit/operation','audit.operation.export');
+    (34, 'Operation Audit Export','Audit','EKSMTVCH','audit.operation.export','GET|/audit/operation/export','/audit/operation','audit.operation.export');
 
 INSERT INTO t_role (id, name, word, action) VALUES
-    (1, 'Admin', 'admin', 'REPYWL4N'),
-    (2, 'Guest', 'guest', 'QW9QBKHY');
+    (1, 'Admin', 'admin', 'KHA9W9BQ'),
+    (2, 'Guest', 'guest', 'QKS3RMJ2');
 
 INSERT INTO t_user_group (id, name, word, action) VALUES
-    (1, 'Read Only', 'readonly', 'CFAM78SW,FCJTVPCA,SR54YGL8,RATPXTGH'),
-    (2, 'Read Write', 'write', 'CFAM78SW,6KA4DPHB,BPWVHND3,599V24GM,FCJTVPCA,3PJ2VCWS,C9G2M2K5,FSCRV2XK,SR54YGL8,9NFBQMHC,EYVTSFLY,NGD8EW75,RATPXTGH,6DMTB3Y8,M3HETB4K,9DG8EYCX'),
-    (3, 'No Delete', 'nodelete', 'CFAM78SW,6KA4DPHB,BPWVHND3,FCJTVPCA,3PJ2VCWS,C9G2M2K5,SR54YGL8,9NFBQMHC,EYVTSFLY,RATPXTGH,6DMTB3Y8,M3HETB4K');
+    (1, 'Read Only', 'readonly', 'LMN3TMX7,QH358XBX,N28EE96N,88TE2ADA'),
+    (2, 'Read Write', 'write', 'LMN3TMX7,XF7QDW6R,J5XT3BR4,4X4LKBQL,QH358XBX,XWD8VPRL,HE2G3J7C,XFC4TDSX,N28EE96N,AYSEGDMC,TS8F8CGJ,VN8BXLS7,88TE2ADA,NBHWSJLY,CA4JXRJ4,FLGG38GF'),
+    (3, 'No Delete', 'nodelete', 'LMN3TMX7,XF7QDW6R,J5XT3BR4,QH358XBX,XWD8VPRL,HE2G3J7C,N28EE96N,AYSEGDMC,TS8F8CGJ,88TE2ADA,NBHWSJLY,CA4JXRJ4');
 
 -- Local seed credentials intentionally use the username as the password.
 INSERT INTO t_user (id, role_id, username, code, password, status) VALUES
-    (1, 1, 'super', '3YCSM68A', '$2a$10$Wx41MADqB3kuLD/bdD8DIeph55Oeo9HABKGt2p2ilqdkHAfZ7EGPm', 1),
-    (2, 2, 'guest', 'TD7B722F', '$2a$10$DzWbkb12WHoyj5UPIAdHBOYXFi6jn5gzQRUoOU8c6oZ9XJx9w6Tju', 1),
-    (3, NULL, 'readonly', '7EJQ43QR', '$2a$10$e5bhTbZUo8JLBWOfxWY7A.BpiGCTgvV3PxIhPozM9UolwFuENjIZi', 1),
-    (4, NULL, 'write', '4BAGD2T8', '$2a$10$SB4cqKKE5t9ACvMXtHaJuOafN1nvJgdK.5XxVAITBCSsU.gSNTbAm', 1),
-    (5, NULL, 'nodelete', '6FNKJDWQ', '$2a$10$.QZNNNrOuEdPvV0UdYwEae942Bb7Hr28Zb0vrbBRocHUkSpqk/Uqu', 1);
+    (1, 1, 'super', 'JGQJ4DKD', '$2a$10$Wx41MADqB3kuLD/bdD8DIeph55Oeo9HABKGt2p2ilqdkHAfZ7EGPm', 1),
+    (2, 2, 'guest', 'LTCD99J4', '$2a$10$DzWbkb12WHoyj5UPIAdHBOYXFi6jn5gzQRUoOU8c6oZ9XJx9w6Tju', 1),
+    (3, NULL, 'readonly', 'H47TMEG2', '$2a$10$e5bhTbZUo8JLBWOfxWY7A.BpiGCTgvV3PxIhPozM9UolwFuENjIZi', 1),
+    (4, NULL, 'write', 'T76M78NY', '$2a$10$SB4cqKKE5t9ACvMXtHaJuOafN1nvJgdK.5XxVAITBCSsU.gSNTbAm', 1),
+    (5, NULL, 'nodelete', 'VQCJ9FNN', '$2a$10$.QZNNNrOuEdPvV0UdYwEae942Bb7Hr28Zb0vrbBRocHUkSpqk/Uqu', 1);
 
 INSERT INTO t_user_user_group_relation (user_id, user_group_id) VALUES
     (3, 1),
@@ -110,68 +110,17 @@ SELECT setval(pg_get_serial_sequence('t_whitelist', 'id'), (SELECT MAX(id) FROM 
 SELECT setval(pg_get_serial_sequence('t_dictionary', 'id'), (SELECT MAX(id) FROM t_dictionary), true);
 
 -- +migrate Down
-DELETE FROM t_user_msg_status WHERE user_id IN (1, 2, 3, 4, 5);
-
-DELETE FROM t_dictionary WHERE id IN (1, 2);
-
-DELETE FROM t_user_user_group_relation
-WHERE (user_id, user_group_id) IN (
-    (3, 1),
-    (4, 2),
-    (5, 3)
-);
-
-DELETE FROM t_user WHERE id IN (
-    1,
-    2,
-    3,
-    4,
-    5
-);
-
-DELETE FROM t_user_group WHERE id IN (
-    1,
-    2,
-    3
-);
-
-DELETE FROM t_role WHERE id IN (1, 2);
-
-DELETE FROM t_action WHERE id IN (
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-    29,
-    30,
-    31,
-    32,
-    33,
-    34
-);
-
-DELETE FROM t_whitelist WHERE id IN (1, 2);
+-- Clear all auth tables, including runtime data, and reset their sequences.
+L7ALXSNR TABLE
+    t_audit_event,
+    t_user_msg_status,
+    t_msg_recipient,
+    t_msg,
+    t_dictionary,
+    t_whitelist,
+    t_user_user_group_relation,
+    t_user,
+    t_user_group,
+    t_role,
+    t_action
+RESTART PMFTK78V;

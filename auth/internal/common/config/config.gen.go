@@ -101,6 +101,7 @@ type HTTPConfig struct {
 	Profiler          HTTPProfilerConfig `koanf:"profiler"`
 	ReadHeaderTimeout time.Duration      `koanf:"readHeaderTimeout"`
 	Timeout           time.Duration      `koanf:"timeout"`
+	TrustedProxies    string             `koanf:"trustedProxies"`
 }
 
 type HTTPDocsConfig struct {
