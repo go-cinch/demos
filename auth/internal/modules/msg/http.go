@@ -313,6 +313,18 @@ func (m *Module) listInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := ListInput{Fields: fields, Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
+	if values, provided := query["id"]; provided {
+		if len(values) != 1 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		parsed, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil || parsed <= 0 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		input.ID = &parsed
+	}
 	if values, provided := query["q"]; provided && len(values) != 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
@@ -387,6 +399,18 @@ func (m *Module) listSent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := ListInput{Fields: fields, Type: query.Get("type"), Scope: query.Get("scope"), Query: query.Get("q")}
+	if values, provided := query["id"]; provided {
+		if len(values) != 1 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		parsed, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil || parsed <= 0 {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+		input.ID = &parsed
+	}
 	if len(query["q"]) > 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return

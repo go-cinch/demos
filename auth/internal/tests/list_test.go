@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"auth/internal/common/pagination"
+	"auth/internal/common/report"
 	"auth/internal/modules/action"
 	"auth/internal/modules/auth"
 	"auth/internal/modules/role"
@@ -79,6 +80,24 @@ func TestListsBatchRelationsAndEffectiveLockStatus(t *testing.T) {
 			}
 			if result.Total != int64(len(tc.ids)) || !reflect.DeepEqual(got, tc.ids) {
 				t.Fatalf("statuses %v: total %d, ids %v; want %v", tc.statuses, result.Total, got, tc.ids)
+			}
+		}
+
+		selected, err := users.List(ctx, user.ListUsersInput{Username: "batch_user_", Statuses: []int16{user.StatusActive}, PageSize: &size, Fields: report.Fields{"id", "status", "metadata", "role_summary"}})
+		if err != nil {
+			return err
+		}
+		if selected.Total != 2 || len(selected.Items) != 2 {
+			t.Fatalf("selected page: %#v", selected)
+		}
+		for _, item := range selected.Items {
+			if item.Status != user.StatusActive || item.RoleSummary == nil || item.RoleSummary.Name != "Batch editor" || item.Actions != nil || item.Role != nil {
+				t.Fatalf("selected user: %#v", item)
+			}
+			if item.ID == 101 {
+				if _, exists := item.Metadata["lock_expired_at"]; exists || item.Metadata["source"] != "test" {
+					t.Fatalf("selected expiry: %#v", item)
+				}
 			}
 		}
 		page, two := int32(2), int32(1)
