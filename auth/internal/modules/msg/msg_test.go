@@ -273,3 +273,21 @@ func TestInboxKeywordKeepsVisibilityAndPagination(t *testing.T) {
 		t.Fatalf("inbox search: %#v %v", result, err)
 	}
 }
+
+func TestInboxIDFilterKeepsVisibilityAndPagination(t *testing.T) {
+	m, mock := testModule(t)
+	id := int64(1)
+	page, size := int32(1), int32(10)
+	predicate := "delivery.user_id = .*JOIN t_user u ON u.id = .*r.deleted_at IS NULL.*m.id = \\$2.*m.title ILIKE"
+	mock.ExpectQuery("SELECT COUNT.*"+predicate).WithArgs(int64(2), id, "%hello%").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT .*"+predicate+".*ORDER BY").WithArgs(int64(2), id, "%hello%", size, int64(0)).WillReturnRows(messageRows("targeted"))
+	value, err := m.List(t.Context(), 2, ListInput{ID: &id, Query: "hello", Page: &page, PageSize: &size})
+	if err != nil || value.Total != 1 || len(value.Items) != 1 || value.Items[0].ID != id {
+		t.Fatalf("%+v %v", value, err)
+	}
+	for _, invalid := range []int64{0, -1} {
+		if _, err := m.List(t.Context(), 2, ListInput{ID: &invalid}); !errors.Is(err, ErrInvalid) {
+			t.Fatal(err)
+		}
+	}
+}

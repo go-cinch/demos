@@ -2264,7 +2264,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,key,name,description,enabled. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,key,name,description,enabled,value. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
@@ -2636,6 +2636,12 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
         - name: p
           in: query
           required: false
@@ -2682,7 +2688,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. Optional id filters one positive message ID before counting and pagination, combined with other filters; inbox visibility and personal deletion/expiry rules still apply. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
           content:
             application/json:
               schema:
@@ -3006,6 +3012,12 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
         - name: p
           in: query
           required: false
@@ -3047,7 +3059,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. Optional id filters one positive message ID before counting and pagination, combined with other filters; inbox visibility and personal deletion/expiry rules still apply. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
           content:
             application/json:
               schema:
@@ -3366,7 +3378,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,name,word. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,actions,action_summaries. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. action_summaries returns ordered code,name,group identities without loading resource/menu/button rules; actions retains complete associations."
           content:
             application/json:
               schema:
@@ -3382,6 +3394,11 @@ paths:
                           type: array
                           items:
                             type: string
+                        action_summaries:
+                          type: array
+                          nullable: true
+                          items:
+                            $ref: "#/components/schemas/Summary"
                         actions:
                           type: array
                           items:
@@ -3751,7 +3768,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. role_summary returns only id,name,word (or null), with one batched role query and no permission lookup. role retains the complete role association. Status and metadata use the same request timestamp as the filters to reflect expired temporary locks without writes."
           content:
             application/json:
               schema:
@@ -3796,6 +3813,8 @@ paths:
                           type: integer
                           nullable: true
                           format: int64
+                        role_summary:
+                          $ref: "#/components/schemas/Summary"
                         status:
                           type: integer
                           format: int32
@@ -3948,7 +3967,7 @@ paths:
             example: "id"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,name,word. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. The associations actions,users,member_count,member_preview may also be selected. Association-only selections preserve existing base metadata; selections containing scalar fields return exactly the selected fields."
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,action_summaries. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. action_summaries returns ordered code,name,group identities without loading resource/menu/button rules; actions retains complete associations. The associations actions,users,member_count,member_preview may also be selected. Selections containing only legacy associations (actions,users,member_count,member_preview) preserve existing base metadata; selections containing any listed field, including action_summaries, return exactly the selected fields."
           content:
             application/json:
               schema:
@@ -3964,6 +3983,11 @@ paths:
                           type: array
                           items:
                             type: string
+                        action_summaries:
+                          type: array
+                          nullable: true
+                          items:
+                            $ref: "#/components/schemas/Summary"
                         actions:
                           type: array
                           items:
@@ -5653,6 +5677,11 @@ components:
           type: array
           items:
             type: string
+        action_summaries:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/Summary"
         actions:
           type: array
           items:
@@ -5753,67 +5782,15 @@ components:
           type: string
     Summary:
       type: object
-      required: [from, to]
+      required: [id, name, word]
       properties:
-        accounts:
-          type: array
-          items:
-            $ref: "#/components/schemas/Breakdown"
-        average_ms:
-          type: number
-          format: double
-        bucket_ms:
+        id:
           type: integer
           format: int64
-        failed:
-          type: integer
-          format: int64
-        from:
-          type: integer
-          format: int64
-        heatmap:
-          type: array
-          items:
-            $ref: "#/components/schemas/HeatCell"
-        heatmap_granularity:
+        name:
           type: string
-        modules:
-          type: array
-          items:
-            $ref: "#/components/schemas/Breakdown"
-        p95_ms:
-          type: number
-          format: double
-        repeated_failures:
-          type: array
-          items:
-            $ref: "#/components/schemas/Breakdown"
-        sources:
-          type: array
-          items:
-            $ref: "#/components/schemas/Breakdown"
-        success:
-          type: integer
-          format: int64
-        success_rate:
-          type: number
-          format: double
-        to:
-          type: integer
-          format: int64
-        total:
-          type: integer
-          format: int64
-        trend:
-          type: array
-          items:
-            $ref: "#/components/schemas/Bucket"
-        unique_ips:
-          type: integer
-          format: int64
-        unique_users:
-          type: integer
-          format: int64
+        word:
+          type: string
     UnreadStatus:
       type: object
       required: [count, latest_unread_at, observed_at, user_id]
@@ -5977,6 +5954,8 @@ components:
           type: integer
           nullable: true
           format: int64
+        role_summary:
+          $ref: "#/components/schemas/Summary"
         status:
           type: integer
           format: int32
@@ -5996,6 +5975,11 @@ components:
           type: array
           items:
             type: string
+        action_summaries:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/Summary"
         actions:
           type: array
           items:
