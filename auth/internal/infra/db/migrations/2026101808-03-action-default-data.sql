@@ -4,12 +4,12 @@
 -- UI and transport projections match the finalized I18N_CATALOG in 04.
 -- Catalog mutations require the explicit developer publish capability or scoped all.
 INSERT INTO t_action (id, action_group, code, word, config) VALUES
-    (1, 'admin:system:general', 'ACDFC75C', 'admin:all:system:general', '{
+    (1, 'admin:system:general', 'KQ2CKDF6', 'admin:all:system:general', '{
     "ui": [],
     "builtin": "all",
     "endpoints": []
 }'::jsonb),
-    (2, 'admin:system:general', 'REAC2MQB', 'admin:default:system:general', '{
+    (2, 'admin:system:general', 'Q4NEEXVG', 'admin:default:system:general', '{
     "builtin": "default",
     "endpoints": [
         {
@@ -117,7 +117,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (3, 'admin:dashboard:overview', '5S8CAATY', 'admin:read:dashboard:overview', '{
+    (3, 'admin:dashboard:overview', 'VT4YX7XN', 'admin:read:dashboard:overview', '{
     "bindings": [
         {
             "operation": "read",
@@ -136,7 +136,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (4, 'admin:system:user', 'WADGYR8Y', 'admin:read:system:user', '{
+    (4, 'admin:system:user', '57VGBNEW', 'admin:read:system:user', '{
     "bindings": [
         {
             "operation": "read",
@@ -181,7 +181,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (5, 'admin:system:user', '27NKE7BW', 'admin:create:system:user', '{
+    (5, 'admin:system:user', 'CEBTAGTL', 'admin:create:system:user', '{
     "bindings": [
         {
             "operation": "create",
@@ -210,7 +210,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (6, 'admin:system:user', 'S6SBKX4B', 'admin:update:system:user', '{
+    (6, 'admin:system:user', 'GF7SA34M', 'admin:update:system:user', '{
     "bindings": [
         {
             "operation": "update",
@@ -247,7 +247,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (7, 'admin:system:user', 'M4CAAEYQ', 'admin:delete:system:user', '{
+    (7, 'admin:system:user', 'T777XDYF', 'admin:delete:system:user', '{
     "bindings": [
         {
             "operation": "delete",
@@ -278,7 +278,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (8, 'admin:system:user-group', '6XY7LHRB', 'admin:read:system:user-group', '{
+    (8, 'admin:system:user-group', 'PNA8WWNP', 'admin:read:system:user-group', '{
     "bindings": [
         {
             "operation": "read",
@@ -330,7 +330,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (9, 'admin:system:user-group', '7NFH7GQ7', 'admin:create:system:user-group', '{
+    (9, 'admin:system:user-group', 'V3P4AK2Q', 'admin:create:system:user-group', '{
     "bindings": [
         {
             "operation": "create",
@@ -359,7 +359,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (10, 'admin:system:user-group', 'LYLX6DH7', 'admin:update:system:user-group', '{
+    (10, 'admin:system:user-group', 'KSD89P5H', 'admin:update:system:user-group', '{
     "bindings": [
         {
             "operation": "update",
@@ -392,7 +392,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (11, 'admin:system:user-group', 'YTP5BPRG', 'admin:delete:system:user-group', '{
+    (11, 'admin:system:user-group', 'W94GCP9F', 'admin:delete:system:user-group', '{
     "bindings": [
         {
             "operation": "delete",
@@ -423,7 +423,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (12, 'admin:system:role', 'W8XNP7GN', 'admin:read:system:role', '{
+    (12, 'admin:system:role', 'H8B2TJT4', 'admin:read:system:role', '{
     "bindings": [
         {
             "operation": "read",
@@ -468,7 +468,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (13, 'admin:system:role', 'X2W2Q288', 'admin:create:system:role', '{
+    (13, 'admin:system:role', 'MQL48MQC', 'admin:create:system:role', '{
     "bindings": [
         {
             "operation": "create",
@@ -497,7 +497,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (14, 'admin:system:role', 'SCJ34TWD', 'admin:update:system:role', '{
+    (14, 'admin:system:role', 'W586442Q', 'admin:update:system:role', '{
     "bindings": [
         {
             "operation": "update",
@@ -526,7 +526,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (15, 'admin:system:role', 'B6ATLRH5', 'admin:delete:system:role', '{
+    (15, 'admin:system:role', 'LT2WHSEA', 'admin:delete:system:role', '{
     "bindings": [
         {
             "operation": "delete",
@@ -557,7 +557,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (16, 'admin:system:action', 'XM8VGWWB', 'admin:read:system:action', '{
+    (16, 'admin:system:action', 'KPFJ3BDV', 'admin:read:system:action', '{
     "bindings": [
         {
             "operation": "read",
@@ -612,7 +612,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (17, 'admin:system:action', '9Y8YL2AE', 'admin:create:system:action', '{
+    (17, 'admin:system:action', '22MK9ETF', 'admin:create:system:action', '{
     "bindings": [
         {
             "operation": "create",
@@ -653,7 +653,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (18, 'admin:system:action', 'EJC6XPNJ', 'admin:update:system:action', '{
+    (18, 'admin:system:action', 'ASYRTQ4W', 'admin:update:system:action', '{
     "bindings": [
         {
             "operation": "update",
@@ -694,7 +694,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (19, 'admin:system:action', 'B9E8GRYG', 'admin:delete:system:action', '{
+    (19, 'admin:system:action', 'T3RT8T5H', 'admin:delete:system:action', '{
     "bindings": [
         {
             "operation": "delete",
@@ -737,7 +737,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (24, 'admin:system:dictionary', 'DKGN4TPF', 'admin:read:system:dictionary', '{
+    (24, 'admin:system:dictionary', 'MCPK2MT4', 'admin:read:system:dictionary', '{
     "bindings": [
         {
             "operation": "read",
@@ -782,7 +782,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (25, 'admin:system:dictionary', 'HH5EFRD4', 'admin:create:system:dictionary', '{
+    (25, 'admin:system:dictionary', 'X73CBNQP', 'admin:create:system:dictionary', '{
     "bindings": [
         {
             "operation": "create",
@@ -811,7 +811,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (26, 'admin:system:dictionary', 'LFKNDE8Q', 'admin:update:system:dictionary', '{
+    (26, 'admin:system:dictionary', '39NFCKVJ', 'admin:update:system:dictionary', '{
     "bindings": [
         {
             "operation": "update",
@@ -840,7 +840,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (27, 'admin:system:dictionary', 'NTYM5NAC', 'admin:delete:system:dictionary', '{
+    (27, 'admin:system:dictionary', 'CMT9S6FG', 'admin:delete:system:dictionary', '{
     "bindings": [
         {
             "operation": "delete",
@@ -871,7 +871,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (28, 'admin:system:msg', 'VRYG9JWE', 'admin:read:system:msg', '{
+    (28, 'admin:system:msg', '3SSXLNXW', 'admin:read:system:msg', '{
     "bindings": [
         {
             "operation": "read",
@@ -916,7 +916,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (29, 'admin:system:msg', '2N97H9EN', 'admin:create:system:msg', '{
+    (29, 'admin:system:msg', 'WCM45YKN', 'admin:create:system:msg', '{
     "bindings": [
         {
             "operation": "create",
@@ -950,7 +950,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (30, 'admin:system:msg', 'A9M4T4VB', 'admin:delete:system:msg', '{
+    (30, 'admin:system:msg', 'YJAPCRVN', 'admin:delete:system:msg', '{
     "bindings": [
         {
             "operation": "delete",
@@ -981,7 +981,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (31, 'admin:audit:login', 'EXHV3E7F', 'admin:read:audit:login', '{
+    (31, 'admin:audit:login', 'NWQGYBF2', 'admin:read:audit:login', '{
     "bindings": [
         {
             "operation": "read",
@@ -1038,7 +1038,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (33, 'admin:audit:operation', 'MVK3PYY4', 'admin:read:audit:operation', '{
+    (33, 'admin:audit:operation', 'SBYKFQVR', 'admin:read:audit:operation', '{
     "bindings": [
         {
             "operation": "read",
@@ -1095,7 +1095,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (35, 'admin:dashboard:workspace', '5RAQS9J5', 'admin:read:dashboard:workspace', '{
+    (35, 'admin:dashboard:workspace', 'SERP63H6', 'admin:read:dashboard:workspace', '{
     "bindings": [
         {
             "operation": "read",
@@ -1114,11 +1114,11 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::jsonb),
-    (36, 'admin:system:permission-admin', 'P4X5W7T8', 'admin:grant:system:permission-admin', '{
+    (36, 'admin:system:permission-admin', 'WGQTYCXM', 'admin:grant:system:permission-admin', '{
     "endpoints": [],
     "ui": []
 }'::jsonb),
-    (37, 'admin:system:developer', 'DWKR57GJ', 'admin:update:system:developer', '{
+    (37, 'admin:system:developer', 'E3J5VW9V', 'admin:update:system:developer', '{
     "bindings": [
         {
             "resource_key": "admin:system:developer",

@@ -1876,10 +1876,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/captcha:
+  /captcha:
     post:
-      summary: "POST /auth/captcha"
-      operationId: postAuthCaptcha
+      summary: "POST /captcha"
+      operationId: postCaptcha
       tags: ["Auth"]
       security:
         - bearerAuth: []
@@ -1927,10 +1927,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/captcha/verify:
+  /captcha/verify:
     post:
-      summary: "POST /auth/captcha/verify"
-      operationId: postAuthCaptchaVerify
+      summary: "POST /captcha/verify"
+      operationId: postCaptchaVerify
       tags: ["Auth"]
       security:
         - bearerAuth: []
@@ -1978,10 +1978,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/challenge:
+  /challenge:
     post:
-      summary: "POST /auth/challenge"
-      operationId: postAuthChallenge
+      summary: "POST /challenge"
+      operationId: postChallenge
       tags: ["Auth"]
       security:
         - bearerAuth: []
@@ -2035,10 +2035,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /auth/change/pwd:
+  /change/pwd:
     patch:
-      summary: "PATCH /auth/change/pwd"
-      operationId: patchAuthChangePwd
+      summary: "PATCH /change/pwd"
+      operationId: patchChangePwd
       tags: ["Auth"]
       security:
         - bearerAuth: []
@@ -2076,530 +2076,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PasswordChangeFailureResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/info:
-    get:
-      summary: "GET /auth/info"
-      operationId: getAuthInfo
-      tags: ["Auth"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: X-Auth-Scope
-          in: header
-          required: false
-          schema:
-            type: string
-            example: "admin"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserInfo"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: "permission denied"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/logout:
-    post:
-      summary: "POST /auth/logout"
-      operationId: postAuthLogout
-      tags: ["Auth"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: X-Auth-Scope
-          in: header
-          required: false
-          schema:
-            type: string
-            example: "admin"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshTokenInput"
-      responses:
-        "200":
-          description: "OK"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: "permission denied"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/permission:
-    get:
-      summary: "GET /auth/permission"
-      operationId: getAuthPermission
-      tags: ["Auth"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: X-Auth-Scope
-          in: header
-          required: false
-          schema:
-            type: string
-            example: "admin"
-      responses:
-        "200":
-          description: "OK"
-        "400":
-          description: "invalid permission scope header"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: "Forbidden"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/captcha:
-    post:
-      summary: "POST /auth/pub/captcha"
-      operationId: postAuthPubCaptcha
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshPointCaptchaInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PointCaptchaChallenge"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/captcha/verify:
-    post:
-      summary: "POST /auth/pub/captcha/verify"
-      operationId: postAuthPubCaptchaVerify
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VerifyLoginPointCaptchaInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PointCaptchaVerificationResult"
-        "400":
-          description: "Bad Request; invalid login"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/challenge:
-    post:
-      summary: "POST /auth/pub/challenge"
-      operationId: postAuthPubChallenge
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ChallengeInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CredentialChallenge"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/login:
-    post:
-      summary: "POST /auth/pub/login"
-      operationId: postAuthPubLogin
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EncryptedLoginInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        "400":
-          description: "Bad Request; invalid login credential; slider verification is required; invalid login"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginFailureResponse"
-        "403":
-          description: "Forbidden"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/login/verification:
-    get:
-      summary: "GET /auth/pub/login/verification"
-      operationId: getAuthPubLoginVerification
-      tags: ["Auth"]
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginVerificationResult"
-        "400":
-          description: "Bad Request; invalid login"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/logout:
-    post:
-      summary: "POST /auth/pub/logout"
-      operationId: postAuthPubLogout
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshTokenInput"
-      responses:
-        "200":
-          description: "OK"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/refresh:
-    post:
-      summary: "POST /auth/pub/refresh"
-      operationId: postAuthPubRefresh
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshTokenInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/register:
-    post:
-      summary: "POST /auth/pub/register"
-      operationId: postAuthPubRegister
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EncryptedRegisterInput"
-      responses:
-        "200":
-          description: "OK"
-        "400":
-          description: "Bad Request; invalid registration credential; slider verification is required; invalid registration"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: "username already exists"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/register/username:
-    get:
-      summary: "GET /auth/pub/register/username"
-      operationId: getAuthPubRegisterUsername
-      tags: ["Auth"]
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UsernameAvailability"
-        "400":
-          description: "Bad Request; invalid registration"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/slider/challenge:
-    post:
-      summary: "POST /auth/pub/slider/challenge"
-      operationId: postAuthPubSliderChallenge
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SliderChallengeInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SliderCaptchaChallenge"
-        "400":
-          description: "Bad Request; slider verification is required"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/pub/slider/verify:
-    post:
-      summary: "POST /auth/pub/slider/verify"
-      operationId: postAuthPubSliderVerify
-      tags: ["Auth"]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SliderCaptchaVerification"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SliderCaptchaVerificationResult"
-        "400":
-          description: "Bad Request; slider verification is required"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /auth/reset/pwd:
-    patch:
-      summary: "PATCH /auth/reset/pwd"
-      operationId: patchAuthResetPwd
-      tags: ["Auth"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: X-Auth-Scope
-          in: header
-          required: false
-          schema:
-            type: string
-            example: "admin"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EncryptedPasswordResetInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: "permission denied"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: "Conflict"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -3063,6 +2539,98 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: "Service Unavailable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /info:
+    get:
+      summary: "GET /info"
+      operationId: getInfo
+      tags: ["Auth"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /logout:
+    post:
+      summary: "POST /logout"
+      operationId: postLogout
+      tags: ["Auth"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenInput"
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
           content:
             application/json:
               schema:
@@ -3939,6 +3507,438 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: "Not Found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /permission:
+    get:
+      summary: "GET /permission"
+      operationId: getPermission
+      tags: ["Auth"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "invalid permission scope header"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/captcha:
+    post:
+      summary: "POST /pub/captcha"
+      operationId: postPubCaptcha
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshPointCaptchaInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointCaptchaChallenge"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/captcha/verify:
+    post:
+      summary: "POST /pub/captcha/verify"
+      operationId: postPubCaptchaVerify
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyLoginPointCaptchaInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointCaptchaVerificationResult"
+        "400":
+          description: "Bad Request; invalid login"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/challenge:
+    post:
+      summary: "POST /pub/challenge"
+      operationId: postPubChallenge
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChallengeInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialChallenge"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/login:
+    post:
+      summary: "POST /pub/login"
+      operationId: postPubLogin
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EncryptedLoginInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "400":
+          description: "Bad Request; invalid login credential; slider verification is required; invalid login"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginFailureResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/login/verification:
+    get:
+      summary: "GET /pub/login/verification"
+      operationId: getPubLoginVerification
+      tags: ["Auth"]
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginVerificationResult"
+        "400":
+          description: "Bad Request; invalid login"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/logout:
+    post:
+      summary: "POST /pub/logout"
+      operationId: postPubLogout
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenInput"
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/refresh:
+    post:
+      summary: "POST /pub/refresh"
+      operationId: postPubRefresh
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/register:
+    post:
+      summary: "POST /pub/register"
+      operationId: postPubRegister
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EncryptedRegisterInput"
+      responses:
+        "200":
+          description: "OK"
+        "400":
+          description: "Bad Request; invalid registration credential; slider verification is required; invalid registration"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "username already exists"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/register/username:
+    get:
+      summary: "GET /pub/register/username"
+      operationId: getPubRegisterUsername
+      tags: ["Auth"]
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsernameAvailability"
+        "400":
+          description: "Bad Request; invalid registration"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/slider/challenge:
+    post:
+      summary: "POST /pub/slider/challenge"
+      operationId: postPubSliderChallenge
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SliderChallengeInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SliderCaptchaChallenge"
+        "400":
+          description: "Bad Request; slider verification is required"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pub/slider/verify:
+    post:
+      summary: "POST /pub/slider/verify"
+      operationId: postPubSliderVerify
+      tags: ["Auth"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SliderCaptchaVerification"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SliderCaptchaVerificationResult"
+        "400":
+          description: "Bad Request; slider verification is required"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reset/pwd:
+    patch:
+      summary: "PATCH /reset/pwd"
+      operationId: patchResetPwd
+      tags: ["Auth"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EncryptedPasswordResetInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Conflict"
           content:
             application/json:
               schema:

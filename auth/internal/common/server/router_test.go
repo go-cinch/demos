@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+
 	"context"
 	"errors"
 
@@ -157,5 +159,53 @@ func TestHTTPPermissionAuthorization(t *testing.T) {
 	}
 	if _, err := NewRouter(&cfg, authenticator, nil, &permissionTestModule{permissionSuffix: "invalid"}); err == nil {
 		t.Fatal("invalid permission endpoint accepted")
+	}
+}
+
+type rootPathTestModule struct{}
+
+func (rootPathTestModule) Name() string           { return "" }
+func (rootPathTestModule) HTTPPathConfig() string { return "auth.path" }
+func (rootPathTestModule) Public() bool           { return true }
+
+func (rootPathTestModule) HTTP() http.Handler {
+	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Module-Middleware", "true")
+			next.ServeHTTP(w, r)
+		})
+	})
+	middleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Route-Middleware", "true")
+			next.ServeHTTP(w, r)
+		})
+	}
+	r.With(middleware).Get("/probe/{id}", func(w http.ResponseWriter, r *http.Request) {
+		WriteOK(w, map[string]string{"route": chi.RouteContext(r.Context()).RoutePattern(), "id": chi.URLParam(r, "id")})
+	})
+	return r
+}
+
+func TestConfiguredRootModulePreservesRouteAndMiddleware(t *testing.T) {
+	handler, err := NewRouter(&config.Config{}, nil, nil, rootPathTestModule{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/probe/42", nil))
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	expected := "/probe/{id}"
+	if response.Code != 200 || body["route"] != expected || body["id"] != "42" || response.Header().Get("X-Module-Middleware") != "true" || response.Header().Get("X-Route-Middleware") != "true" {
+		t.Fatalf("root route lost routing context or middleware: %d %v %v", response.Code, body, response.Header())
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/missing", nil))
+	if response.Code != 404 {
+		t.Fatal(response.Code)
 	}
 }

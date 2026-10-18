@@ -23,6 +23,7 @@ type AuthConfig struct {
 	ChallengeEncryption AuthChallengeEncryptionConfig `koanf:"challengeEncryption"`
 	Jwt                 AuthJwtConfig                 `koanf:"jwt"`
 	PasswordChange      AuthPasswordChangeConfig      `koanf:"passwordChange"`
+	Path                string                        `koanf:"path"`
 	PointCaptcha        AuthPointCaptchaConfig        `koanf:"pointCaptcha"`
 	Refresh             AuthRefreshConfig             `koanf:"refresh"`
 	SliderCaptcha       AuthSliderCaptchaConfig       `koanf:"sliderCaptcha"`

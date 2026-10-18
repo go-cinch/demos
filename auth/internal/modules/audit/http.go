@@ -3,6 +3,7 @@ package audit
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
+	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
@@ -214,7 +215,11 @@ func (m *Module) export(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuditTarget keeps business scope and operation semantics in the owning capability.
-func (*Module) AuditTarget(method, path string) auditctx.Target {
+func (m *Module) AuditTarget(method, path string) auditctx.Target {
+	relative, authEndpoint := authn.RelativeAuthHTTPPath(path, m.authHTTPPath)
+	if authEndpoint {
+		path = "/auth" + relative
+	}
 	target := auditctx.Target{}
 	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodPut && method != http.MethodDelete {
 		return target
@@ -224,6 +229,9 @@ func (*Module) AuditTarget(method, path string) auditctx.Target {
 	case "user", "role", "action", "user-group", "dictionary", "msg":
 		target = auditctx.Target{Kind: "operation", Module: parts[0], ResourceType: parts[0]}
 	case "auth":
+		if !authEndpoint {
+			return target
+		}
 		switch path {
 		case "/auth/pub/login":
 			if method == http.MethodPost {
@@ -271,3 +279,5 @@ func (*Module) AuditTarget(method, path string) auditctx.Target {
 	}
 	return target
 }
+
+func (m *Module) SetAuthHTTPPath(prefix string) { m.authHTTPPath = prefix }

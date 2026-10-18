@@ -42,8 +42,8 @@ internal/modules/game/
 
 - Keep module interfaces in `internal/modules/module.go`. `Module` is an alias of `HTTPModule`, not a separate contract.
 - HTTP capabilities implement `modules.HTTPModule` with `Name() string` and `HTTP() http.Handler`.
-- HTTP modules return their application mount path from `Name()`; match it to the singular module name.
-- HTTP infrastructure integrates modules through `HTTPModule` and the optional `IdempotentHTTPModule`, `PublicHTTPModule`, `HTTPPermissionAuthorizer`, `AnonymousHTTPModule`, and `HTTPAuditRecorder` contracts in the same package.
+- HTTP modules return their application mount path from `Name()`; match it to the singular module name. The auth module declares `ConfigurableHTTPModule`: its `auth.path` scalar may be empty for a root mount or an explicit prefix such as `/auth`.
+- HTTP infrastructure integrates modules through `HTTPModule` and the optional `IdempotentHTTPModule`, `PublicHTTPModule`, `HTTPPermissionAuthorizer`, `AnonymousHTTPModule`, and `HTTPAuditRecorder`, and `ConfigurableHTTPModule` contracts in the same package.
 
 ## HTTP
 
