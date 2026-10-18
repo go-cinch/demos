@@ -1,6 +1,7 @@
 package dictionary
 
 import (
+	"auth/internal/modules/localization"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"strings"
 
 	"auth/internal/common/apperror"
+	"auth/internal/common/authn"
+	"auth/internal/common/i18n"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
@@ -28,6 +31,7 @@ func (m *Module) HTTP() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", m.list)
 	r.Get("/summary", m.summary)
+	r.Get("/pub/i18n", m.localization)
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
 	r.Patch("/{id}", m.update)
@@ -69,7 +73,11 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Create(r.Context(), input)
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrGroupNotEmpty) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -93,11 +101,19 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Update(r.Context(), id, input)
+	if errors.Is(err, ErrVersionConflict) {
+		server.WriteError(w, r, http.StatusConflict, err)
+		return
+	}
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, apperror.FeatureDisabled) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrGroupNotEmpty) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -144,6 +160,10 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, id)
 	}
 	err := m.Delete(r.Context(), ids...)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, apperror.FeatureDisabled) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
@@ -249,4 +269,38 @@ func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server.WriteOK(w, value)
+}
+
+func (m *Module) localization(w http.ResponseWriter, r *http.Request) {
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	for key := range query {
+		if key != "f" {
+			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+			return
+		}
+	}
+	fields, err := report.ParseFields(query, "default_locale", "locales", "scopes", "operations", "group_order", "messages", "frontend_messages")
+	if err != nil || (fields != nil && fields.Has("messages") && fields.Has("frontend_messages")) {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	if fields == nil {
+		fields = report.Fields{"default_locale", "locales"}
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	var value localization.PublicCatalog = m.catalogSource.PublicCatalog(fields...)
+	server.WriteOK(w, value)
+}
+
+func (m *Module) Translator() i18n.Translator {
+	if m == nil {
+		return nil
+	}
+	translator, _ := m.catalogSource.(i18n.Translator)
+	return translator
 }

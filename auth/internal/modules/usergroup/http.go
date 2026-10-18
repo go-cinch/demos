@@ -2,6 +2,7 @@ package usergroup
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
@@ -96,6 +97,10 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Create(r.Context(), input, fields...)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
@@ -147,6 +152,10 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Update(r.Context(), id, input, fields...)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
@@ -189,6 +198,10 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, id)
 	}
 	err := m.Delete(r.Context(), ids...)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, ErrIDs) {
 		server.WriteError(w, r, http.StatusBadRequest, ErrIDs)
 		return

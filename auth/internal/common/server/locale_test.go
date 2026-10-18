@@ -64,3 +64,33 @@ func TestLocalizedErrorWriter(t *testing.T) {
 		t.Fatal(recorder.Body.String())
 	}
 }
+
+type applicationTranslator struct{ locale, message string }
+
+func (t applicationTranslator) Match(string) string { return t.locale }
+
+func (t applicationTranslator) Translate(locale, code, fallback string) string {
+	if locale == t.locale && code == "HTTP_NOT_FOUND" {
+		return t.message
+	}
+	return fallback
+}
+
+func TestApplicationTranslatorIsScopedToRouter(t *testing.T) {
+
+	newHandler := func(translator applicationTranslator) http.Handler {
+		return Locale(translator)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { WriteError(w, r, 404, apperror.NotFound) }))
+	}
+
+	for _, translator := range []applicationTranslator{{locale: "fr-FR", message: "Introuvable"}, {locale: "de-DE", message: "Nicht gefunden"}} {
+		response := httptest.NewRecorder()
+		newHandler(translator).ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+		var body ErrorResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if response.Header().Get("Content-Language") != translator.locale || body.Msg != translator.message {
+			t.Fatalf("router translation escaped: %s", response.Body.String())
+		}
+	}
+}

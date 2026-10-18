@@ -2,6 +2,7 @@ package server
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/i18n"
 	"errors"
 
 	"auth/internal/common/auditctx"
@@ -30,7 +31,7 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 	r := chi.NewRouter()
 	policy := redact.New(cfg.Redact.Keys...)
 	r.Use(TraceID(cfg.Server.Name, policy))
-	r.Use(ClientIP(), Locale(), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
+	r.Use(ClientIP(), Locale(httpTranslator(mounted)), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, apperror.NotFound)
@@ -39,6 +40,7 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 		WriteError(w, r, http.StatusMethodNotAllowed, apperror.MethodNotAllowed)
 	})
 	routes := r.With(RequestTimeout(cfg.HTTP.Timeout))
+	catalog := make([]modules.HTTPPermissionRoute, 0)
 	seen := make(map[string]struct{}, len(mounted))
 	for _, module := range mounted {
 		if module == nil {
@@ -57,6 +59,15 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 			return nil, errors.New("http module handler is required")
 		}
 
+		if registered, ok := handler.(chi.Routes); ok {
+			if err := chi.Walk(registered, func(method, path string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+				catalog = append(catalog, modules.HTTPPermissionRoute{Method: method, Path: strings.TrimSuffix(pattern, "/") + path})
+				return nil
+			}); err != nil {
+				return nil, err
+			}
+		}
+
 		if isIdempotentModule(module) {
 			if idempotencyKeys == nil || cfg.Idempotency.TTL <= 0 {
 				return nil, errors.New("idempotency store and positive ttl are required")
@@ -73,6 +84,12 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 		routes.Mount(pattern, handler)
 	}
 
+	// Gateway checks need route precedence even when local authorization is disabled.
+	for _, module := range mounted {
+		if receiver, ok := module.(modules.HTTPPermissionRouteCatalog); ok {
+			receiver.SetHTTPPermissionRoutes(catalog)
+		}
+	}
 	return r, nil
 }
 
@@ -93,6 +110,11 @@ func authenticationMiddleware(authenticator *authn.Manager, authorizer modules.H
 			} else {
 				WriteError(w, r, http.StatusUnauthorized, apperror.Unauthorized)
 			}
+			return
+		}
+		request, err = authn.ScopeRequest(request)
+		if err != nil {
+			WriteError(w, r, http.StatusBadRequest, err)
 			return
 		}
 		identity, _ := authn.FromContext(request.Context())
@@ -152,4 +174,13 @@ func isIdempotentModule(module modules.Module) bool {
 func isPublicEndpoint(path, modulePath string) bool {
 	publicPath := strings.TrimSuffix(modulePath, "/") + "/pub"
 	return path == publicPath || strings.HasPrefix(path, publicPath+"/")
+}
+
+func httpTranslator(mounted []modules.Module) i18n.Translator {
+	for _, module := range mounted {
+		if source, ok := module.(modules.HTTPLocalizer); ok {
+			return source.Translator()
+		}
+	}
+	return nil
 }

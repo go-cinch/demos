@@ -2,6 +2,7 @@ package action
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
@@ -28,6 +29,8 @@ func (m *Module) HTTP() http.Handler {
 	r.Get("/", m.list)
 	r.Get("/summary", m.summary)
 	r.Get("/group", m.listGroups)
+	r.Get("/catalog", m.catalog)
+	r.Get("/effective", m.effective)
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
 	r.Patch("/{id}", m.update)
@@ -67,7 +70,17 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.ActionID)
 		return
 	}
-	value, err := m.Get(r.Context(), id)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, detailFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	value, err := m.GetSelected(r.Context(), id, fields)
 	if errors.Is(err, ErrInvalid) {
 		server.WriteError(w, r, http.StatusBadRequest, ErrInvalid)
 		return
@@ -98,7 +111,11 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Create(r.Context(), input)
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, apperror.InvalidBody) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -130,11 +147,15 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := m.Update(r.Context(), id, input)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, apperror.FeatureDisabled) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, apperror.InvalidBody) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -168,6 +189,10 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, id)
 	}
 	err := m.Delete(r.Context(), ids...)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, apperror.FeatureDisabled) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
@@ -195,6 +220,10 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
+	if values, provided := query["scope"]; provided && (len(values) != 1 || !ValidScope(values[0])) {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
 	if values, provided := query["q"]; provided && len(values) != 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
@@ -205,7 +234,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := ListActionsInput{Fields: fields,
-		Q:    query.Get("q"),
+		Q: query.Get("q"), Scope: query.Get("scope"),
 		Code: query.Get("code"), Name: query.Get("name"), Group: query.Get("group"), Word: query.Get("word"),
 		Resource: query.Get("resource"), Menu: query.Get("menu"), Button: query.Get("button"),
 	}
@@ -291,6 +320,65 @@ func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 	value, err := m.Summary(r.Context(), fields...)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "summarize action failed: "+err.Error(), "operation", "summarize_action", "outcome", "failure", "error", err)
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+		return
+	}
+	server.WriteOK(w, value)
+}
+
+func (m *Module) catalog(w http.ResponseWriter, r *http.Request) {
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, "scopes", "operations", "resource_catalog", "defined_actions")
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	if fields == nil {
+		fields = report.Fields{"scopes", "operations"}
+	}
+	value, err := m.Catalog(r.Context(), fields)
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
+	if err != nil {
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+		return
+	}
+	server.WriteOK(w, value)
+}
+
+func (m *Module) effective(w http.ResponseWriter, r *http.Request) {
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || len(query["scope"]) != 1 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, "btn", "http", "grpc")
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	if fields == nil {
+		fields = report.Fields{"btn"}
+	}
+	value, err := m.Effective(r.Context(), query.Get("scope"), fields)
+	if errors.Is(err, ErrInvalid) {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
+		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "inspect current permissions failed: "+err.Error(), "operation", "inspect_permissions", "outcome", "failure", "error", err)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

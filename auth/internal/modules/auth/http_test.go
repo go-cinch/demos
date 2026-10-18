@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"auth/internal/common/authn"
+	"auth/internal/modules/localization"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -9,10 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/common/config"
-	"auth/internal/common/server"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/lib/pq"
+
+	"auth/internal/common/config"
+	"auth/internal/common/server"
 )
 
 func validSliderProof(t *testing.T, slider *SliderCaptcha, purpose, username string) string {
@@ -100,7 +103,9 @@ func TestGatewayAnonymousTargets(t *testing.T) {
 }
 
 func TestAuthHTTP(t *testing.T) {
+	localizer := localization.New()
 	m, authenticator, mock := newAuthTestModule(t)
+	localizer = m.catalogSource.(*localization.Module)
 	if m.Name() != "/auth" {
 		t.Fatal(m.Name())
 	}
@@ -340,9 +345,8 @@ func TestAuthHTTP(t *testing.T) {
 		}
 		return recorder
 	}
-	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3)).WillReturnRows(
-		sqlmock.NewRows([]string{"resource", "menu", "btn"}).
-			AddRow("GET|/auth/info|/auth.v1.Auth/Info", "", ""),
+	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(
+		permissionRows().AddRow("admin:read:system:info", permissionConfig(localizer, "GET", "/auth/info")),
 	)
 	permissionRecorder := permissionRequest(http.MethodGet, "/auth/info", http.StatusOK)
 	if code := permissionRecorder.Header().Get(permissionResponseCode); code != "EXP78RGH" {
@@ -351,9 +355,8 @@ func TestAuthHTTP(t *testing.T) {
 	if value := permissionRecorder.Header().Get("X-Username"); value != "" {
 		t.Fatalf("permission response exposed username: %q", value)
 	}
-	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3)).WillReturnRows(
-		sqlmock.NewRows([]string{"resource", "menu", "btn"}).
-			AddRow("GET|/auth/info|/auth.v1.Auth/Info", "", ""),
+	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(
+		permissionRows().AddRow("admin:read:system:info", permissionConfig(localizer, "GET", "/auth/info")),
 	)
 	permissionRequest(http.MethodGet, "/missing", http.StatusForbidden)
 	request(http.MethodPost, "/auth/challenge", `{`, login.AccessToken, http.StatusBadRequest)
@@ -461,9 +464,8 @@ func TestAuthHTTP(t *testing.T) {
 	mock.ExpectQuery("SELECT u.id, u.username, u.code").WithArgs(int64(3), "EXP78RGH").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "code", "role_id", "role_name", "role_word"}).
 			AddRow(3, "readonly", "EXP78RGH", 2, "Reader", "reader"))
-	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3)).WillReturnRows(
-		sqlmock.NewRows([]string{"resource", "menu", "btn"}).
-			AddRow("GET|/auth/info|/auth.v1.Auth/Info", "/dashboard/overview", "system.dashboard.read"),
+	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(
+		permissionRows().AddRow("admin:read:system:user", userReadPermissionConfig),
 	)
 	infoRecorder := request(http.MethodGet, "/auth/info", "", refreshed.AccessToken, http.StatusOK)
 	var info UserInfo
@@ -520,5 +522,49 @@ func TestLocalizedAuthFailures(t *testing.T) {
 	}
 	if recorder.Code != 401 || body.ErrorCode != "HTTP_UNAUTHORIZED" || body.Msg != "登录状态无效或已过期，请重新登录" {
 		t.Fatal(recorder.Body.String())
+	}
+}
+
+func TestInfoUsesHeaderScopeAndIgnoresLegacyQuery(t *testing.T) {
+	m, manager, mock := newAuthTestModule(t)
+	ctx := authenticatedContext(t, manager, m.sessions)
+
+	handler := m.HTTP()
+
+	for _, test := range []struct {
+		query, header, want string
+		status              int
+	}{
+		{"", "", "admin", 200}, {"", "mini", "mini", 200},
+		{"?scope=mini", "admin", "admin", 200}, {"?scope=admin", "mini", "mini", 200},
+		{"?scope=", "", "admin", 200}, {"?scope=admin&scope=mini", "admin", "admin", 200},
+		{"?scope=Admin", "admin", "admin", 200}, {"?scope=%zz", "admin", "", 400},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/info"+test.query, nil).WithContext(ctx)
+		if test.header != "" {
+			request.Header.Set(authn.PermissionScopeHeader, test.header)
+		}
+		scoped, err := authn.ScopeRequest(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if test.status == 200 {
+			mock.ExpectQuery("SELECT u.id, u.username, u.code").WithArgs(int64(3), "EXP78RGH").WillReturnRows(sqlmock.NewRows([]string{"id", "username", "code", "role_id", "role_name", "role_word"}).AddRow(3, "readonly", "EXP78RGH", nil, nil, nil))
+			mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), test.want).WillReturnRows(permissionRows())
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, scoped)
+		if response.Code != test.status {
+			t.Fatalf("query=%s header=%s status=%d: %s", test.query, test.header, response.Code, response.Body.String())
+		}
+		if test.status == 200 {
+			var value UserInfo
+			if err := json.Unmarshal(response.Body.Bytes(), &value); err != nil {
+				t.Fatal(err)
+			}
+			if value.Scope != test.want {
+				t.Fatalf("scope=%s want=%s", value.Scope, test.want)
+			}
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"auth/internal/modules/localization"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,8 +31,8 @@ func TestGeneratedModulesReuseBusinessInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &Application{db: &db.Store{DB: database}, pagination: limits, authenticator: testAuthenticator(t)}
-	a.dictionaryModule, err = dictionarymodule.New(a.db, dictionarymodule.NewMemoryValueCache(), dictionarymodule.CacheTTL, limits, false)
+	a := &Application{localization: localization.New(), db: &db.Store{DB: database}, pagination: limits, authenticator: testAuthenticator(t)}
+	a.dictionaryModule, err = dictionarymodule.New(a.db, dictionarymodule.NewMemoryValueCache(), dictionarymodule.CacheTTL, limits, false, a.localization)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,6 @@ func TestGeneratedModulesReuseBusinessInstances(t *testing.T) {
 		"/role":       a.roleModule,
 		"/user":       a.userModule,
 		"/user-group": a.groupModule,
-		"/whitelist":  a.whitelistModule,
 	}
 	// Rebuilding the transport registry must never rebuild a business module.
 	for range 2 {
@@ -107,7 +107,7 @@ func TestBusinessModuleWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	a := &Application{db: &db.Store{DB: database}, authenticator: testAuthenticator(t), idempotencyKeys: idempotency.NewMemoryStore()}
+	a := &Application{localization: localization.New(), db: &db.Store{DB: database}, authenticator: testAuthenticator(t), idempotencyKeys: idempotency.NewMemoryStore()}
 	a.wireBusinessModules()
 	cfg := &config.Config{}
 	cfg.Idempotency.TTL = time.Minute
@@ -146,6 +146,8 @@ func TestSignalContextCanBeCanceled(t *testing.T) {
 
 func TestBusinessHTTPAlwaysRequiresAuthentication(t *testing.T) {
 	a := &Application{
+		localization: localization.New(),
+
 		db:              &db.Store{},
 		authenticator:   testAuthenticator(t),
 		idempotencyKeys: idempotency.NewMemoryStore(),

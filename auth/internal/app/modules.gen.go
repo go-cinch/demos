@@ -25,7 +25,5 @@ func (a *Application) generatedModules() ([]modules.HTTPModule, []modules.GRPCMo
 	httpModules = append(httpModules, module6)
 	module7 := a.groupModule
 	httpModules = append(httpModules, module7)
-	module8 := a.whitelistModule
-	httpModules = append(httpModules, module8)
 	return httpModules, grpcModules
 }

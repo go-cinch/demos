@@ -2,6 +2,7 @@ package app
 
 import (
 	"auth/internal/common/config"
+	"auth/internal/modules/localization"
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
@@ -22,7 +23,6 @@ import (
 	rolemodule "auth/internal/modules/role"
 	usermodule "auth/internal/modules/user"
 	groupmodule "auth/internal/modules/usergroup"
-	whitelistmodule "auth/internal/modules/whitelist"
 
 	"auth/internal/common/logging"
 	"auth/internal/common/pagination"
@@ -36,9 +36,10 @@ import (
 )
 
 type Application struct {
-	auditModule *auditmodule.Module
-	msgModule   *msgmodule.Module
-	pagination  pagination.Limits
+	localization *localization.Module
+	auditModule  *auditmodule.Module
+	msgModule    *msgmodule.Module
+	pagination   pagination.Limits
 
 	authenticator    *authn.Manager
 	idempotencyKeys  idempotency.Store
@@ -54,7 +55,6 @@ type Application struct {
 	roleModule       *rolemodule.Module
 	userModule       *usermodule.Module
 	groupModule      *groupmodule.Module
-	whitelistModule  *whitelistmodule.Module
 
 	server          *http.Server
 	profilerServer  *http.Server
@@ -133,10 +133,15 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 	}
 	dictionaryCache = redisDictionaryCache
 	cleanups = append(cleanups, cleanupDictionaryCache)
-	dictionaryModule, err := dictionarymodule.New(dbStore, dictionaryCache, dictionarymodule.CacheTTL, limits, authSwitches.ProtectCaptchaDictionaries)
+	localizer := localization.New()
+	dictionaryModule, err := dictionarymodule.New(dbStore, dictionaryCache, dictionarymodule.CacheTTL, limits, authSwitches.ProtectCaptchaDictionaries, localizer)
 	if err != nil {
 		cleanup()
 		return nil, fmt.Errorf("initialize dictionary module: %w", err)
+	}
+	if err := dictionaryModule.LoadLocalization(ctx); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("initialize localization: %w", err)
 	}
 	credentials, err := authmodule.NewCredentials(
 		cfg.Auth.ChallengeEncryption.KeyID,
@@ -203,7 +208,7 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 		sliderCaptcha:    sliderCaptcha,
 		passwordGuard:    passwordGuard,
 		authSwitches:     authSwitches,
-		dictionaryModule: dictionaryModule,
+		dictionaryModule: dictionaryModule, localization: localizer,
 
 		db:       dbStore,
 		rds:      rdsClient,
@@ -249,13 +254,27 @@ func authSwitchesFromConfig(cfg *config.Config) authmodule.Switches {
 func (a *Application) wireBusinessModules() {
 	// Build in dependency order; generatedModules registers these same instances.
 	// The dictionary is initialized earlier because captcha construction needs it.
+	a.authModule = authmodule.New(a.db, a.authenticator, a.credentials, a.loginSessions, a.loginCaptcha, a.sliderCaptcha, a.passwordGuard, a.authSwitches, a.localization)
 	a.auditModule = auditmodule.New(a.db, a.pagination)
-	a.actionModule = actionmodule.New(a.db, a.pagination, a.authSwitches.ProtectSuper)
+	a.actionModule = actionmodule.New(a.db, a.pagination, a.authSwitches.ProtectSuper, a.localization)
+	if a.dictionaryModule != nil {
+		a.actionModule.SetNameLocalization(a.dictionaryModule)
+		a.actionModule.SetDefinitionCatalog(a.dictionaryModule)
+	}
+	if a.dictionaryModule != nil {
+		a.dictionaryModule.SetPermissionGroups(a.actionModule)
+		a.dictionaryModule.SetResourcePermissions(a.actionModule)
+	}
 	a.roleModule = rolemodule.New(a.db, a.pagination, a.actionModule, a.authSwitches.ProtectSuper)
 	a.userModule = usermodule.New(a.db, a.pagination, a.credentials, a.passwordGuard, a.actionModule, a.roleModule, a.authSwitches)
 	a.groupModule = groupmodule.New(a.db, a.pagination, a.actionModule, a.userModule)
-	a.authModule = authmodule.New(a.db, a.authenticator, a.credentials, a.loginSessions, a.loginCaptcha, a.sliderCaptcha, a.passwordGuard, a.authSwitches)
-	a.whitelistModule = whitelistmodule.New(a.db, a.pagination)
+	a.actionModule.SetPermissionAdministration(a.authModule)
+	if a.dictionaryModule != nil {
+		a.dictionaryModule.SetPermissionAdministration(a.authModule)
+	}
+	a.userModule.SetPermissionAdministration(a.authModule)
+	a.roleModule.SetPermissionAdministration(a.authModule)
+	a.groupModule.SetPermissionAdministration(a.authModule)
 	a.msgModule = msgmodule.New(a.db, a.pagination)
 }
 

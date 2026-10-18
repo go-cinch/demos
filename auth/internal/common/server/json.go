@@ -42,7 +42,7 @@ func WriteOK(w http.ResponseWriter, body ...any) {
 func ErrorMessage(r *http.Request, err error) string {
 	public := apperror.Public(err)
 	locale := i18n.Locale(r.Context(), r.Header.Get("Accept-Language"))
-	return i18n.Translate(locale, apperror.Code(public), public.Error())
+	return i18n.TranslateContext(r.Context(), locale, apperror.Code(public), public.Error())
 }
 
 func WriteError(w http.ResponseWriter, r *http.Request, status int, err error) {

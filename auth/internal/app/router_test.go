@@ -1,6 +1,7 @@
 package app
 
 import (
+	"auth/internal/modules/localization"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,7 @@ import (
 
 func TestNewRouter(t *testing.T) {
 	application := &Application{
+		localization: localization.New(),
 
 		authenticator:   testAuthenticator(t),
 		idempotencyKeys: idempotency.NewMemoryStore(),

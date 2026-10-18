@@ -83,6 +83,11 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
         - name: word
           in: query
           required: false
@@ -94,9 +99,15 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,code,name,group,word,resource,menu,button. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,code,name,group,word,scope,config,resource,menu,button. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
           content:
             application/json:
               schema:
@@ -112,6 +123,8 @@ paths:
                           type: string
                         code:
                           type: string
+                        config:
+                          $ref: "#/components/schemas/Config"
                         created_at:
                           type: integer
                           format: int64
@@ -124,7 +137,13 @@ paths:
                           type: string
                         name:
                           type: string
+                        names:
+                          type: object
+                          additionalProperties:
+                            type: string
                         resource:
+                          type: string
+                        scope:
                           type: string
                         updated_at:
                           type: integer
@@ -152,6 +171,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -170,6 +195,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -195,6 +226,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: "idempotency key has already been used"
           content:
@@ -203,6 +240,115 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error; internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /action/catalog:
+    get:
+      summary: "GET /action/catalog"
+      operationId: getActionCatalog
+      tags: ["Action"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: f
+          in: query
+          required: false
+          description: "Select scopes,operations,resource_catalog,defined_actions. Omitted f returns scopes and operations. Only selected fields are present; empty selected collections remain arrays."
+          schema:
+            type: string
+            example: "scopes,operations,resource_catalog,defined_actions"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /action/effective:
+    get:
+      summary: "GET /action/effective"
+      operationId: getActionEffective
+      tags: ["Action"]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: f
+          in: query
+          required: false
+          description: "Select btn,http,grpc. Omitted f returns btn. scope is always present; selected empty collections are arrays."
+          schema:
+            type: string
+            example: "btn,http,grpc"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveResult"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "Internal Server Error"
           content:
             application/json:
               schema:
@@ -220,6 +366,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -235,6 +387,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -259,6 +417,12 @@ paths:
           schema:
             type: string
             example: "total,counts,groups"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -274,6 +438,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -298,6 +468,12 @@ paths:
           schema:
             type: string
             example: "1,2,3"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -344,13 +520,58 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,created_at,updated_at,code,name,names,group,word,scope,config,resource,menu,button. Only selected fields are returned, with no always-present metadata. Omitted f preserves the complete detail response. Empty, unknown, duplicate selectors or repeated f parameters return 400. SQL loads only selected columns and hidden dependencies: name needs word/config and localized labels; names needs word and registered-language overrides; config/resource/menu/button need word/config and the resource catalog. Unselected names and mappings are not computed. Selected empty names remain an object and empty resource/menu/button values remain strings."
+          schema:
+            type: string
+            example: "id,word,group,names,scope,config"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,code,name,names,group,word,scope,config,resource,menu,button. Only selected fields are returned, with no always-present metadata. Omitted f preserves the complete detail response. Empty, unknown, duplicate selectors or repeated f parameters return 400. SQL loads only selected columns and hidden dependencies: name needs word/config and localized labels; names needs word and registered-language overrides; config/resource/menu/button need word/config and the resource catalog. Unselected names and mappings are not computed. Selected empty names remain an object and empty resource/menu/button values remain strings."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Action"
+                type: object
+                properties:
+                  button:
+                    type: string
+                  code:
+                    type: string
+                  config:
+                    $ref: "#/components/schemas/Config"
+                  created_at:
+                    type: integer
+                    format: int64
+                  group:
+                    type: string
+                  id:
+                    type: integer
+                    format: int64
+                  menu:
+                    type: string
+                  name:
+                    type: string
+                  names:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  resource:
+                    type: string
+                  scope:
+                    type: string
+                  updated_at:
+                    type: integer
+                    format: int64
+                  word:
+                    type: string
         "400":
           description: "Bad Request; invalid action"
           content:
@@ -359,6 +580,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -388,6 +615,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -527,6 +760,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
@@ -653,6 +892,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -762,6 +1007,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "CSV audit metadata"
@@ -865,6 +1116,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -976,6 +1233,12 @@ paths:
           schema:
             type: string
             example: "metrics,trend,heatmap,accounts,sources"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -1103,6 +1366,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
@@ -1229,6 +1498,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -1338,6 +1613,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "CSV audit metadata"
@@ -1441,6 +1722,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -1552,6 +1839,12 @@ paths:
           schema:
             type: string
             example: "metrics,trend,modules"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -1590,6 +1883,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -1615,6 +1915,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -1628,6 +1934,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -1653,6 +1966,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -1666,6 +1985,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -1716,6 +2042,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -1756,6 +2089,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -1763,8 +2103,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserInfo"
+        "400":
+          description: "Bad Request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -1782,6 +2134,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -1803,6 +2162,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -1816,9 +2181,22 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
+        "400":
+          description: "invalid permission scope header"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
           content:
@@ -2178,6 +2556,13 @@ paths:
       tags: ["Auth"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -2199,6 +2584,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2262,6 +2653,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,key,name,description,enabled,value. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
@@ -2323,6 +2720,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -2341,6 +2744,18 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDictionaryInput"
       responses:
         "200":
           description: "OK"
@@ -2360,6 +2775,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: "idempotency key has already been used"
           content:
@@ -2368,6 +2789,32 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error; internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dictionary/pub/i18n:
+    get:
+      summary: "GET /dictionary/pub/i18n"
+      operationId: getDictionaryPubI18n
+      tags: ["Dictionary"]
+      parameters:
+        - name: f
+          in: query
+          required: false
+          description: "Select default_locale,locales,scopes,operations,group_order,messages,frontend_messages. Omitted f returns default_locale and locales. schema_version is always present. frontend_messages returns only messages.<locale>.frontend, including projected menu labels; messages returns all namespaces. These two selectors are mutually exclusive. Only selected fields are present; selected empty collections remain arrays or objects."
+          schema:
+            type: string
+            example: "default_locale,locales,group_order,frontend_messages"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCatalog"
+        "400":
+          description: "Bad Request"
           content:
             application/json:
               schema:
@@ -2386,6 +2833,12 @@ paths:
           schema:
             type: string
             example: "total,counts"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2401,6 +2854,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2425,6 +2884,12 @@ paths:
           schema:
             type: string
             example: "1,2,3"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2471,6 +2936,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2486,6 +2957,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2515,6 +2992,18 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDictionaryInput"
       responses:
         "200":
           description: "OK"
@@ -2542,6 +3031,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: "dictionary not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Conflict"
           content:
             application/json:
               schema:
@@ -2585,6 +3080,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -2606,6 +3107,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2686,6 +3193,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. Optional id filters one positive message ID before counting and pagination, combined with other filters; inbox visibility and personal deletion/expiry rules still apply. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
@@ -2764,6 +3277,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: "Not Found"
           content:
@@ -2789,6 +3308,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2800,6 +3325,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2836,6 +3367,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2847,6 +3384,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2876,6 +3419,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2891,6 +3440,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2920,6 +3475,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -2942,6 +3503,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -2971,6 +3538,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -2988,6 +3561,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3057,6 +3636,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. Optional id filters one positive message ID before counting and pagination, combined with other filters; inbox visibility and personal deletion/expiry rules still apply. summary is the first 160 Unicode characters of content; it is not included by default. Detail endpoints still return full content."
@@ -3135,6 +3720,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: "Not Found"
           content:
@@ -3161,6 +3752,12 @@ paths:
           schema:
             type: string
             example: "total,counts"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3176,6 +3773,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3200,6 +3803,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3211,6 +3820,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3240,6 +3855,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3255,6 +3876,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3278,6 +3905,13 @@ paths:
       tags: ["Msg"]
       security:
         - bearerAuth: []
+      parameters:
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3293,6 +3927,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3376,6 +4016,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,actions,action_summaries. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. action_summaries returns ordered code,name,group identities without loading resource/menu/button rules; actions retains complete associations."
@@ -3437,6 +4083,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -3455,6 +4107,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -3476,6 +4134,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
           content:
             application/json:
               schema:
@@ -3512,6 +4176,12 @@ paths:
           schema:
             type: string
             example: "total,counts,groups"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3527,6 +4197,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3551,6 +4227,12 @@ paths:
           schema:
             type: string
             example: "1,2,3"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3597,6 +4279,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -3612,6 +4300,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -3641,6 +4335,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -3766,6 +4466,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. role_summary returns only id,name,word (or null), with one batched role query and no permission lookup. role retains the complete role association. Status and metadata use the same request timestamp as the filters to reflect expired temporary locks without writes."
@@ -3847,6 +4553,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -3865,6 +4577,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -3886,6 +4604,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
           content:
             application/json:
               schema:
@@ -3965,6 +4689,12 @@ paths:
           schema:
             type: string
             example: "id"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,action_summaries. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400. action_summaries returns ordered code,name,group identities without loading resource/menu/button rules; actions retains complete associations. The associations actions,users,member_count,member_preview may also be selected. Selections containing only legacy associations (actions,users,member_count,member_preview) preserve existing base metadata; selections containing any listed field, including action_summaries, return exactly the selected fields."
@@ -4039,6 +4769,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: "Internal Server Error"
           content:
@@ -4063,6 +4799,12 @@ paths:
           required: false
           schema:
             type: string
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -4084,6 +4826,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
           content:
             application/json:
               schema:
@@ -4120,6 +4868,12 @@ paths:
           schema:
             type: string
             example: "total,counts,groups"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4135,6 +4889,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -4159,6 +4919,12 @@ paths:
           schema:
             type: string
             example: "1,2,3"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4170,6 +4936,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
           content:
             application/json:
               schema:
@@ -4205,6 +4977,12 @@ paths:
           schema:
             type: string
             example: "actions,member_count,member_preview"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "Base fields always returned: id, created_at, updated_at, name, word, action_codes; lists also return items,t,p,s. f selects actions, users (all members), member_count, member_preview (at most five, ordered by user id). Omitted f preserves legacy actions and users. Unselected associations are omitted and not queried."
@@ -4220,6 +4998,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -4255,6 +5039,12 @@ paths:
           schema:
             type: string
             example: "actions,member_count,member_preview"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -4276,6 +5066,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Forbidden"
           content:
             application/json:
               schema:
@@ -4329,6 +5125,12 @@ paths:
             x-pagination: s
             description: "Values outside 1..10000 return an empty list."
             default: 1
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4344,6 +5146,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -4385,6 +5193,12 @@ paths:
           schema:
             type: string
             example: "total,counts,trend"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4400,6 +5214,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -4424,6 +5244,12 @@ paths:
           schema:
             type: string
             example: "1,2,3"
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4470,6 +5296,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       responses:
         "200":
           description: "OK"
@@ -4485,6 +5317,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "permission denied"
           content:
             application/json:
               schema:
@@ -4514,6 +5352,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: X-Auth-Scope
+          in: header
+          required: false
+          schema:
+            type: string
+            example: "admin"
       requestBody:
         required: true
         content:
@@ -4557,327 +5401,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /whitelist:
-    get:
-      summary: "GET /whitelist"
-      operationId: getWhitelist
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: category
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int64
-        - name: p
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-            x-pagination: p
-            description: "Values outside 1..10000 return an empty list."
-            default: 1
-        - name: resource
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: s
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-            x-pagination: s
-            description: "Values outside 1..10000 return an empty list."
-            default: 1
-        - name: f
-          in: query
-          required: false
-          schema:
-            type: string
-            example: "id"
-      responses:
-        "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,category,resource. Only selected record fields are loaded and returned; items,t,p,s always remain. Omitted f preserves the legacy response. Empty, unknown, duplicate selectors or repeated f parameters return 400."
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items, p, s, t]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        category:
-                          type: integer
-                          format: int32
-                        created_at:
-                          type: integer
-                          format: int64
-                        id:
-                          type: integer
-                          format: int64
-                        resource:
-                          type: string
-                        updated_at:
-                          type: integer
-                          format: int64
-                  p:
-                    type: integer
-                    format: int32
-                  s:
-                    type: integer
-                    format: int32
-                  t:
-                    type: integer
-                    format: int64
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    post:
-      summary: "POST /whitelist"
-      operationId: postWhitelist
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: X-Idempotent
-          in: header
-          required: false
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateWhitelistInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Whitelist"
-        "400":
-          description: "Bad Request; invalid idempotency key"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: "idempotency key has already been used"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error; internal server error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /whitelist/summary:
-    get:
-      summary: "GET /whitelist/summary"
-      operationId: getWhitelistSummary
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: f
-          in: query
-          required: false
-          schema:
-            type: string
-            example: "total,counts"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ManagementSummary"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /whitelist/{id}:
-    delete:
-      summary: "DELETE /whitelist/{id}"
-      operationId: deleteWhitelistId
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "1,2,3"
-      responses:
-        "200":
-          description: "OK"
-        "400":
-          description: "provide 1-100 positive whitelist ids"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: "whitelist entry not found"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    get:
-      summary: "GET /whitelist/{id}"
-      operationId: getWhitelistId
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Whitelist"
-        "400":
-          description: "Bad Request; invalid whitelist entry"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: "whitelist entry not found"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    patch:
-      summary: "PATCH /whitelist/{id}"
-      operationId: patchWhitelistId
-      tags: ["Whitelist"]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateWhitelistInput"
-      responses:
-        "200":
-          description: "OK"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Whitelist"
-        "400":
-          description: "Bad Request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: "Unauthorized"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: "whitelist entry not found"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: "Internal Server Error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -4887,12 +5410,14 @@ components:
   schemas:
     Action:
       type: object
-      required: [button, code, created_at, group, id, menu, name, resource, updated_at, word]
+      required: [button, code, config, created_at, group, id, menu, name, resource, scope, updated_at, word]
       properties:
         button:
           type: string
         code:
           type: string
+        config:
+          $ref: "#/components/schemas/Config"
         created_at:
           type: integer
           format: int64
@@ -4905,9 +5430,24 @@ components:
           type: string
         name:
           type: string
+        names:
+          type: object
+          additionalProperties:
+            type: string
         resource:
           type: string
+        scope:
+          type: string
         updated_at:
+          type: integer
+          format: int64
+        word:
+          type: string
+    ActionReference:
+      type: object
+      required: [id, word]
+      properties:
+        id:
           type: integer
           format: int64
         word:
@@ -4974,34 +5514,101 @@ components:
         y:
           type: integer
           format: int32
+    CatalogResult:
+      type: object
+      properties:
+        defined_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionReference"
+        operations:
+          type: array
+          items:
+            type: string
+        resource_catalog:
+          $ref: "#/components/schemas/ResourceCatalog"
+        scopes:
+          type: array
+          items:
+            type: string
     ChallengeInput:
       type: object
       required: [purpose]
       properties:
         purpose:
           type: string
+    Config:
+      type: object
+      required: [endpoints, feature_keys, ui]
+      properties:
+        bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
+        builtin:
+          type: string
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceEndpoint"
+        feature_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+        operation:
+          type: string
+        resource_key:
+          type: string
+        resource_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+        ui:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceUI"
     CreateActionInput:
       type: object
-      required: [group, name, word]
+      required: [config, word]
       properties:
-        button:
-          type: string
-          example: "system.user.read"
+        config:
+          $ref: "#/components/schemas/Config"
         group:
           type: string
-          example: "User"
-        menu:
-          type: string
-          example: "/system/user"
-        name:
-          type: string
-          example: "User Query"
-        resource:
-          type: string
-          example: "GET|/user|/auth.v1.User/ListUsers"
+        names:
+          type: object
+          additionalProperties:
+            type: string
         word:
           type: string
-          example: "user.read"
+          example: "admin:read:system:user"
+    CreateDictionaryInput:
+      type: object
+      required: [key, name, value]
+      properties:
+        description:
+          type: string
+        enabled:
+          type: boolean
+          nullable: true
+        key:
+          type: string
+          example: "APPLICATION_FEATURE_FLAGS"
+        name:
+          type: string
+          example: "Application Feature Flags"
+        value:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
     CreateInput:
       type: object
       required: [content, expired_at, recipient_ids, scope, title, type]
@@ -5081,17 +5688,6 @@ components:
         username:
           type: string
           example: "operator"
-    CreateWhitelistInput:
-      type: object
-      required: [category, resource]
-      properties:
-        category:
-          type: integer
-          format: int32
-          example: 0
-        resource:
-          type: string
-          example: "GET|/healthz"
     CredentialChallenge:
       type: object
       required: [challenge_id, expired_at, key_id, public_key]
@@ -5135,6 +5731,24 @@ components:
               nullable: true
             - type: number
             - type: boolean
+    EffectiveResult:
+      type: object
+      required: [scope]
+      properties:
+        btn:
+          type: array
+          items:
+            type: string
+        grpc:
+          type: array
+          items:
+            type: string
+        http:
+          type: array
+          items:
+            $ref: "#/components/schemas/HTTPPath"
+        scope:
+          type: string
     EncryptedLoginInput:
       type: object
       required: [challenge_id, credential]
@@ -5251,6 +5865,30 @@ components:
           format: int64
         username:
           type: string
+    Feature:
+      type: object
+      required: [btn, grpc, http]
+      properties:
+        btn:
+          type: array
+          items:
+            type: string
+        grpc:
+          type: array
+          items:
+            type: string
+        http:
+          type: array
+          items:
+            $ref: "#/components/schemas/HTTPPath"
+    HTTPPath:
+      type: object
+      required: [method, path]
+      properties:
+        method:
+          type: string
+        path:
+          type: string
     HeatCell:
       type: object
       required: [count, ended_at, failed, hour, started_at, weekday]
@@ -5273,6 +5911,16 @@ components:
         weekday:
           type: integer
           format: int32
+    Language:
+      type: object
+      required: [enabled, name, tag]
+      properties:
+        enabled:
+          type: boolean
+        name:
+          type: string
+        tag:
+          type: string
     ListActionGroupsResult:
       type: object
       required: [items]
@@ -5391,23 +6039,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
-        p:
-          type: integer
-          format: int32
-        s:
-          type: integer
-          format: int32
-        t:
-          type: integer
-          format: int64
-    ListWhitelistsResult:
-      type: object
-      required: [items, p, s, t]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Whitelist"
         p:
           type: integer
           format: int32
@@ -5546,6 +6177,21 @@ components:
         updated_at:
           type: integer
           format: int64
+    Messages:
+      type: object
+      properties:
+        backend:
+          type: object
+          additionalProperties:
+            type: string
+        frontend:
+          type: object
+          additionalProperties:
+            type: object
+        shared:
+          type: object
+          additionalProperties:
+            type: object
     Page:
       type: object
       required: [items, p, s, t]
@@ -5577,20 +6223,48 @@ components:
           type: string
     Permission:
       type: object
-      required: [btns, menus, resources]
+      required: [menus, navigation, words]
+      properties:
+        menus:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionMenu"
+        navigation:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionNavigation"
+        words:
+          type: array
+          items:
+            type: string
+    PermissionMenu:
+      type: object
+      required: [btns, menu_key, menu_path]
       properties:
         btns:
           type: array
           items:
             type: string
-        menus:
+        menu_key:
+          type: string
+        menu_path:
+          type: string
+        parent_menu_key:
+          type: string
+    PermissionNavigation:
+      type: object
+      required: [resource_key]
+      properties:
+        children:
           type: array
           items:
-            type: string
-        resources:
-          type: array
-          items:
-            type: string
+            $ref: "#/components/schemas/PermissionNavigation"
+        menu_key:
+          type: string
+        menu_path:
+          type: string
+        resource_key:
+          type: string
     PointCaptchaChallenge:
       type: object
       required: [captcha_id, captcha_image, expired_at, height, hint_text, target_count, width]
@@ -5621,6 +6295,35 @@ components:
           $ref: "#/components/schemas/PointCaptchaChallenge"
         verified:
           type: boolean
+    PublicCatalog:
+      type: object
+      required: [schema_version]
+      properties:
+        default_locale:
+          type: string
+        group_order:
+          type: array
+          items:
+            type: string
+        locales:
+          type: array
+          items:
+            $ref: "#/components/schemas/Language"
+        messages:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Messages"
+        operations:
+          type: array
+          items:
+            type: string
+        schema_version:
+          type: integer
+          format: int32
+        scopes:
+          type: array
+          items:
+            type: string
     PublicJWK:
       type: object
       required: [alg, e, kid, kty, n, use]
@@ -5668,6 +6371,133 @@ components:
       required: [refresh_token]
       properties:
         refresh_token:
+          type: string
+    Resource:
+      type: object
+      required: [kind, sort]
+      properties:
+        child_order:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceChildOrder"
+        collection:
+          type: string
+        entries:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ResourceEntry"
+        frontend_visible:
+          type: boolean
+          nullable: true
+        kind:
+          type: string
+        operations:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ResourceOperation"
+        parent:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+        sort:
+          type: integer
+          format: int32
+    ResourceBinding:
+      type: object
+      required: [feature_keys, operation, resource_key]
+      properties:
+        feature_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+        operation:
+          type: string
+        resource_key:
+          type: string
+    ResourceCatalog:
+      type: object
+      required: [buttons, defaults, resources]
+      properties:
+        buttons:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Feature"
+        defaults:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ResourceGrant"
+        resources:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Resource"
+    ResourceChildOrder:
+      type: object
+      required: [key, kind]
+      properties:
+        key:
+          type: string
+        kind:
+          type: string
+    ResourceEndpoint:
+      type: object
+      required: [method, path, protocol]
+      properties:
+        method:
+          type: string
+        path:
+          type: string
+        protocol:
+          type: string
+    ResourceEntry:
+      type: object
+      required: [path]
+      properties:
+        parent_menu_key:
+          type: string
+        path:
+          type: string
+    ResourceGrant:
+      type: object
+      required: [endpoints, ui]
+      properties:
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceEndpoint"
+        ui:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceUI"
+    ResourceOperation:
+      type: object
+      required: [button_keys, entry_keys]
+      properties:
+        button_keys:
+          type: array
+          items:
+            type: string
+        entry_keys:
+          type: array
+          items:
+            type: string
+    ResourceUI:
+      type: object
+      required: [button_keys, menu_key, menu_path, page_entry]
+      properties:
+        button_keys:
+          type: array
+          items:
+            type: string
+        menu_key:
+          type: string
+        menu_path:
+          type: string
+        page_entry:
+          type: boolean
+        parent_menu_key:
           type: string
     Role:
       type: object
@@ -5811,24 +6641,63 @@ components:
     UpdateActionInput:
       type: object
       properties:
-        button:
-          type: string
-          nullable: true
+        config:
+          $ref: "#/components/schemas/Config"
         group:
           type: string
           nullable: true
-        menu:
+        names:
+          type: object
+          additionalProperties:
+            type: string
+        word:
+          type: string
+          nullable: true
+    UpdateDictionaryInput:
+      type: object
+      properties:
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+          nullable: true
+        expected_value:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
+        feature_renames:
+          type: object
+          additionalProperties:
+            type: string
+        group_renames:
+          type: object
+          additionalProperties:
+            type: string
+        key:
           type: string
           nullable: true
         name:
           type: string
           nullable: true
-        resource:
-          type: string
-          nullable: true
-        word:
-          type: string
-          nullable: true
+        resource_renames:
+          type: object
+          additionalProperties:
+            type: string
+        value:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
     UpdateRoleInput:
       type: object
       properties:
@@ -5905,16 +6774,6 @@ components:
           nullable: true
           format: int32
         username:
-          type: string
-          nullable: true
-    UpdateWhitelistInput:
-      type: object
-      properties:
-        category:
-          type: integer
-          nullable: true
-          format: int32
-        resource:
           type: string
           nullable: true
     User:
@@ -6012,7 +6871,7 @@ components:
           type: string
     UserInfo:
       type: object
-      required: [code, id, permission, username]
+      required: [code, id, permission, scope, username]
       properties:
         code:
           type: string
@@ -6023,6 +6882,8 @@ components:
           $ref: "#/components/schemas/Permission"
         role:
           $ref: "#/components/schemas/UserRole"
+        scope:
+          type: string
         username:
           type: string
     UserRole:
@@ -6075,21 +6936,3 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CaptchaPoint"
-    Whitelist:
-      type: object
-      required: [category, created_at, id, resource, updated_at]
-      properties:
-        category:
-          type: integer
-          format: int32
-        created_at:
-          type: integer
-          format: int64
-        id:
-          type: integer
-          format: int64
-        resource:
-          type: string
-        updated_at:
-          type: integer
-          format: int64
