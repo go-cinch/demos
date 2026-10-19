@@ -19,8 +19,8 @@ on:
           - art-eleplus-vue3
           - shadcn-react
           - tail-react
-          - tdesign-vue3-mobile
-          - ant-design-mobile
+          - tdesign-vue3-h5
+          - ant-design-h5
 
 permissions:
   contents: read
@@ -74,12 +74,12 @@ jobs:
                   "dockerfile": "tail-react/Dockerfile",
               },
               {
-                  "name": "tdesign-vue3-mobile",
-                  "dockerfile": "tdesign-vue3-mobile/Dockerfile",
+                  "name": "tdesign-vue3-h5",
+                  "dockerfile": "tdesign-vue3-h5/Dockerfile",
               },
               {
-                  "name": "ant-design-mobile",
-                  "dockerfile": "ant-design-mobile/Dockerfile",
+                  "name": "ant-design-h5",
+                  "dockerfile": "ant-design-h5/Dockerfile",
               },
           ]
           with open(os.environ["GITHUB_EVENT_PATH"]) as source:
@@ -310,11 +310,11 @@ jobs:
               "tail-react": Path(
                   "go-app/tail-react/overlays/single/kustomization.yaml"
               ),
-              "tdesign-vue3-mobile": Path(
-                  "go-app/tdesign-vue3-mobile/overlays/single/kustomization.yaml"
+              "tdesign-vue3-h5": Path(
+                  "go-app/tdesign-vue3-h5/overlays/single/kustomization.yaml"
               ),
-              "ant-design-mobile": Path(
-                  "go-app/ant-design-mobile/overlays/single/kustomization.yaml"
+              "ant-design-h5": Path(
+                  "go-app/ant-design-h5/overlays/single/kustomization.yaml"
               ),
           }
           digest_files = sorted(Path(os.environ["DIGEST_DIR"]).glob("*.digest"))
