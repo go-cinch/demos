@@ -2,7 +2,7 @@
 -- Final action definitions. Codes remain stable assignment identities; words and
 -- multilingual action keys identify each scope:operation:module:resource.
 INSERT INTO t_action (id, action_group, code, word, config) VALUES
-    (1, 'admin:system:high-risk', '93747EHX', 'admin:all:system:all', '{
+    (1, 'admin:system:high-risk', 'AY32HK37', 'admin:all:system:all', '{
     "ui": [],
     "bindings": [
         {
@@ -15,7 +15,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
     "feature_keys": null,
     "permission_scope": "*"
 }'::JSONB),
-    (2, 'admin:system:default', 'SV3LH27F', 'admin:default:system:default', '{
+    (2, 'admin:system:default', '5JKGRJMC', 'admin:default:system:default', '{
     "ui": [
         {
             "menu_key": "admin:menu:account:profile",
@@ -123,7 +123,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         "admin:dashboard:overview"
     ]
 }'::JSONB),
-    (3, 'admin:dashboard:overview', 'BVXDD77E', 'admin:read:dashboard:overview', '{
+    (3, 'admin:dashboard:overview', 'CB4HYBEJ', 'admin:read:dashboard:overview', '{
     "ui": [
         {
             "menu_key": "admin:menu:dashboard:overview",
@@ -142,7 +142,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
     ],
     "endpoints": []
 }'::JSONB),
-    (4, 'admin:system:user', 'FR5555S6', 'admin:read:system:user', '{
+    (4, 'admin:system:user', '9RYW26YJ', 'admin:read:system:user', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user",
@@ -188,7 +188,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
     ],
     "feature_keys": null
 }'::JSONB),
-    (5, 'admin:system:user', '686GAV6L', 'admin:create:system:user', '{
+    (5, 'admin:system:user', 'VTY6EAVN', 'admin:create:system:user', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user",
@@ -217,7 +217,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (6, 'admin:system:user', 'QECC9KGF', 'admin:update:system:user', '{
+    (6, 'admin:system:user', '77G683AH', 'admin:update:system:user', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user",
@@ -254,7 +254,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (7, 'admin:system:user', 'YKF387VK', 'admin:delete:system:user', '{
+    (7, 'admin:system:user', 'EHBP9LD4', 'admin:delete:system:user', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user",
@@ -285,7 +285,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (8, 'admin:system:user-group', 'DCWDKY4C', 'admin:read:system:user-group', '{
+    (8, 'admin:system:user-group', 'XDSWTHAA', 'admin:read:system:user-group', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user-group",
@@ -337,7 +337,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (9, 'admin:system:user-group', '8E7LEDSD', 'admin:create:system:user-group', '{
+    (9, 'admin:system:user-group', 'NH2GBG9R', 'admin:create:system:user-group', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user-group",
@@ -366,7 +366,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (10, 'admin:system:user-group', 'TK2GA8PK', 'admin:update:system:user-group', '{
+    (10, 'admin:system:user-group', 'HK4ECPGT', 'admin:update:system:user-group', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user-group",
@@ -399,7 +399,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (11, 'admin:system:user-group', 'EVHB868B', 'admin:delete:system:user-group', '{
+    (11, 'admin:system:user-group', 'P2GGF7HM', 'admin:delete:system:user-group', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:user-group",
@@ -430,7 +430,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (12, 'admin:system:role', 'QJEL5YKV', 'admin:read:system:role', '{
+    (12, 'admin:system:role', 'P5C8EY3J', 'admin:read:system:role', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",
@@ -475,7 +475,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (13, 'admin:system:role', 'AT9Q6TL2', 'admin:create:system:role', '{
+    (13, 'admin:system:role', '7Y2M6JT9', 'admin:create:system:role', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",
@@ -504,7 +504,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (14, 'admin:system:role', '8XMHTS4V', 'admin:update:system:role', '{
+    (14, 'admin:system:role', 'G9HC36QN', 'admin:update:system:role', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",
@@ -533,7 +533,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (15, 'admin:system:role', '8C2CY8VR', 'admin:delete:system:role', '{
+    (15, 'admin:system:role', '8HM75GSY', 'admin:delete:system:role', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",
@@ -564,7 +564,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (16, 'admin:system:action', '8AYHF4DS', 'admin:read:system:action', '{
+    (16, 'admin:system:action', 'SGGWLXEV', 'admin:read:system:action', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:action",
@@ -619,7 +619,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (17, 'admin:system:action', 'C3AS6HK7', 'admin:create:system:action', '{
+    (17, 'admin:system:action', 'W3BVFF2D', 'admin:create:system:action', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:action",
@@ -660,7 +660,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (18, 'admin:system:action', 'B94KYJWP', 'admin:update:system:action', '{
+    (18, 'admin:system:action', '78K9QWCP', 'admin:update:system:action', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:action",
@@ -701,7 +701,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (19, 'admin:system:action', '9XX58LSR', 'admin:delete:system:action', '{
+    (19, 'admin:system:action', 'H73QA8PY', 'admin:delete:system:action', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:action",
@@ -744,7 +744,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (24, 'admin:system:dictionary', 'F2P4BK5R', 'admin:read:system:dictionary', '{
+    (24, 'admin:system:dictionary', 'Q8P69K6D', 'admin:read:system:dictionary', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:dictionary",
@@ -789,7 +789,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (25, 'admin:system:dictionary', 'PD58JJLA', 'admin:create:system:dictionary', '{
+    (25, 'admin:system:dictionary', '89SL8RER', 'admin:create:system:dictionary', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:dictionary",
@@ -818,7 +818,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (26, 'admin:system:dictionary', 'JW9SL7DE', 'admin:update:system:dictionary', '{
+    (26, 'admin:system:dictionary', '797KBVC2', 'admin:update:system:dictionary', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:dictionary",
@@ -847,7 +847,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (27, 'admin:system:dictionary', 'RFBP8W8B', 'admin:delete:system:dictionary', '{
+    (27, 'admin:system:dictionary', 'M692J9Y8', 'admin:delete:system:dictionary', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:dictionary",
@@ -878,7 +878,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (28, 'admin:system:msg', 'JKEM8DBN', 'admin:read:system:msg', '{
+    (28, 'admin:system:msg', 'GE6R7MTV', 'admin:read:system:msg', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:msg",
@@ -923,7 +923,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (29, 'admin:system:msg', 'VTYYA9BB', 'admin:create:system:msg', '{
+    (29, 'admin:system:msg', 'HPXHQGS9', 'admin:create:system:msg', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:msg",
@@ -957,7 +957,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (30, 'admin:system:msg', 'XBJ8T7SG', 'admin:delete:system:msg', '{
+    (30, 'admin:system:msg', 'DP9DVALL', 'admin:delete:system:msg', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:msg",
@@ -988,7 +988,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (31, 'admin:audit:login', '2C4AT7QV', 'admin:read:audit:login', '{
+    (31, 'admin:audit:login', 'TJM6R659', 'admin:read:audit:login', '{
     "ui": [
         {
             "menu_key": "admin:menu:audit:login",
@@ -1045,7 +1045,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (33, 'admin:audit:operation', '5TR3NN5D', 'admin:read:audit:operation', '{
+    (33, 'admin:audit:operation', 'QDP9DXHB', 'admin:read:audit:operation', '{
     "ui": [
         {
             "menu_key": "admin:menu:audit:operation",
@@ -1102,7 +1102,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
         }
     ]
 }'::JSONB),
-    (35, 'admin:dashboard:workspace', 'RBBYJQWQ', 'admin:read:dashboard:workspace', '{
+    (35, 'admin:dashboard:workspace', 'KQB3MCFA', 'admin:read:dashboard:workspace', '{
     "ui": [
         {
             "menu_key": "admin:menu:dashboard:workspace",
@@ -1121,7 +1121,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
     ],
     "endpoints": []
 }'::JSONB),
-    (36, 'admin:system:high-risk', 'PLK4EXWV', 'admin:grant:system:permission-admin', '{
+    (36, 'admin:system:high-risk', '8ERXG2K4', 'admin:grant:system:permission-admin', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",
@@ -1487,7 +1487,7 @@ INSERT INTO t_action (id, action_group, code, word, config) VALUES
     ],
     "feature_keys": null
 }'::JSONB),
-    (37, 'admin:system:developer', 'MLRB79NH', 'admin:update:system:developer', '{
+    (37, 'admin:system:developer', 'GS2SD7HS', 'admin:update:system:developer', '{
     "ui": [
         {
             "menu_key": "admin:menu:system:role",

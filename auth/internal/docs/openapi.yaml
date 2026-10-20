@@ -4814,6 +4814,11 @@ paths:
                                 nullable: true
                               - type: number
                               - type: boolean
+                        permission_sources:
+                          type: array
+                          nullable: true
+                          items:
+                            $ref: "#/components/schemas/PermissionSource"
                         role:
                           anyOf:
                             - $ref: "#/components/schemas/RoleView"
@@ -5608,7 +5613,7 @@ paths:
         - name: f
           in: query
           required: false
-          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary,permission_sources. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400. permission_sources is opt-in and adds one statement snapshot of direct, role and user-group assignments, including owner kind/id/name and action_codes/actions (code,word,config without technical ui/endpoints projections). Empty owners are retained, overlapping codes keep all owners, and no user-list or write contract changes."
           schema:
             type: string
             example: "id"
@@ -5620,7 +5625,7 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary,permission_sources. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400. permission_sources is opt-in and adds one statement snapshot of direct, role and user-group assignments, including owner kind/id/name and action_codes/actions (code,word,config without technical ui/endpoints projections). Empty owners are retained, overlapping codes keep all owners, and no user-list or write contract changes."
           content:
             application/json:
               schema:
@@ -5660,6 +5665,11 @@ paths:
                           nullable: true
                         - type: number
                         - type: boolean
+                  permission_sources:
+                    type: array
+                    nullable: true
+                    items:
+                      $ref: "#/components/schemas/PermissionSource"
                   role:
                     anyOf:
                       - $ref: "#/components/schemas/RoleView"
@@ -6584,6 +6594,16 @@ components:
           type: array
           items:
             type: string
+    PermissionAction:
+      type: object
+      required: [code, config, word]
+      properties:
+        code:
+          type: string
+        config:
+          $ref: "#/components/schemas/Config"
+        word:
+          type: string
     PermissionMenu:
       type: object
       required: [btns, menu_key, menu_path]
@@ -6611,6 +6631,25 @@ components:
         menu_path:
           type: string
         resource_key:
+          type: string
+    PermissionSource:
+      type: object
+      required: [action_codes, actions, id, kind, name]
+      properties:
+        action_codes:
+          type: array
+          items:
+            type: string
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionAction"
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+        name:
           type: string
     PointCaptchaChallenge:
       type: object
@@ -7172,6 +7211,11 @@ components:
                 nullable: true
               - type: number
               - type: boolean
+        permission_sources:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/PermissionSource"
         role:
           anyOf:
             - $ref: "#/components/schemas/RoleView"
