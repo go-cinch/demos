@@ -12,7 +12,6 @@ import (
 	"auth/internal/common/pagination"
 	"auth/internal/infra/db"
 	actionmodule "auth/internal/modules/action"
-	authmodule "auth/internal/modules/auth"
 	rolemodule "auth/internal/modules/role"
 	usermodule "auth/internal/modules/user"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -38,9 +37,9 @@ func newTestModule(t *testing.T) (*Module, sqlmock.Sqlmock) {
 		t.Fatal(err)
 	}
 	store := &db.Store{DB: database}
-	actions := actionmodule.New(store, limits, false, localization.New())
-	roles := rolemodule.New(store, limits, actions, false)
-	users := usermodule.New(store, limits, nil, nil, actions, roles, authmodule.Switches{PasswordResetRequired: true})
+	actions := actionmodule.New(store, limits, localization.New())
+	roles := rolemodule.New(store, limits, actions)
+	users := usermodule.New(store, limits, nil, nil, actions, roles)
 	return New(store, limits, actions, users), mock
 }
 

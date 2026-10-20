@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/common/apperror"
 	"auth/internal/common/authn"
 	"auth/internal/common/i18n"
 	"auth/internal/common/pagination"
@@ -41,7 +40,7 @@ func newTestModule(t *testing.T) (*Module, sqlmock.Sqlmock) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module := New(&db.Store{DB: database}, limits, false, localizer)
+	module := New(&db.Store{DB: database}, limits, localizer)
 	module.SetDefinitionCatalog(testDefinitionCatalog{localizer})
 	return module, mock
 }
@@ -104,14 +103,6 @@ func TestActionCRUD(t *testing.T) {
 	if _, err := m.Update(ctx, 1, UpdateActionInput{Word: &invalidWord}); !errors.Is(err, ErrInvalid) {
 		t.Fatal(err)
 	}
-	m.protectSuper = true
-	if _, err := m.Update(ctx, AllPermissionsActionID, UpdateActionInput{Group: &group}); !errors.Is(err, apperror.FeatureDisabled) {
-		t.Fatal(err)
-	}
-	if err := m.Delete(ctx, AllPermissionsActionID, 2); !errors.Is(err, apperror.FeatureDisabled) {
-		t.Fatal(err)
-	}
-	m.protectSuper = false
 	mock.ExpectBegin()
 	expectActionGet(mock, 1, "ABCDEFGH", "Demo")
 	expectRegisteredActionCatalog(t, mock, localizer)

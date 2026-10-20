@@ -71,11 +71,8 @@ type AuthSliderCaptchaConfig struct {
 }
 
 type AuthSwitchesConfig struct {
-	EnableE2ETest              bool   `koanf:"enableE2ETest"`
-	EnableE2ETestFile          string `koanf:"enableE2ETestFile"`
-	PasswordResetRequired      bool   `koanf:"passwordResetRequired"`
-	ProtectCaptchaDictionaries bool   `koanf:"protectCaptchaDictionaries"`
-	ProtectSuper               bool   `koanf:"protectSuper"`
+	EnableE2ETest     bool   `koanf:"enableE2ETest"`
+	EnableE2ETestFile string `koanf:"enableE2ETestFile"`
 }
 
 type DatabaseConfig struct {
