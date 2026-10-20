@@ -9,43 +9,56 @@ import { useFormRuntime } from '../src/form-runtime';
 
 const wrappers: ReturnType<typeof mount>[] = [];
 
+type AsyncValidator = (input: { value: any }) => Promise<string | undefined>;
+type MountedFieldOptions = {
+  asyncDebounceMs?: number;
+  validators: {
+    onBlurAsync?: AsyncValidator;
+    onChangeAsync?: AsyncValidator;
+    onSubmitAsync?: AsyncValidator;
+  };
+};
+
 function mountRuntime(
   defaultValues: Record<string, any>,
-  validator?: (input: { value: any }) => Promise<string | undefined>,
+  validator?: AsyncValidator,
+  fields?: Record<string, MountedFieldOptions>,
 ) {
   let form: FormActions | undefined;
   const RuntimeHarness = defineComponent({
     setup() {
       const runtime = useFormRuntime(defaultValues);
       form = runtime;
-      return () => {
-        if (!validator) {
-          return h('div');
-        }
-        return h(
-          runtime.fieldComponent,
-          {
-            name: 'name',
-            validators: {
-              onSubmitAsync: validator,
-            },
-          },
-          {
-            default: ({ field }: Record<string, any>) =>
-              h('input', {
-                name: 'name',
-                onBlur: field.handleBlur,
-                onInput: (event: Event) => {
-                  const target = event.target;
-                  if (target instanceof HTMLInputElement) {
-                    field.handleChange(target.value);
-                  }
-                },
-                value: field.state.value,
-              }),
-          },
+      const mountedFields =
+        fields ??
+        (validator
+          ? { name: { validators: { onSubmitAsync: validator } } }
+          : {});
+      return () =>
+        h(
+          'div',
+          Object.entries(mountedFields).map(([name, options]) =>
+            h(
+              runtime.fieldComponent,
+              { name, ...options },
+              {
+                default: ({ field }: Record<string, any>) =>
+                  h('input', {
+                    name,
+                    'data-validating': String(field.state.meta.isValidating),
+                    onBlur: field.handleBlur,
+                    onInput: (event: Event) => {
+                      const target = event.target;
+                      if (target instanceof HTMLInputElement) {
+                        field.handleChange(target.value);
+                      }
+                    },
+                    value: field.state.value,
+                  }),
+              },
+            ),
+          ),
         );
-      };
     },
   });
   const wrapper = mount(RuntimeHarness);
@@ -57,6 +70,7 @@ afterEach(() => {
   for (const wrapper of wrappers.splice(0)) {
     wrapper.unmount();
   }
+  vi.useRealTimers();
 });
 
 describe('form runtime', () => {
@@ -218,6 +232,82 @@ describe('form runtime', () => {
     expect(form.errors).toEqual({});
     expect(form.meta.validating).toBe(false);
   });
+
+  for (const trigger of ['blur', 'change'] as const) {
+    it(`cancels queued ${trigger} validation only for the cleared field and still validates a later submit`, async () => {
+      vi.useFakeTimers();
+      const nameValidator = vi.fn(async ({ value }: { value: string }) =>
+        value ? undefined : 'Name is required',
+      );
+      const emailValidator = vi.fn(async ({ value }: { value: string }) =>
+        value.includes('@') ? undefined : 'Email is invalid',
+      );
+      const validationKey =
+        trigger === 'blur' ? 'onBlurAsync' : 'onChangeAsync';
+      const { form, wrapper } = mountRuntime(
+        { email: '', name: 'initial' },
+        undefined,
+        {
+          email: {
+            asyncDebounceMs: 40,
+            validators: {
+              [validationKey]: emailValidator,
+              onSubmitAsync: emailValidator,
+            },
+          },
+          name: {
+            asyncDebounceMs: 40,
+            validators: {
+              [validationKey]: nameValidator,
+              onSubmitAsync: nameValidator,
+            },
+          },
+        },
+      );
+      expect(form).toBeDefined();
+      if (!form) return;
+      const fieldValidation = () =>
+        ['name', 'email'].map((name) =>
+          wrapper.get(`input[name="${name}"]`).attributes('data-validating'),
+        );
+
+      for (const name of ['name', 'email']) {
+        const input = wrapper.get(`input[name="${name}"]`);
+        if (trigger === 'blur') await input.trigger('blur');
+        else await input.setValue('changed');
+      }
+      // Enter TanStack's async scheduling path without executing the delayed
+      // validators. Clearing only an already-started promise misses this race.
+      await vi.advanceTimersByTimeAsync(0);
+      await nextTick();
+      expect(nameValidator).not.toHaveBeenCalled();
+      expect(emailValidator).not.toHaveBeenCalled();
+      expect(fieldValidation()).toEqual(['true', 'true']);
+      await form.setFieldValue('name', '');
+      form.clearValidation('name');
+      await vi.advanceTimersByTimeAsync(40);
+      await nextTick();
+
+      expect(nameValidator).not.toHaveBeenCalled();
+      expect(emailValidator).toHaveBeenCalledOnce();
+      expect(form.errors).toEqual({ email: 'Email is invalid' });
+      expect(fieldValidation()).toEqual(['false', 'false']);
+      expect(form.meta.validating).toBe(false);
+
+      const onSubmit = vi.fn();
+      const submitted = form.handleSubmit(onSubmit)();
+      await vi.runAllTimersAsync();
+      await submitted;
+      await nextTick();
+      expect(form.errors).toEqual({
+        email: 'Email is invalid',
+        name: 'Name is required',
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(fieldValidation()).toEqual(['false', 'false']);
+      expect(form.meta.validating).toBe(false);
+    });
+  }
 
   it('clears only the requested field validation state', async () => {
     const { form } = mountRuntime({ email: '', name: '' });

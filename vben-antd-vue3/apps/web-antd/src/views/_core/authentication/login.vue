@@ -34,6 +34,14 @@ interface SliderCaptchaExpose {
 
 let applyingRegistrationLogin = false;
 
+async function clearPassword() {
+  const formApi = loginFormRef.value?.getFormApi();
+  if (!formApi) return;
+  await formApi.setFieldValue('password', '');
+  // Account changes invalidate a pending blur validation of the old password.
+  await formApi.clearValidation('password');
+}
+
 onActivated(async () => {
   const credentials = consumeRegistrationLogin();
   const formApi = loginFormRef.value?.getFormApi();
@@ -54,8 +62,7 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: markRaw(LoginAccountInput),
       componentProps: {
-        onSelect: () =>
-          loginFormRef.value?.getFormApi().setFieldValue('password', ''),
+        onSelect: clearPassword,
         placeholder: $t('authentication.usernameTip'),
       },
       fieldName: 'username',
@@ -144,7 +151,7 @@ async function handleValuesChange(
   if (!changedFields.includes('username')) return;
   authStore.resetLoginVerification();
   if (!applyingRegistrationLogin) {
-    await loginFormRef.value?.getFormApi().setFieldValue('password', '');
+    await clearPassword();
   }
   await resetSliderCaptcha();
   const username = typeof values.username === 'string' ? values.username : '';
