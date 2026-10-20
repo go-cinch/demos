@@ -10,7 +10,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The generated `.env.development.local` preserves the selected port and `AUTH_PROXY_TARGET=http://127.0.0.1:8081` on regeneration. The local assignment is **5671**, following the existing assignments 5666–5670. The native Vite proxy removes `/api/auth` once: `/api/auth/auth/pub/login` reaches backend `/auth/pub/login`, while browser `/auth/login` remains an application route. Follow `chi-auth-layout/LOCAL_DEV_WORKFLOW.md` for backend setup.
+The generated `.env.development.local` preserves the selected port and `AUTH_PROXY_TARGET=http://127.0.0.1:8081` on regeneration. The local assignment is **5671**, following the existing assignments 5666–5670. The native Vite proxy removes `/api/auth` once: `/api/auth/pub/login` reaches backend `/pub/login`, while browser `/auth/login` remains an application route. Follow `chi-auth-layout/LOCAL_DEV_WORKFLOW.md` for backend setup.
 
 The maintained template is `pc-admin-fe-layout/{{ .Project }}/ant-design-h5`; the generated runnable output is `demos/ant-design-h5`. Ant Design Mobile is an upstream component library rather than a ready-made admin application, so this template uses its published components in a standalone Vite application. Its MIT license is preserved in `LICENSE_ANT_DESIGN_MOBILE`; see `THIRD_PARTY_NOTICES.md`.
 
@@ -50,3 +50,7 @@ The headless central E2E suite exercises the visible UI on the loopback service,
 ## Usability revision
 
 See `UI_FIXES.md` for the disposition of all 35 audit findings and the validation scope. `IMPLEMENTATION.md` describes the original delivery; its historical full-suite result is not a test result for the current revision.
+
+## Current Auth compatibility
+
+Auth calls use service-internal paths (`/pub/login`, `/pub/refresh`, `/info`) under `VITE_GLOB_AUTH_API_URL` (default `/api/auth`). Requests explicitly send `X-Auth-Scope: admin`: this minimal H5 integration uses the existing admin resource catalog. `/info` selects identity, scope and permission fields; navigation reads `menus[].menu_path` and controls read that menu's scoped `btns`. Frontend `/auth/*` routes remain independent. The current PC permission/catalog editor is not ported as part of this compatibility update.

@@ -43,7 +43,13 @@ export interface AuthInfo {
   username: string;
   code: string;
   role?: { id: number; name: string; word: string };
-  permission: { menus: string[]; btns: string[] };
+  scope: string;
+  permission: {
+    words: string[];
+    permission_scope?: '*';
+    permission_scopes?: string[];
+    menus: { menu_key: string; menu_path: string; btns: string[] }[];
+  };
 }
 export interface SessionResult {
   access_token: string;

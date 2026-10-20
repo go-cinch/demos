@@ -11,6 +11,8 @@ import type {
   PointCaptcha,
 } from './types';
 
+// The existing H5 management pages use the backend's admin resource catalog.
+export const AUTH_SCOPE = 'admin';
 const base = (import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth').replace(/\/$/, '');
 const refreshKey = `cinch-garnet-session:${location.hostname}`;
 let sessionGeneration = 0;
@@ -64,7 +66,7 @@ let refreshing: Promise<void> | null = null;
 export async function refreshSession() {
   if (!refreshing) {
     const generation = sessionGeneration;
-    refreshing = request<SessionResult>('/auth/pub/refresh', {
+    refreshing = request<SessionResult>('/pub/refresh', {
       method: 'POST',
       body: { refresh_token: session.refreshToken },
       public: true,
@@ -101,6 +103,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       signal: options.signal,
       headers: {
         'Accept-Language': locale.value,
+        'X-Auth-Scope': AUTH_SCOPE,
         ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(!options.public && session.accessToken
           ? { Authorization: `Bearer ${session.accessToken}` }
@@ -133,7 +136,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       window.dispatchEvent(new Event('cinch-session-ended'));
       throw error;
     }
-    if (session.resetRequired && !path.startsWith('/auth/')) {
+    if (
+      session.resetRequired &&
+      !['/challenge', '/reset/pwd', '/captcha', '/captcha/verify'].includes(path.split('?')[0]!)
+    ) {
       window.dispatchEvent(new Event('cinch-reset-required'));
       throw new ApiError(403, { error_code: 'AUTH_PASSWORD_RESET_REQUIRED' });
     }
@@ -164,15 +170,17 @@ export async function initializeSession() {
 }
 export async function loadUser(): Promise<void> {
   const generation = sessionGeneration;
-  const user = await request<AuthInfo>('/auth/info');
-  if (generation === sessionGeneration) session.user = user;
-  else if (session.accessToken) await loadUser();
+  const user = await request<AuthInfo>('/info?f=id,username,code,role,scope,permission');
+  if (generation === sessionGeneration) {
+    if (user.scope !== AUTH_SCOPE) throw new Error(t('noAccessHint'));
+    session.user = user;
+  } else if (session.accessToken) await loadUser();
 }
 export async function logout() {
   try {
     if (refreshing) await refreshing.catch(() => undefined);
     if (session.refreshToken)
-      await request('/auth/pub/logout', {
+      await request('/pub/logout', {
         method: 'POST',
         body: { refresh_token: session.refreshToken },
         public: true,
@@ -194,7 +202,7 @@ export async function encryptedCredential(
 ) {
   const authenticated = purpose === 'password_change' || purpose === 'password_reset';
   const challenge = await request<{ challenge_id: string; key_id: string; public_key: JWK }>(
-    authenticated ? '/auth/challenge' : '/auth/pub/challenge',
+    authenticated ? '/challenge' : '/pub/challenge',
     { method: 'POST', body: { purpose }, public: !authenticated },
   );
   const key = await importJWK(challenge.public_key, 'RSA-OAEP-256');
@@ -215,10 +223,10 @@ export async function submitCredentials(
   payload: Record<string, unknown>,
 ) {
   const paths = {
-    login: '/auth/pub/login',
-    register: '/auth/pub/register',
-    password_change: '/auth/change/pwd',
-    password_reset: '/auth/reset/pwd',
+    login: '/pub/login',
+    register: '/pub/register',
+    password_change: '/change/pwd',
+    password_reset: '/reset/pwd',
   };
   return request<SessionResult>(paths[purpose], {
     method: purpose.startsWith('password') ? 'PATCH' : 'POST',
@@ -256,21 +264,24 @@ export function deleteResources(resource: ResourceKind, ids: number[]) {
   return request(`/${resource}/${ids.join(',')}`, { method: 'DELETE' });
 }
 export function canMenu(path: string) {
-  if (path === '/dashboard/workspace') return !!session.user?.permission.menus.includes('*');
+  if (path === '/dashboard/overview' || path === '/profile') return true;
   return (
-    path === '/dashboard/overview' ||
-    path === '/profile' ||
-    path === '/msg/inbox' ||
-    !!session.user?.permission.menus.some(
-      (value) =>
-        value === '*' || value === (path === '/system/user-group' ? '/system/group' : path),
+    session.user?.scope === AUTH_SCOPE &&
+    !!session.user.permission?.menus?.some(
+      (menu) => menu.menu_key?.startsWith(`${AUTH_SCOPE}:menu:`) && menu.menu_path === path,
     )
   );
 }
-export function can(resource: ResourceKind, operation: string) {
-  return !!session.user?.permission.btns.some(
-    (value) =>
-      value === '*' ||
-      value === `system.${resource === 'user-group' ? 'user.group' : resource}.${operation}`,
+export function canButton(path: string, control: string) {
+  if (session.user?.scope !== AUTH_SCOPE) return false;
+  return !!session.user.permission?.menus?.some(
+    (menu) =>
+      menu.menu_key?.startsWith(`${AUTH_SCOPE}:menu:`) &&
+      menu.menu_path === path &&
+      menu.btns?.includes(`${menu.menu_key.replace(':menu:', ':btn:')}:${control}`),
   );
+}
+export function can(resource: ResourceKind, operation: string) {
+  const control = { read: 'query', update: 'edit', create: 'create', delete: 'delete' }[operation];
+  return !!control && canButton(`/system/${resource}`, control);
 }

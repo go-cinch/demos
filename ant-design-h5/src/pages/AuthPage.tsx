@@ -90,7 +90,7 @@ export default function AuthPage() {
     try {
       if (mode === 'register') {
         const result = await request<{ available: boolean }>(
-          `/auth/pub/register/username?username=${encodeURIComponent(value)}`,
+          `/pub/register/username?username=${encodeURIComponent(value)}`,
           { public: true, signal: controller.signal },
         );
         if (current === verification.current)
@@ -100,7 +100,7 @@ export default function AuthPage() {
           }));
       } else {
         const result = await request<{ captcha?: Challenge }>(
-          `/auth/pub/login/verification?username=${encodeURIComponent(value)}`,
+          `/pub/login/verification?username=${encodeURIComponent(value)}`,
           { public: true, signal: controller.signal },
         );
         if (current === verification.current) setCaptcha(result.captcha);
@@ -141,7 +141,7 @@ export default function AuthPage() {
     try {
       if (mode === 'register') {
         const available = await request<{ available: boolean }>(
-          `/auth/pub/register/username?username=${encodeURIComponent(trimmedUsername)}`,
+          `/pub/register/username?username=${encodeURIComponent(trimmedUsername)}`,
           { public: true },
         );
         if (!available.available) {

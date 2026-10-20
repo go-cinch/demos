@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button, Tag, Checkbox } from "antd-mobile";
-import { session } from "../lib/api";
+import { canButton } from "../lib/api";
 import { useMessages } from "../lib/use-messages";
 import { dateTime, parseDateTime } from "../lib/format";
 import { t } from "../locales";
@@ -29,9 +29,7 @@ function MsgManagementPage() {
   const composeForm = useRef<HTMLFormElement>(null);
   const sent = useLocation().pathname === "/system/msg";
   const permitted = (action: string) =>
-    session.user?.permission.btns.some(
-      (code) => code === "*" || code === `system.msg.${action}`,
-    ) ?? false;
+    canButton("/system/msg", action === "read" ? "query" : action);
   const readable = !sent || permitted("read"),
     deletable = !sent || permitted("delete");
   const m = useMessages(sent, readable, tr, (value) =>
