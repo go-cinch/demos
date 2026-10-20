@@ -12,8 +12,9 @@ import { $t } from '#/locales';
 
 import ActionResourceSelector from './action-resource-selector.vue';
 import { actionResourceBindings, menuResourceKeys, permissionOperations, resolveResourceBindings, resolveResourceConfig, resolveResourceSelectionConfig, resourceBreadcrumb } from './resource-catalog';
+import { orderPermissionResourceKeys } from './resource-references';
 
-const props = defineProps<{ catalog: PermissionCatalog; scope: string; config?: ActionConfig; disabled?: boolean; readOnly?: boolean; assignment?: boolean; defaultMode?: boolean; recordId?: number }>();
+const props = defineProps<{ catalog: PermissionCatalog; scope: string; config?: ActionConfig; disabled?: boolean; readOnly?: boolean; assignment?: boolean; defaultMode?: boolean; recordId?: number; effectiveView?: boolean }>();
 const emit = defineEmits<{ 'update:scope': [string]; 'update:config': [ActionConfig] }>();
 const catalog = computed(() => props.catalog);
 const scope = computed(() => props.scope);
@@ -37,7 +38,7 @@ const effectResources = computed(() => {
     operation: 'read',
     feature_keys: resourceCatalog.resources[resource_key]?.operations?.read?.button_keys.filter((key) => props.config?.feature_keys == null || props.config.feature_keys.includes(key)) ?? [],
   })) : bindings.value;
-  return [...new Set(selections.map((binding) => binding.resource_key))].map((key) => {
+  return orderPermissionResourceKeys(resourceCatalog, scope.value, selections.map((binding) => binding.resource_key)).map((key) => {
     const operations = ['*', ...permissionOperations].flatMap((operation) => {
       const binding = selections.find((item) => item.resource_key === key && item.operation === operation);
       if (!binding) return [];
@@ -89,17 +90,21 @@ const effectResources = computed(() => {
         :assignment="assignment"
         :disabled="disabled"
         :read-only="readOnly"
+        :effective-view="effectiveView"
         @update:config="emit('update:config', $event)"
       />
-      <section class="permission-effect" aria-live="polite">
-        <div class="effect-heading"><IconifyIcon icon="lucide:shield-check" /><span>{{ $t('action-editor.effect') }}</span></div>
+      <section v-if="!effectiveView || bindings.length" class="permission-effect" aria-live="polite">
+        <div class="effect-heading">
+          <IconifyIcon icon="lucide:shield-check" />
+          <span>{{ $t('action-editor.effect') }}<span v-if="effectiveView && generated?.permission_scope === '*'" class="effect-note">({{ $t('permission-display.allAutoExpanded') }})</span></span>
+          <Tag v-if="!effectiveView && generated?.permission_scope === '*'" color="red">{{ $t('developer.permissionScope') }} *</Tag>
+        </div>
         <div v-if="effectResources.length" class="effect-resources">
           <article v-for="resource in effectResources" :key="resource.key" class="effect-resource" :data-effect-resource="resource.key">
             <header class="effect-resource-header">
               <h3>{{ resource.name }}</h3>
-              <Tag v-if="generated?.permission_scope === '*'" color="red">{{ $t('developer.permissionScope') }} *</Tag>
               <div class="secondary">{{ resource.breadcrumb }}</div>
-              <div v-if="generated?.permission_scope === '*'" class="page-access">{{ $t('permission-display.allResources') }}</div>
+              <div v-if="resource.operations.some((operation) => operation.config.permission_scope === '*')" class="page-access">{{ $t('permission-display.allResources') }}</div>
               <div v-else-if="resource.pages.length" class="page-access">
                 <span>{{ $t('action-editor.accessiblePages') }}</span>
                 <Tag v-for="page in resource.pages" :key="page.key" :title="page.path">{{ page.name }}</Tag>
@@ -121,7 +126,7 @@ const effectResources = computed(() => {
             </table>
           </article>
         </div>
-        <span v-else class="secondary">{{ $t('action-editor.effectPlaceholder') }}</span>
+        <span v-else class="secondary">{{ $t(effectiveView ? 'permission-display.emptyScope' : 'action-editor.effectPlaceholder') }}</span>
       </section>
   </div>
 </template>
@@ -162,7 +167,7 @@ const effectResources = computed(() => {
 }
 .permission-effect {
   padding: 14px 16px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius) * 0.75);
   background: var(--editor-soft);
 }
 .effect-heading {
@@ -174,8 +179,9 @@ const effectResources = computed(() => {
 .effect-heading :deep(svg) {
   color: hsl(var(--primary));
 }
+.effect-note { color: var(--editor-muted); font-size: 13px; font-weight: 400; }
 .effect-resources { display: grid; gap: 14px; }
-.effect-resource { min-width: 0; overflow: hidden; border: 1px solid var(--editor-border); border-radius: 6px; background: hsl(var(--card)); }
+.effect-resource { min-width: 0; overflow: hidden; border: 1px solid var(--editor-border); border-radius: calc(var(--radius) * 0.75); background: hsl(var(--card)); }
 .effect-resource-header { padding: 12px 14px; }
 .effect-resource h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
 .effect-resource .secondary { overflow-wrap: anywhere; }

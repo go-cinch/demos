@@ -89,6 +89,7 @@ export interface RoleRecord {
 }
 
 export interface UserRecord {
+  permission_sources?: UserPermissionSource[];
   action_codes: string[];
   actions: ActionRecord[];
   code: string;
@@ -104,6 +105,14 @@ export interface UserRecord {
   updated_at: number;
   username: string;
   wrong: number;
+}
+
+export interface UserPermissionSource {
+  kind: 'direct' | 'group' | 'role';
+  id: number;
+  name: string;
+  action_codes: string[];
+  actions: Pick<ActionRecord, 'code' | 'word' | 'config'>[];
 }
 
 export interface UserSummary {
@@ -350,7 +359,7 @@ export const deleteDictionaries = (ids: number[]) => remove('dictionary', ids);
 export const systemDetailFields: Record<string, string> = {
   action: 'id,created_at,updated_at,code,name,names,group,word,scope,config,resource,menu,button',
   role: 'id,created_at,updated_at,name,word,action_codes,actions',
-  user: 'id,created_at,updated_at,username,code,role_id,role_summary,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions',
+  user: 'id,created_at,updated_at,username,code,role_id,role_summary,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,permission_sources',
   'user-group': groupFields,
 };
 

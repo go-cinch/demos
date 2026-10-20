@@ -1,6 +1,16 @@
 {
+  "effectiveResources": "有效权限资源",
+  "sourceFilter": "权限来源",
+  "emptyScope": "当前来源在此作用域下暂无权限",
+  "source": {
+    "direct": "用户",
+    "role": "角色",
+    "group": "用户组",
+    "all": "全部"
+  },
   "relatedMenus": "关联菜单",
   "allResources": "全部资源",
+  "allAutoExpanded": "全部权限*自动展开",
   "allOperations": "全部操作",
   "allFeatures": "全部功能",
   "noResource": "无关联菜单",

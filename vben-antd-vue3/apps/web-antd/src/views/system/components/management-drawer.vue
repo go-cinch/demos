@@ -20,7 +20,7 @@ const props = withDefaults(
   }>(),
   { busy: false, wide: false, mode: 'detail', recordId: undefined },
 );
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; afterOpenChange: [open: boolean] }>();
 const body = ref<HTMLElement>();
 const heading = ref<HTMLElement>();
 
@@ -46,6 +46,7 @@ watch([() => props.mode, () => props.open], async () => {
     :body-style="{ padding: 0, overflow: 'hidden' }"
     root-class-name="system-record-drawer"
     @close="emit('close')"
+    @after-open-change="emit('afterOpenChange', $event)"
   >
     <section
       class="drawer-shell"

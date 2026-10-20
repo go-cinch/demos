@@ -458,7 +458,6 @@ kind="statistics"
           <div
             v-if="summary.groups.length"
             class="group-bars"
-            :class="{ 'role-bars': resource === 'role' }"
             data-testid="management-group-distribution"
           >
             <template
@@ -895,16 +894,13 @@ button:disabled {
 }
 .group-bars {
   display: grid;
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 20px;
   max-height: 190px;
   overflow: auto;
   padding: 5px;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-}
-.role-bars {
-  grid-template-columns: 1fr 1fr;
-  gap: 15px 20px;
 }
 .group-bar {
   display: grid;
@@ -1061,7 +1057,7 @@ button:focus-visible {
     width: 112px;
     height: 112px;
   }
-  .role-bars {
+  .group-bars {
     grid-template-columns: 1fr;
   }
   .summary-metrics > div {
@@ -1073,7 +1069,7 @@ button:focus-visible {
   .user-grid {
     grid-template-columns: 1fr;
   }
-  .role-bars {
+  .group-bars {
     grid-template-columns: 1fr 1fr;
   }
   .status-legend {

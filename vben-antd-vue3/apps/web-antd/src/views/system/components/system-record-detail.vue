@@ -36,6 +36,7 @@ const props = withDefaults(
     loading?: boolean;
     error?: boolean;
     editing?: boolean;
+    focusField?: 'button' | 'menu';
   }>(),
   { loading: false, error: false, editing: false },
 );
@@ -60,6 +61,7 @@ const actionCodes = computed(() =>
     : [],
 );
 const detailActions = computed(() => props.resource === 'action' && record.value ? [record.value as ActionRecord] : actions.value);
+const permissionCount = computed(() => new Set(user.value?.permission_sources?.flatMap((source) => source.action_codes) ?? actionCodes.value).size);
 const facts = computed(() => {
   const keys: Record<ResourceKind, string[]> = {
     action: ['name', 'word', 'code', 'group'],
@@ -185,7 +187,7 @@ const facts = computed(() => {
       </section>
       <section v-if="resource === 'action'" class="detail-section">
         <template v-if="editing"><slot name="field-resource"></slot><slot name="field-menu"></slot><slot name="field-button"></slot></template>
-        <PermissionDetail v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" />
+        <PermissionDetail v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :focus-field="focusField" />
       </section>
       <section v-if="resource === 'user-group'" class="detail-section">
         <slot v-if="editing && $slots['field-user_ids']" name="field-user_ids"></slot>
@@ -196,9 +198,9 @@ const facts = computed(() => {
         <template v-else>
           <h4>
             {{ $t('system.fields.permissions') }}
-            <span>{{ actions.length }}</span>
+            <span v-if="!user">{{ permissionCount }}</span>
           </h4>
-          <PermissionDetail v-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :codes="actionCodes" />
+          <PermissionDetail v-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :codes="actionCodes" :sources="user?.permission_sources" />
         </template>
       </section>
       <section v-if="record" class="detail-section">

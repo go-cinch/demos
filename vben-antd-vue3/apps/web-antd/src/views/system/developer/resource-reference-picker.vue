@@ -154,7 +154,7 @@ function confirmAdd() {
             <span v-else class="catalog-muted" :title="t('referenceUnavailableHint')">
               {{ t('referenceUnavailable') }}
             </span>
-            <div v-if="isReferenced(String(key))" class="catalog-reference-operation-options" :aria-label="label(String(key)) + ' / ' + t('operation')">
+            <div v-if="isReferenced(String(key))" class="catalog-reference-operation-options" :aria-label="label(String(key)) + ' / ' + t('operation')" @click.stop>
               <Checkbox
                 v-for="operation in catalog.operations"
                 :key="operation"

@@ -1,6 +1,16 @@
 {
+  "effectiveResources": "Effective permission resources",
+  "sourceFilter": "Permission source",
+  "emptyScope": "No permissions from this source in the current scope",
+  "source": {
+    "direct": "User",
+    "role": "Role",
+    "group": "User group",
+    "all": "All"
+  },
   "relatedMenus": "Related menus",
   "allResources": "All resources",
+  "allAutoExpanded": "All permissions * automatically expanded",
   "allOperations": "All operations",
   "allFeatures": "All features",
   "noResource": "No related menus",

@@ -214,3 +214,26 @@ export function resourceReferenceTree(
     });
   return walk(resourceTree(catalog, scope, '', label));
 }
+
+/** Match the full menu's depth-first order, including mixed reference positions.
+ * A referenced resource has one card at its first occurrence. Search and grant
+ * selection never change this order; retain unresolved keys at the end.
+ */
+export function orderPermissionResourceKeys(
+  catalog: ResourceCatalog,
+  scope: string,
+  keys: readonly string[],
+): string[] {
+  const remaining = new Set(keys);
+  if (!remaining.size) return [];
+  const result: string[] = [];
+  const visit = (nodes: ReferenceTreeNode[]) => {
+    for (const node of nodes) {
+      const key = node.referenceTarget ?? node.key;
+      if (remaining.delete(key)) result.push(key);
+      visit(node.children);
+    }
+  };
+  visit(resourceReferenceTree(catalog, scope, '', (key) => key));
+  return [...result, ...remaining];
+}

@@ -13,6 +13,7 @@ import PermissionResourceEditor from './permission-resource-editor.vue';
 import ActionGroupDialog from './action-group-dialog.vue';
 import { applyGroupOrder } from './action-group-model';
 import { actionResourceBindings, menuResourceKeys, permissionOperations, resourceBreadcrumb, resolveResourceBindings, resolveResourceConfig, resolveResourceSelectionConfig } from './resource-catalog';
+import { orderPermissionResourceKeys } from './resource-references';
 
 const props = defineProps<{
   word?: string;
@@ -71,7 +72,7 @@ const effectResources = computed(() => {
     operation: 'read',
     feature_keys: resourceCatalog.resources[resource_key]?.operations?.read?.button_keys.filter((key) => props.config?.feature_keys == null || props.config.feature_keys.includes(key)) ?? [],
   })) : bindings.value;
-  return [...new Set(selections.map((binding) => binding.resource_key))].map((key) => {
+  return orderPermissionResourceKeys(resourceCatalog, scope.value, selections.map((binding) => binding.resource_key)).map((key) => {
     const operations = ['*', ...permissionOperations].flatMap((operation) => {
       const binding = selections.find((item) => item.resource_key === key && item.operation === operation);
       if (!binding) return [];
@@ -378,7 +379,7 @@ onMounted(loadCatalog);
 }
 .permission-effect {
   padding: 14px 16px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius) * 0.75);
   background: var(--editor-soft);
 }
 .effect-heading {
@@ -391,7 +392,7 @@ onMounted(loadCatalog);
   color: hsl(var(--primary));
 }
 .effect-resources { display: grid; gap: 14px; }
-.effect-resource { min-width: 0; overflow: hidden; border: 1px solid var(--editor-border); border-radius: 6px; background: hsl(var(--card)); }
+.effect-resource { min-width: 0; overflow: hidden; border: 1px solid var(--editor-border); border-radius: calc(var(--radius) * 0.75); background: hsl(var(--card)); }
 .effect-resource-header { padding: 12px 14px; }
 .effect-resource h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
 .effect-resource .secondary { overflow-wrap: anywhere; }
@@ -446,7 +447,7 @@ dd {
   overflow: auto;
   padding: 10px 12px;
   border: 1px solid var(--editor-border);
-  border-radius: 6px;
+  border-radius: calc(var(--radius) * 0.75);
 }
 .path-values code {
   display: block;

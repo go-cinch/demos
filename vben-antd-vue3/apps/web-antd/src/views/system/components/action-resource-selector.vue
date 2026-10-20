@@ -11,7 +11,7 @@ import { Button, Checkbox, CheckboxGroup, Empty, Input, Tag, Tree } from 'ant-de
 import { $t } from '#/locales';
 
 import { actionResourceBindings, permissionOperations, resolveResourceBindings, resolveResourceSelectionConfig, resourceBreadcrumb } from './resource-catalog';
-import { referencedOperations, referenceResourceBindings, resourceReferenceTree } from './resource-references';
+import { orderPermissionResourceKeys, referencedOperations, referenceResourceBindings, resourceReferenceTree } from './resource-references';
 
 const props = defineProps<{
   catalog: ResourceCatalog;
@@ -21,6 +21,7 @@ const props = defineProps<{
   readOnly?: boolean;
   defaultMode?: boolean;
   assignment?: boolean;
+  effectiveView?: boolean;
 }>();
 const emit = defineEmits<{ 'update:config': [ActionConfig] }>();
 const search = ref('');
@@ -41,10 +42,9 @@ const bindings = computed<ActionResourceBinding[]>(() => {
   }));
 });
 const pendingResources = ref<string[]>([]);
-const resourceOrder = ref<string[]>([]);
 const resources = computed(() => {
-  const available = [...new Set([...bindings.value.map((binding) => binding.resource_key), ...pendingResources.value])];
-  return [...resourceOrder.value.filter((key) => available.includes(key)), ...available.filter((key) => !resourceOrder.value.includes(key))].map((resource_key) => ({
+  const available = [...bindings.value.map((binding) => binding.resource_key), ...pendingResources.value];
+  return orderPermissionResourceKeys(props.catalog, props.scope, available).map((resource_key) => ({
     resource_key, bindings: bindings.value.filter((binding) => binding.resource_key === resource_key),
   }));
 });
@@ -58,10 +58,10 @@ function operationRows(key: string) {
       operation,
       selected: Boolean(binding),
       partial: Boolean(props.assignment && binding && featureKeys(draft).length && (binding.feature_keys ?? featureKeys(draft)).length < featureKeys(draft).length),
-      features: featureOptions(draft),
+      features: featureOptions(draft).filter((feature) => !props.effectiveView || (binding && (binding.feature_keys ?? featureKeys(binding)).includes(feature.value))),
       selectedFeatures: binding ? binding.feature_keys ?? featureKeys(binding) : [],
     };
-  });
+  }).filter((row) => !props.effectiveView || row.selected);
 }
 function toggleOperation(key: string, operation: string, checked: boolean) {
   if (props.assignment && checked) {
@@ -79,6 +79,7 @@ function allSelected(key: string) {
     return binding && featureKeys(binding).every((feature) => (binding.feature_keys ?? featureKeys(binding)).includes(feature));
   });
 }
+// Keep the full catalog visible; grants determine selection, never visibility.
 const tree = computed(() => resourceReferenceTree(props.catalog, props.scope, search.value, (key) => label('resources', key)));
 
 function resourceSelections(key: string, owner?: string) {
@@ -166,7 +167,6 @@ function remove(key: string) {
   publish(bindings.value.filter((binding) => binding.resource_key !== key));
 }
 function updateOperations(key: string, values: (boolean | number | string)[]) {
-  resourceOrder.value = resources.value.map((resource) => resource.resource_key);
   const operations = operationKeys(key).filter((operation) => values.map(String).includes(operation));
   const previous = bindings.value.filter((binding) => binding.resource_key === key);
   const next = operations.map((operation) => previous.find((binding) => binding.operation === operation) ?? {
@@ -178,11 +178,10 @@ function updateOperations(key: string, values: (boolean | number | string)[]) {
   replaceResourceBindings(key, next);
 }
 function replaceResourceBindings(key: string, replacements: ActionResourceBinding[]) {
-  const order = [...new Set([...resourceOrder.value, ...bindings.value.map((binding) => binding.resource_key), key])];
+  const order = [...new Set([...bindings.value.map((binding) => binding.resource_key), key])];
   publish(order.flatMap((resource) => resource === key ? replacements : bindings.value.filter((binding) => binding.resource_key === resource)));
 }
 function selectAll(key: string) {
-  resourceOrder.value = resources.value.map((resource) => resource.resource_key);
   pendingResources.value = pendingResources.value.filter((item) => item !== key);
   replaceResourceBindings(key, operationKeys(key).map((operation) => ({
     resource_key: key, operation, feature_keys: [...(props.catalog.resources[key]?.operations?.[operation]?.button_keys ?? [])],
@@ -206,7 +205,7 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
 
 <template>
   <div ref="workspace" class="resource-workspace" :class="{ 'read-only': readOnly }" :data-readonly="readOnly || undefined" data-testid="action-resource-selector">
-    <section class="resource-directory" :aria-label="$t('action-editor.page')">
+    <section class="resource-directory" data-permission-region="menu" :aria-label="$t('action-editor.page')">
       <div class="panel-heading"><span>{{ $t('action-editor.page') }}</span><span class="secondary">{{ label('scopes', scope) }}</span></div>
       <Input v-model:value="search" allow-clear :disabled="disabled" :placeholder="$t('action-editor.searchResources')" :aria-label="$t('action-editor.searchResources')" data-testid="action-resource-search">
         <template #prefix><IconifyIcon icon="lucide:search" /></template>
@@ -214,7 +213,7 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
       <div class="resource-tree-area">
         <Tree v-if="tree.length" :key="`${scope }:${ search}`" multiple block-node default-expand-all :tree-data="tree" :selected-keys="selectedTreeKeys" :disabled="disabled" @select="selectNode">
           <template #title="node">
-            <span class="resource-title" :title="breadcrumb(node.referenceTarget ?? node.key)">
+            <span class="resource-title" :data-permission-resource-key="node.referenceTarget ? undefined : node.key" :title="breadcrumb(node.referenceTarget ?? node.key)">
               <span>{{ node.title }}</span>
               <Tag v-if="node.referenceTarget" class="reference-tag"><IconifyIcon icon="lucide:link-2" aria-hidden="true" />{{ $t('action-editor.reference') }}</Tag>
               <IconifyIcon v-if="rowState(node.referenceTarget ?? node.key, node.referenceOwner).partial" icon="lucide:minus" class="selection-marker" :aria-label="$t('action-editor.partialSelection')" />
@@ -222,11 +221,11 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
             </span>
           </template>
         </Tree>
-        <Empty v-else :image="Empty.PRESENTED_IMAGE_SIMPLE" :description="$t(search ? 'action-editor.noMatches' : 'action-editor.noResources')" />
+        <Empty v-else :image="Empty.PRESENTED_IMAGE_SIMPLE" :description="$t(search ? 'action-editor.noMatches' : effectiveView ? 'permission-display.emptyScope' : 'action-editor.noResources')" />
       </div>
     </section>
-    <section class="resource-config" :aria-label="$t('action-editor.selectedResources')">
-      <div class="panel-heading"><span>{{ $t('action-editor.selectedResources') }}</span><span class="secondary" role="status" aria-live="polite">{{ $t('action-editor.selectedCount', { count: resources.length }) }}</span></div>
+    <section class="resource-config" data-permission-region="button" :aria-label="$t('action-editor.selectedResources')">
+      <div class="panel-heading"><span>{{ $t(effectiveView ? 'permission-display.effectiveResources' : 'action-editor.selectedResources') }}</span><span class="secondary" role="status" aria-live="polite">{{ $t(effectiveView ? 'permission-display.total' : 'action-editor.selectedCount', { count: resources.length }) }}</span></div>
       <p v-if="defaultMode && !readOnly" class="secondary default-hint">{{ $t('action-editor.defaultPermissionHint') }}</p>
       <div class="selected-resources">
         <article v-for="resource in resources" :key="resource.resource_key" class="selected-resource" :data-resource-key="resource.resource_key">
@@ -255,8 +254,10 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
                   <Checkbox v-else :checked="row.selected && !row.partial" :indeterminate="row.partial" :disabled="disabled || readOnly" @change="toggleOperation(resource.resource_key, row.operation, $event.target.checked)">{{ label('operations', row.operation) }}</Checkbox>
                 </th>
                 <td>
-                  <CheckboxGroup v-if="row.features.length" :value="row.selectedFeatures" :options="row.features" :disabled="readOnly || disabled || (!assignment && !row.selected)" class="feature-options" :aria-label="`${label('resources', resource.resource_key) } / ${ label('operations', row.operation)}`" @change="updateFeatures(resource.resource_key, row.operation, $event)" />
-                  <span v-else class="secondary">{{ $t('action-editor.noFeatures') }}</span>
+                  <CheckboxGroup v-if="row.features.length" :value="row.selectedFeatures" :disabled="readOnly || disabled || (!assignment && !row.selected)" class="feature-options" :aria-label="`${label('resources', resource.resource_key) } / ${ label('operations', row.operation)}`" @change="updateFeatures(resource.resource_key, row.operation, $event)">
+                    <Checkbox v-for="feature in row.features" :key="feature.value" :value="feature.value" :data-permission-feature-key="row.selectedFeatures.includes(feature.value) ? feature.value : undefined">{{ feature.label }}</Checkbox>
+                  </CheckboxGroup>
+                  <span v-else class="secondary">{{ $t(effectiveView ? 'action-editor.noSelectedFeatures' : 'action-editor.noFeatures') }}</span>
                 </td>
               </tr>
             </tbody>
@@ -264,7 +265,7 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
           <p v-if="!resource.bindings.length" class="secondary operation-note">{{ $t('action-editor.noSelectedOperations') }}</p>
           <p v-else-if="!canEnter(resource.resource_key)" class="secondary operation-note">{{ $t('action-editor.requiresRead') }}</p>
         </article>
-        <Empty v-if="!resources.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" :description="$t('action-editor.selectResource')" />
+        <Empty v-if="!resources.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" :description="$t(effectiveView ? 'permission-display.emptyScope' : 'action-editor.selectResource')" />
       </div>
     </section>
   </div>
@@ -277,7 +278,7 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
   margin-bottom: 20px;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .resource-directory {
   min-width: 0;
@@ -336,7 +337,7 @@ function updateFeatures(key: string, operation: string, values: (boolean | numbe
   overflow: hidden;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .selected-resource + .selected-resource { margin-top: 16px; }
 .resource-card-header {

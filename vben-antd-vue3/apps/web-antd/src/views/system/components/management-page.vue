@@ -908,12 +908,16 @@ let pendingListQuery = '';
 let summaryRequest = 0;
 let active = true;
 const detailsOpen = ref(false);
+const detailDrawerReady = ref(false);
+const detailFocusField = ref<'button' | 'menu'>();
 const detailLoading = ref(false);
 const detailError = ref(false);
 let detailRequest = 0;
 let detailRecordID: number | undefined;
 watch(detailsOpen, (open) => {
   if (!open) {
+    detailDrawerReady.value = false;
+    detailFocusField.value = undefined;
     ++detailRequest;
     selectedRecord.value = null;
     detailLoading.value = false;
@@ -1103,8 +1107,9 @@ function selectAllCards(checked: boolean) {
     ? records.value.filter(canSelectRecord).map((record) => record.id)
     : [];
 }
-async function openDetail(record: Recordable<any>) {
+async function openDetail(record: Recordable<any>, field?: string) {
   if (loading.value || !canDetail.value) return;
+  detailFocusField.value = field === 'menu' || field === 'button' ? field : undefined;
   detailRecordID = record.id;
   return loadRecordDetail();
 }
@@ -2520,6 +2525,10 @@ async function submitEditor() {
     detailsOpen.value = canDetail.value;
     formModel.password = '';
     if (['action', 'role', 'user', 'user-group'].includes(props.resource)) window.dispatchEvent(new Event('auth-permissions-changed'));
+    if (props.resource === 'user' && detailsOpen.value) {
+      detailRecordID = saved.id;
+      await loadRecordDetail();
+    }
   } catch (error) {
     if (!active || currentEditor !== editorRequest) return;
     const status =
@@ -3377,7 +3386,7 @@ onBeforeUnmount(() => {
                 <strong>{{ actionDisplayName(record.word || '', record.config, record.name) }}</strong>
 </template>
               <template v-else-if="props.resource === 'action' && viewMode === 'matrix' && ['menu', 'resource', 'button'].includes(String(column.key))">
-                <PermissionResultCell :config="'config' in record ? record.config : undefined" :field="String(column.key)" :can-detail="canRead" @detail="openDetail(record)" />
+                <PermissionResultCell :config="'config' in record ? record.config : undefined" :field="String(column.key)" :can-detail="canRead" @detail="openDetail(record, String(column.key))" />
               </template>
               <template
                 v-else-if="
@@ -3396,26 +3405,38 @@ onBeforeUnmount(() => {
                     : formatDate(columnValue(record, column))
                 }}
               </template>
+              <template
+                v-else-if="
+                  props.resource === 'action' &&
+                  ['menu', 'button'].includes(String(column.key))
+                "
+              >
+                <div
+                  class="system-action-list-cell whitespace-pre-line"
+                  tabindex="0"
+                  :aria-label="String(column.title)"
+                >{{ columnValue(record, column) || '-' }}</div>
+              </template>
               <template v-else-if="columnDisplay(column) === 'resource-rules'">
-                <Space
+                <div
                   v-if="resourceRules(columnValue(record, column)).length"
-                  direction="vertical"
-                  :size="4"
+                  class="system-action-list-cell"
+                  tabindex="0"
+                  :aria-label="String(column.title)"
                 >
-                  <Tag
-                    v-for="(rule, index) in resourceRules(
-                      columnValue(record, column),
-                    )"
-                    :key="`${rule}-${index}`"
-                    class="system-resource-rule-tag m-0"
-                    :color="resourceRuleColor(rule, record.category)"
-                    :style="{
-                      maxWidth: `${adaptiveColumnMaxWidth - 32}px`,
-                    }"
-                  >
-                    {{ rule }}
-                  </Tag>
-                </Space>
+                  <div class="flex flex-col items-start gap-1">
+                    <Tag
+                      v-for="(rule, index) in resourceRules(
+                        columnValue(record, column),
+                      )"
+                      :key="`${rule}-${index}`"
+                      class="system-resource-rule-tag m-0 max-w-full"
+                      :color="resourceRuleColor(rule, record.category)"
+                    >
+                      {{ rule }}
+                    </Tag>
+                  </div>
+                </div>
                 <span v-else>-</span>
               </template>
               <template v-else-if="columnDisplay(column) === 'actions'">
@@ -3546,6 +3567,7 @@ onBeforeUnmount(() => {
       :wide="props.resource === 'dictionary' || props.resource === 'action'"
       :width="['action', 'role', 'user', 'user-group'].includes(props.resource) ? 'min(1000px, 100vw)' : undefined"
       @close="closeEditorPanel()"
+      @after-open-change="detailDrawerReady = $event"
     >
       <template v-if="editingPermission" #description>
         <span>{{ $t('system.fields.word') }}</span>
@@ -3557,6 +3579,7 @@ onBeforeUnmount(() => {
         :resource="props.resource"
         :loading="detailLoading"
         :error="detailError"
+        :focus-field="detailDrawerReady ? detailFocusField : undefined"
         @retry="loadRecordDetail"
       />
       <ManagementForm v-else ref="formRef" :model="formModel" :rules="formRules" :disabled="submitting || !(editingRecord ? canUpdate : canCreate)" vertical data-testid="management-editor">
@@ -4021,6 +4044,19 @@ onBeforeUnmount(() => {
 
 :deep(.system-table-row-striped > .ant-table-cell-fix-right) {
   background: hsl(var(--card)) !important;
+}
+
+.system-action-list-cell {
+  max-height: 160px;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.system-action-list-cell:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
 }
 
 :deep(.system-resource-rule-tag) {

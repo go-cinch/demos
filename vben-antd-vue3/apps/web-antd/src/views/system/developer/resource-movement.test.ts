@@ -86,6 +86,7 @@ describe('resource tree movement', () => {
       parent: 'admin:audit',
       sort: 1,
     };
+    const before = structuredClone(value);
     const result = moveResource(
       value,
       'admin:system:user',
@@ -100,7 +101,18 @@ describe('resource tree movement', () => {
     });
     expect(
       result.document.resource_catalog.resources['admin:audit:user'],
-    ).toEqual(value.resource_catalog.resources['admin:audit:user']);
+    ).toEqual({
+      ...before.resource_catalog.resources['admin:audit:user'],
+      // Moving a node renumbers owned siblings without replacing their content.
+      sort: 10,
+    });
+    expect(
+      resourceChildren(result.document.resource_catalog, 'admin:audit', 'admin'),
+    ).toEqual([
+      { kind: 'node', key: 'admin:audit:user' },
+      { kind: 'node', key: 'admin:audit:user-3' },
+    ]);
+    expect(value).toEqual(before);
   });
 
   it('returns the same document for a no-op order and computes adjacent moves', () => {
