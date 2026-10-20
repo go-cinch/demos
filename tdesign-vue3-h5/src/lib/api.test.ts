@@ -79,10 +79,10 @@ it('ignores account information that arrives after sign-out', async () => {
 
 describe('credential transport', () => {
   for (const [purpose, typ, path] of [
-    ['login', 'login+jwe', '/auth/pub/login'],
-    ['register', 'register+jwe', '/auth/pub/register'],
-    ['password_change', 'password+jwe', '/auth/change/pwd'],
-    ['password_reset', 'password-reset+jwe', '/auth/reset/pwd'],
+    ['login', 'login+jwe', '/pub/login'],
+    ['register', 'register+jwe', '/pub/register'],
+    ['password_change', 'password+jwe', '/change/pwd'],
+    ['password_reset', 'password-reset+jwe', '/reset/pwd'],
   ] as const) {
     it(`encrypts ${purpose} fields with the one-time challenge`, async () => {
       const keys = await generateKeyPair('RSA-OAEP-256');
@@ -135,6 +135,10 @@ describe('credential transport', () => {
         challenge_id: 'one-time',
       });
       expect(calls[1].headers['Accept-Language']).toBe('zh-CN');
+      expect(calls[1].headers['X-Auth-Scope']).toBe('admin');
+      expect(calls[0].url).toBe(
+        `/api/auth${purpose.startsWith('password') ? '/challenge' : '/pub/challenge'}`,
+      );
     });
   }
   it('encrypts administrator passwords but leaves password-free edits challenge-free', async () => {
@@ -182,7 +186,7 @@ it('rotates refresh once for concurrent unauthorized calls and persists no acces
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, options: RequestInit) => {
-      if (url.endsWith('/auth/pub/refresh')) {
+      if (url.endsWith('/pub/refresh')) {
         refreshes++;
         await new Promise((resolve) => setTimeout(resolve, 15));
         return Response.json({
@@ -232,22 +236,99 @@ it('cannot restore an ended session from a late refresh response', async () => {
   expect(api.session.refreshToken).toBe('');
 });
 
-it('accepts canonical and retained legacy group menus without granting other resources', async () => {
-  for (const menu of ['/system/user-group', '/system/group']) {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        Response.json({
-          id: 1,
-          username: 'operator',
-          code: 'ABC12345',
-          permission: { menus: [menu], btns: [] },
-        }),
-      ),
-    );
-    await api.loadUser();
-    expect(api.canMenu('/system/user-group')).toBe(true);
-    expect(api.canMenu('/system/msg')).toBe(false);
-    expect(api.canMenu('/system/user')).toBe(false);
-  }
+it('loads the selected permission projection and checks menu-scoped controls', async () => {
+  const fetch = vi.fn(async () =>
+    Response.json({
+      id: 1,
+      username: 'operator',
+      code: 'ABC12345',
+      scope: 'admin',
+      permission: {
+        words: ['admin:read:system:user-group'],
+        menus: [
+          {
+            menu_key: 'admin:menu:system:user-group',
+            menu_path: '/system/user-group',
+            btns: ['admin:btn:system:user-group:query'],
+          },
+          {
+            menu_key: 'admin:menu:system:role',
+            menu_path: '/system/role',
+            btns: ['admin:btn:system:user-group:edit'],
+          },
+          {
+            menu_key: 'mini:menu:system:user',
+            menu_path: '/system/user',
+            btns: ['mini:btn:system:user:create'],
+          },
+        ],
+      },
+    }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  await api.loadUser();
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/auth/info?f=id,username,code,role,scope,permission',
+    expect.anything(),
+  );
+  expect(api.canMenu('/system/user-group')).toBe(true);
+  expect(api.can('user-group', 'read')).toBe(true);
+  expect(api.can('user-group', 'update')).toBe(false);
+  expect(api.canMenu('/system/user')).toBe(false);
+  expect(api.can('user', 'create')).toBe(false);
+  expect(api.canMenu('/system/msg')).toBe(false);
+  expect(api.canMenu('/dashboard/overview')).toBe(true);
+  expect(api.canMenu('/profile')).toBe(true);
+});
+it('rejects an unexpected permission scope and grants nothing from legacy wildcard strings', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        id: 1,
+        username: 'operator',
+        code: 'ABC12345',
+        scope: 'mini',
+        permission: { menus: [], words: [] },
+      }),
+    ),
+  );
+  await expect(api.loadUser()).rejects.toThrow();
+  expect(api.session.user).toBeNull();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        id: 1,
+        username: 'operator',
+        code: 'ABC12345',
+        scope: 'admin',
+        permission: { menus: ['*'], btns: ['*'] },
+      }),
+    ),
+  );
+  await api.loadUser();
+  expect(api.canMenu('/system/user')).toBe(false);
+  expect(api.can('user', 'create')).toBe(false);
+});
+it('does not replay a business request when refresh requires a password reset', async () => {
+  api.acceptSession({
+    access_token: 'old',
+    refresh_token: 'refresh',
+    expired_at: 0,
+    password_reset_required: false,
+  });
+  const fetch = vi.fn(async (url: string) =>
+    url === '/api/auth/pub/refresh'
+      ? Response.json({
+          access_token: 'restricted',
+          refresh_token: 'rotated',
+          password_reset_required: true,
+        })
+      : Response.json({ error_code: 'UNAUTHORIZED' }, { status: 401 }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  await expect(api.request('/user')).rejects.toMatchObject({ status: 403 });
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/auth/user', '/api/auth/pub/refresh']);
+  expect(api.session.resetRequired).toBe(true);
 });

@@ -11,7 +11,7 @@ const selected = ref<CaptchaPoint[]>([]);
 const image = ref<HTMLImageElement>();
 const busy = ref(false);
 const error = ref<Feedback>('');
-const path = () => (props.authenticated ? '/auth/captcha' : '/auth/pub/captcha');
+const path = () => (props.authenticated ? '/captcha' : '/pub/captcha');
 watch(
   () => props.captcha.captcha_id,
   () => {

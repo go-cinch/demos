@@ -105,7 +105,7 @@ async function verifyUsername(account = username.value) {
   try {
     if (mode.value === 'register') {
       const result = await request<{ available: boolean }>(
-        `/auth/pub/register/username?username=${encodeURIComponent(value)}`,
+        `/pub/register/username?username=${encodeURIComponent(value)}`,
         { public: true, signal: controller.signal },
       );
       if (current === verificationGeneration) {
@@ -114,7 +114,7 @@ async function verifyUsername(account = username.value) {
       }
     } else {
       const result = await request<{ captcha?: Challenge; captcha_required: boolean }>(
-        `/auth/pub/login/verification?username=${encodeURIComponent(value)}`,
+        `/pub/login/verification?username=${encodeURIComponent(value)}`,
         { public: true, signal: controller.signal },
       );
       if (current === verificationGeneration) captcha.value = result.captcha;
@@ -160,7 +160,7 @@ async function submit() {
   try {
     if (mode.value === 'register') {
       const available = await request<{ available: boolean }>(
-        `/auth/pub/register/username?username=${encodeURIComponent(normalizedUsername)}`,
+        `/pub/register/username?username=${encodeURIComponent(normalizedUsername)}`,
         { public: true },
       );
       if (!available.available) {

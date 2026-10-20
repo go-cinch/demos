@@ -45,7 +45,7 @@ function begin() {
   width = Math.max(0, (track.value?.clientWidth || 0) - 52);
   tracks = [{ x: 0, t: 0 }];
   dragging.value = true;
-  challenge = request('/auth/pub/slider/challenge', {
+  challenge = request('/pub/slider/challenge', {
     method: 'POST',
     body: { purpose: props.purpose, username: props.username.trim() },
     public: true,
@@ -107,7 +107,7 @@ async function end() {
   tracks.push({ x: Math.round(width), t: duration });
   try {
     const value = await challenge;
-    const result = await request<{ proof: string }>('/auth/pub/slider/verify', {
+    const result = await request<{ proof: string }>('/pub/slider/verify', {
       method: 'POST',
       public: true,
       body: {

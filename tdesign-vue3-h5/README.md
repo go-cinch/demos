@@ -14,7 +14,7 @@ pnpm dev
 
 `make local` chooses the first available port above 5666, honoring other demos' persisted assignments and active listeners. The current local assignment is **5670**. It preserves `.env.development.local` and installed dependencies on regeneration. An explicit `UI=` override remains supported.
 
-The generated `.env.development.local` contains `VITE_PORT` and `AUTH_PROXY_TARGET=http://127.0.0.1:8081`. The Vite proxy removes only `/api/auth`; for example the browser path `/api/auth/auth/pub/login` reaches `/auth/pub/login`. `/auth/login` is a frontend route. Follow `chi-auth-layout/LOCAL_DEV_WORKFLOW.md` to run the backend; if its generated HTTP configuration is `:8080`, start with `SERVICE_HTTP_ADDR=:8081 ./bin/auth -c ./conf`. Keep auth switches in the backend's existing configuration.
+The generated `.env.development.local` contains `VITE_PORT` and `AUTH_PROXY_TARGET=http://127.0.0.1:8081`. The Vite proxy removes only `/api/auth`; for example the browser path `/api/auth/pub/login` reaches `/pub/login`. `/auth/login` is a frontend route. Follow `chi-auth-layout/LOCAL_DEV_WORKFLOW.md` to run the backend; if its generated HTTP configuration is `:8080`, start with `SERVICE_HTTP_ADDR=:8081 ./bin/auth -c ./conf`. Keep auth switches in the backend's existing configuration.
 
 Use the generated application's supported package manager, pnpm 10.2.0 (Corepack reads `packageManager`). Node 22 or 24 is recommended. The lockfile is committed to the source template; no upstream documentation site or unrelated workspace is imported.
 
@@ -58,3 +58,7 @@ Focused, UI-only regressions live in the central `tests/tdesign-vue3-h5/ui-audit
 ```sh
 E2E_FRONTEND=tdesign-vue3-h5 E2E_MODE=full E2E_BASE_URL=http://127.0.0.1:5670 pnpm exec playwright test ui-audit-regression.spec.ts
 ```
+
+## Current Auth compatibility
+
+Auth calls use service-internal paths (`/pub/login`, `/pub/refresh`, `/info`) under `VITE_GLOB_AUTH_API_URL` (default `/api/auth`). Requests explicitly send `X-Auth-Scope: admin`: this minimal H5 integration uses the existing admin resource catalog. `/info` selects identity, scope and permission fields; navigation reads `menus[].menu_path` and controls read that menu's scoped `btns`. Frontend `/auth/*` routes remain independent. The current PC permission/catalog editor is not ported as part of this compatibility update.

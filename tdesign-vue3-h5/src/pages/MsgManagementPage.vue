@@ -2,7 +2,7 @@
 import type { Msg, MsgInput } from '../lib/msg';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { session } from '../lib/api';
+import { canButton } from '../lib/api';
 import { msgApi, msgChanged } from '../lib/msg';
 import { dateTime, parseDateTime } from '../lib/format';
 import { useUnsavedForm } from '../lib/unsaved-form';
@@ -22,9 +22,7 @@ const route = useRoute();
 const tr = (key: string, params?: Record<string, string | number>) => t(`app.msg.${key}`, params);
 const sent = computed(() => route.path === '/system/msg');
 const permitted = (action: string) =>
-  session.user?.permission.btns.some(
-    (code: string) => code === '*' || code === `system.msg.${action}`,
-  ) ?? false;
+  canButton('/system/msg', action === 'read' ? 'query' : action);
 const canRead = computed(() => !sent.value || permitted('read'));
 const canSend = computed(() => sent.value && permitted('send'));
 const canDelete = computed(() => !sent.value || permitted('delete'));
