@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { formatDate, formatDateTime } from '@vben/utils';
 import { Button, Tooltip, theme } from 'ant-design-vue';
 import { $t } from '#/locales';
+import { vSkeleton } from '#/directives/skeleton';
 const props = defineProps<{
   data: AuditHeatCell[];
   days: number;
@@ -112,7 +113,7 @@ function pick(cell: Cell, event: MouseEvent) {
 watch(() => props.data, () => { focusIndex.value = Math.max(0, cells.value.findIndex((cell) => !cell.disabled)); });
 </script>
 <template>
-  <div ref="root" class="audit-heatmap" :class="{ detailed, 'hour-grid': days === 1 || !!drillDay }" role="group"
+  <div ref="root" v-skeleton="{ loading: !!loading, targets: '.audit-heat-cell,.audit-day,.audit-hours > span:not(:empty),.audit-heat-footer > span,.audit-legend' }" class="audit-heatmap" :class="{ detailed, 'hour-grid': days === 1 || !!drillDay }" role="group"
     :style="{ '--heat-rows': Math.max(rows.length, 1) }"
     :aria-label="$t('audit.heatmap')" :aria-busy="loading">
     <div v-if="detailed" class="audit-heat-row audit-hours" aria-hidden="true">
@@ -169,11 +170,13 @@ watch(() => props.data, () => { focusIndex.value = Math.max(0, cells.value.findI
 .hour-grid .audit-heat-cell.ant-btn { min-height: 59px; }
 .detailed .audit-heat-cell.ant-btn { height: 100%; min-height: 30px; padding: 0; }
 .audit-heat-cell.ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.audit-heat-cell.ant-btn.layout-skeleton-shape { opacity: 1; }
+.audit-heat-cell.layout-skeleton-shape::after { inset: 0; }
 .audit-cell-label { font-size: 12px; font-weight: 500; }
 .audit-heat-cell small { font-size: 10px; opacity: 0.75; }
 .audit-heat-cell.ant-btn:hover, .audit-heat-cell.ant-btn:focus-visible, .audit-heat-cell.ant-btn.selected { outline: 2px solid var(--cell-accent); outline-offset: 1px; z-index: 1; }
-.audit-heat-footer { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 11px; margin-top: 0; padding-top: 14px; }
-.audit-legend { display: flex; align-items: center; gap: 4px; }
+.audit-heat-footer { align-items: flex-start; line-height: 16px; flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 11px; margin-top: 0; padding-top: 14px; }
+.audit-legend { min-height: 16px; display: flex; align-items: center; gap: 4px; }
 .audit-legend i { width: 11px; height: 11px; border-radius: calc(var(--radius) * 0.25); }
 .audit-anomaly-legend { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; }
 @media (max-width: 700px) {

@@ -28,6 +28,7 @@ import dayjs from 'dayjs';
 import { auditApi } from '#/api/audit';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
 import { $t } from '#/locales';
+import { heatmapLayout } from './audit-heatmap-layout';
 export function useAudit(kind: AuditKind) {
   const route = useRoute();
   function profileFilter() {
@@ -112,6 +113,10 @@ export function useAudit(kind: AuditKind) {
       time_zone: timezone.timezone,
     };
   }
+  const heatmapPlaceholder = computed(() => {
+    const range = globalParams();
+    return heatmapLayout(Number(range.from), Number(range.to), timezone.timezone);
+  });
   function scopeParams(): AuditParams {
     return {
       ...globalParams(),
@@ -470,6 +475,7 @@ export function useAudit(kind: AuditKind) {
     cell,
     heatmapDay,
     dayHeatmap,
+    heatmapPlaceholder,
     interval,
     overview,
     scope,

@@ -60,6 +60,7 @@ const {
   cell,
   heatmapDay,
   dayHeatmap,
+  heatmapPlaceholder,
   interval,
   overview,
   context,
@@ -569,7 +570,7 @@ class="audit-activity-viewport" :aria-busy="!overviewError && (overviewLoading |
               :role="!overviewError && (overviewLoading || !activityReady) ? 'status' : undefined"
               :aria-label="!overviewError && (overviewLoading || !activityReady) ? $t('audit.activityLoading') : undefined"
 >
-              <div v-skeleton="!overviewError && (overviewLoading || !activityReady)" class="audit-activity-content">
+              <div v-skeleton="loginView === 'trend' && !overviewError && (overviewLoading || !activityReady)" class="audit-activity-content">
             <div
               v-if="loginView === 'heatmap'"
               :key="`heatmap-${days}-${state.timezone.timezone}`"
@@ -581,13 +582,13 @@ class="audit-activity-viewport" :aria-busy="!overviewError && (overviewLoading |
               <Transition :css="days === 30" :name="heatmapMode === 'hour' ? 'audit-zoom-in' : 'audit-zoom-out'" mode="out-in">
                 <AuditHeatmap
                   :key="heatmapMode"
-                  :data="heatmapMode === 'hour' ? dayHeatmap?.heatmap ?? [] : overview?.heatmap ?? []"
+                  :data="heatmapMode === 'hour' ? dayHeatmap?.heatmap ?? [] : overviewLoading || (!overview && !overviewError) ? heatmapPlaceholder : overview?.heatmap ?? []"
                   :days="days"
                   :result="result"
                   :drill-day="heatmapMode === 'hour' ? heatmapDay : undefined"
                   :selected="cell"
                   :suppress-tooltips="heatmapTooltipSuppressed || zooming"
-                  :loading="overviewLoading || overviewError || (heatmapMode === 'hour' && (scopeLoading || scopeError))"
+                  :loading="!overviewError && (overviewLoading || !activityReady || (heatmapMode === 'hour' && scopeLoading))"
                   @select="selectHeatCell"
                   @hover="setHoveredHeatCell"
                 />
