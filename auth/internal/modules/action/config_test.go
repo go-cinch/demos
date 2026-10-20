@@ -10,7 +10,6 @@ import (
 
 func actionCatalogFixture() localization.Catalog {
 	return localization.Catalog{SchemaVersion: 2, DefaultLocale: "en-US", Scopes: []string{"admin", "mini"}, Operations: []string{"read", "create", "update", "delete"}, Locales: []localization.Language{{Tag: "en-US", Name: "English", Enabled: true}}, Messages: map[string]localization.Messages{"en-US": {}}, ResourceCatalog: localization.ResourceCatalog{
-		Defaults: map[string]localization.ResourceGrant{},
 		Resources: map[string]localization.Resource{
 			"admin:demo:record": {Kind: "resource", Operations: map[string]localization.ResourceOperation{"read": {EntryKeys: []string{}, ButtonKeys: []string{}}}},
 			"admin:system:user": {Kind: "resource", Entries: map[string]localization.ResourceEntry{"admin:menu:system:user": {Path: "/system/user"}}, Operations: map[string]localization.ResourceOperation{
@@ -160,13 +159,13 @@ func TestBuiltinOperationMustMatchInBothDirections(t *testing.T) {
 func TestStoredAllRemainsMarkerWhileReadsExpand(t *testing.T) {
 	catalog := resourceMoveCatalog("admin:system:user")
 	config := Config{Builtin: "all", UI: []UIBinding{}, Endpoints: []Endpoint{}}
-	if err := resolveStoredConfig(catalog, "admin:all:system:general", &config); err != nil {
+	if err := resolveStoredConfig(catalog, "admin:all:system:all", &config); err != nil {
 		t.Fatal(err)
 	}
 	if len(config.UI) != 0 || len(config.Endpoints) != 0 {
 		t.Fatal("stored all expanded")
 	}
-	expanded, err := ResolveConfig(catalog, "admin:all:system:general", config)
+	expanded, err := ResolveConfig(catalog, "admin:all:system:all", config)
 	if err != nil || len(expanded.UI) == 0 || len(expanded.Endpoints) == 0 {
 		t.Fatal(expanded, err)
 	}

@@ -1,9 +1,12 @@
 package dictionary
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +14,27 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 )
+
+func TestDeleteFailureLogIncludesCount(t *testing.T) {
+	m, _, mock := newTestModule(t)
+
+	handler := m.HTTP()
+
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	mock.ExpectExec("DELETE FROM t_dictionary").WillReturnError(sqlmock.ErrCancelled)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/42,43", nil))
+	var entry map[string]any
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 500 || entry["count"] != float64(2) || entry["operation"] != "delete_dictionaries" || entry["outcome"] != "failure" || !strings.Contains(entry["msg"].(string), "delete 2 dictionaries failed") || entry["error"] == nil {
+		t.Fatalf("failure log: %s", output.String())
+	}
+}
 
 func TestDictionaryHTTP(t *testing.T) {
 	m, cache, mock := newTestModule(t)

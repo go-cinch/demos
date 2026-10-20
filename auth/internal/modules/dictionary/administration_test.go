@@ -23,6 +23,7 @@ func (p *catalogAdministration) RequireAllPermissions(context.Context) error {
 	}
 	return authn.ErrPermissionAdministrationRequired
 }
+
 func (p *catalogAdministration) LockPermissionMutation(context.Context) error { p.locks++; return nil }
 
 func TestCatalogMutationCannotBypassPermissionAdministration(t *testing.T) {

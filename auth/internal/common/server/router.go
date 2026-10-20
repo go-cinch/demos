@@ -52,10 +52,8 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 			if err != nil {
 				return nil, err
 			}
-			if _, authorizes := module.(modules.HTTPPermissionAuthorizer); authorizes && authenticator != nil {
-				if err := authenticator.SetHTTPPath(normalized); err != nil {
-					return nil, err
-				}
+			if policy, ok := module.(modules.HTTPAuthenticationPolicy); ok && authenticator != nil {
+				authenticator.SetRestrictedHTTPPolicy(policy.AllowRestrictedHTTP)
 			}
 			pattern = normalized
 			if pattern == "" {
@@ -136,11 +134,7 @@ func authenticationMiddleware(authenticator *authn.Manager, authorizer modules.H
 		}
 		request, err := authenticator.AuthenticateRequest(r)
 		if err != nil {
-			if errors.Is(err, authn.ErrPasswordResetRequired) {
-				WriteError(w, r, http.StatusForbidden, err)
-			} else {
-				WriteError(w, r, http.StatusUnauthorized, apperror.Unauthorized)
-			}
+			writeAuthenticationError(w, r, err)
 			return
 		}
 		request, err = authn.ScopeRequest(request)
@@ -214,4 +208,17 @@ func httpTranslator(mounted []modules.Module) i18n.Translator {
 		}
 	}
 	return nil
+}
+
+func writeAuthenticationError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, authn.ErrPasswordResetRequired):
+		WriteError(w, r, http.StatusForbidden, err)
+	case errors.Is(err, authn.ErrUnauthorized):
+		WriteError(w, r, http.StatusUnauthorized, apperror.Unauthorized)
+	default:
+		slog.ErrorContext(r.Context(), "authenticate http request failed: "+err.Error(),
+			"operation", "authenticate_http_request", "outcome", "failure", "method", r.Method, "error", err)
+		WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+	}
 }

@@ -675,6 +675,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -695,12 +696,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -892,6 +895,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,header,request_params,response_params. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -900,11 +910,78 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,header,request_params,response_params. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
+                type: object
+                properties:
+                  duration_ms:
+                    type: integer
+                    format: int64
+                  error_code:
+                    type: string
+                  header:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  id:
+                    type: integer
+                    format: int64
+                  ip:
+                    type: string
+                  kind:
+                    type: string
+                  method:
+                    type: string
+                  module:
+                    type: string
+                  occurred_at:
+                    type: integer
+                    format: int64
+                  operation:
+                    type: string
+                  path:
+                    type: string
+                  request_params:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  resource_id:
+                    type: string
+                  resource_type:
+                    type: string
+                  response_params:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  status:
+                    type: integer
+                    format: int32
+                  trace_id:
+                    type: string
+                  user_agent:
+                    type: string
+                  user_id:
+                    type: integer
+                    format: int64
+                  username:
+                    type: string
         "400":
           description: "Bad Request"
           content:
@@ -946,6 +1023,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -966,12 +1044,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1055,6 +1135,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1075,12 +1156,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1166,6 +1249,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1186,12 +1270,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1245,7 +1331,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Summary"
+                $ref: "#/components/schemas/modules.audit.Summary"
         "400":
           description: "Bad Request"
           content:
@@ -1281,6 +1367,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1301,12 +1388,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1498,6 +1587,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,header,request_params,response_params. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -1506,11 +1602,78 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,header,request_params,response_params. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
+                type: object
+                properties:
+                  duration_ms:
+                    type: integer
+                    format: int64
+                  error_code:
+                    type: string
+                  header:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  id:
+                    type: integer
+                    format: int64
+                  ip:
+                    type: string
+                  kind:
+                    type: string
+                  method:
+                    type: string
+                  module:
+                    type: string
+                  occurred_at:
+                    type: integer
+                    format: int64
+                  operation:
+                    type: string
+                  path:
+                    type: string
+                  request_params:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  resource_id:
+                    type: string
+                  resource_type:
+                    type: string
+                  response_params:
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items: {}
+                      - type: string
+                        nullable: true
+                      - type: number
+                      - type: boolean
+                  status:
+                    type: integer
+                    format: int32
+                  trace_id:
+                    type: string
+                  user_agent:
+                    type: string
+                  user_id:
+                    type: integer
+                    format: int64
+                  username:
+                    type: string
         "400":
           description: "Bad Request"
           content:
@@ -1552,6 +1715,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1572,12 +1736,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1661,6 +1827,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1681,12 +1848,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1772,6 +1941,7 @@ paths:
         - name: q
           in: query
           required: false
+          description: "Case-insensitive literal substring across username, ip, path and trace_id. Trimmed; blank keywords are ignored."
           schema:
             type: string
         - name: module
@@ -1792,12 +1962,14 @@ paths:
         - name: from
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
         - name: to
           in: query
           required: false
+          description: "Optional Unix-millisecond bound: from is inclusive, to exclusive. A single bound constrains only that side. Omit both for the last seven days. Explicit paired ranges and allocated charts may span at most 90 days; narrow longer chart requests. Missing chart bounds are derived from matching event extents and remain null in response range metadata."
           schema:
             type: integer
             format: int64
@@ -1851,7 +2023,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Summary"
+                $ref: "#/components/schemas/modules.audit.Summary"
         "400":
           description: "Bad Request"
           content:
@@ -2551,6 +2723,13 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,username,code,role,scope,permission. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -2559,11 +2738,29 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,username,code,role,scope,permission. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserInfo"
+                type: object
+                properties:
+                  code:
+                    type: string
+                  id:
+                    type: integer
+                    format: int64
+                  permission:
+                    $ref: "#/components/schemas/Permission"
+                  role:
+                    anyOf:
+                      - $ref: "#/components/schemas/UserRole"
+                      - type: object
+                        nullable: true
+                        enum: [null]
+                  scope:
+                    type: string
+                  username:
+                    type: string
         "400":
           description: "Bad Request"
           content:
@@ -3423,6 +3620,13 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at,recipient_ids,recipients. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -3431,13 +3635,57 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,title,content,summary,type,scope,sender_id,published_at,expired_at,read_at,recipient_ids,recipients. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
+                type: object
+                properties:
+                  content:
+                    type: string
+                  created_at:
+                    type: integer
+                    format: int64
+                  expired_at:
+                    type: integer
+                    nullable: true
+                    format: int64
+                  id:
+                    type: integer
+                    format: int64
+                  published_at:
+                    type: integer
+                    format: int64
+                  read_at:
+                    type: integer
+                    nullable: true
+                    format: int64
+                  recipient_ids:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+                  recipients:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Recipient"
+                  scope:
+                    type: string
+                  sender_id:
+                    type: integer
+                    nullable: true
+                    format: int64
+                  summary:
+                    type: string
+                  title:
+                    type: string
+                  type:
+                    type: string
+                  updated_at:
+                    type: integer
+                    format: int64
         "400":
-          description: "invalid message fields; Bad Request"
+          description: "Bad Request; invalid message fields"
           content:
             application/json:
               schema:
@@ -3695,6 +3943,12 @@ paths:
       summary: "GET /pub/login/verification"
       operationId: getPubLoginVerification
       tags: ["Auth"]
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: "OK"
@@ -3813,6 +4067,12 @@ paths:
       summary: "GET /pub/register/username"
       operationId: getPubRegisterUsername
       tags: ["Auth"]
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: "OK"
@@ -4044,11 +4304,11 @@ paths:
                           type: array
                           nullable: true
                           items:
-                            $ref: "#/components/schemas/Summary"
+                            $ref: "#/components/schemas/modules.action.Summary"
                         actions:
                           type: array
                           items:
-                            $ref: "#/components/schemas/ActionView"
+                            $ref: "#/components/schemas/modules.role.ActionView"
                         created_at:
                           type: integer
                           format: int64
@@ -4279,6 +4539,13 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,actions,action_summaries. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -4287,11 +4554,38 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,name,word,action_codes,actions,action_summaries. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Role"
+                type: object
+                properties:
+                  action_codes:
+                    type: array
+                    items:
+                      type: string
+                  action_summaries:
+                    type: array
+                    nullable: true
+                    items:
+                      $ref: "#/components/schemas/modules.action.Summary"
+                  actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/modules.role.ActionView"
+                  created_at:
+                    type: integer
+                    format: int64
+                  id:
+                    type: integer
+                    format: int64
+                  name:
+                    type: string
+                  updated_at:
+                    type: integer
+                    format: int64
+                  word:
+                    type: string
         "400":
           description: "Bad Request; invalid role"
           content:
@@ -4493,7 +4787,7 @@ paths:
                         actions:
                           type: array
                           items:
-                            $ref: "#/components/schemas/ActionView"
+                            $ref: "#/components/schemas/modules.user.ActionView"
                         code:
                           type: string
                         created_at:
@@ -4512,15 +4806,30 @@ paths:
                         metadata:
                           type: object
                           additionalProperties:
-                            type: object
+                            oneOf:
+                              - type: object
+                              - type: array
+                                items: {}
+                              - type: string
+                                nullable: true
+                              - type: number
+                              - type: boolean
                         role:
-                          $ref: "#/components/schemas/RoleView"
+                          anyOf:
+                            - $ref: "#/components/schemas/RoleView"
+                            - type: object
+                              nullable: true
+                              enum: [null]
                         role_id:
                           type: integer
                           nullable: true
                           format: int64
                         role_summary:
-                          $ref: "#/components/schemas/Summary"
+                          anyOf:
+                            - $ref: "#/components/schemas/modules.role.Summary"
+                            - type: object
+                              nullable: true
+                              enum: [null]
                         status:
                           type: integer
                           format: int32
@@ -4717,11 +5026,11 @@ paths:
                           type: array
                           nullable: true
                           items:
-                            $ref: "#/components/schemas/Summary"
+                            $ref: "#/components/schemas/modules.action.Summary"
                         actions:
                           type: array
                           items:
-                            $ref: "#/components/schemas/ActionView"
+                            $ref: "#/components/schemas/modules.usergroup.ActionView"
                         created_at:
                           type: integer
                           format: int64
@@ -5296,6 +5605,13 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: f
+          in: query
+          required: false
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
+          schema:
+            type: string
+            example: "id"
         - name: X-Auth-Scope
           in: header
           required: false
@@ -5304,11 +5620,73 @@ paths:
             example: "admin"
       responses:
         "200":
-          description: "OK"
+          description: "Optional comma-separated f: id,created_at,updated_at,username,code,role_id,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,role,role_summary. Omitted f preserves the complete detail response. Only selected fields and their hidden dependencies are loaded; unselected associations and payloads are not queried. No metadata is always present. Selected zero values, empty arrays and null associations are retained. Empty, unknown, duplicate selectors and repeated f parameters return 400."
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                type: object
+                properties:
+                  action_codes:
+                    type: array
+                    items:
+                      type: string
+                  actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/modules.user.ActionView"
+                  code:
+                    type: string
+                  created_at:
+                    type: integer
+                    format: int64
+                  id:
+                    type: integer
+                    format: int64
+                  last_logged_in_at:
+                    type: integer
+                    nullable: true
+                    format: int64
+                  login_count:
+                    type: integer
+                    format: int64
+                  metadata:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: object
+                        - type: array
+                          items: {}
+                        - type: string
+                          nullable: true
+                        - type: number
+                        - type: boolean
+                  role:
+                    anyOf:
+                      - $ref: "#/components/schemas/RoleView"
+                      - type: object
+                        nullable: true
+                        enum: [null]
+                  role_id:
+                    type: integer
+                    nullable: true
+                    format: int64
+                  role_summary:
+                    anyOf:
+                      - $ref: "#/components/schemas/modules.role.Summary"
+                      - type: object
+                        nullable: true
+                        enum: [null]
+                  status:
+                    type: integer
+                    format: int32
+                  updated_at:
+                    type: integer
+                    format: int64
+                  username:
+                    type: string
+                  wrong:
+                    type: integer
+                    format: int64
         "400":
           description: "Bad Request; invalid user"
           content:
@@ -5452,33 +5830,6 @@ components:
           format: int64
         word:
           type: string
-    ActionView:
-      type: object
-      required: [button, code, created_at, group, id, menu, name, resource, updated_at, word]
-      properties:
-        button:
-          type: string
-        code:
-          type: string
-        created_at:
-          type: integer
-          format: int64
-        group:
-          type: string
-        id:
-          type: integer
-          format: int64
-        menu:
-          type: string
-        name:
-          type: string
-        resource:
-          type: string
-        updated_at:
-          type: integer
-          format: int64
-        word:
-          type: string
     Breakdown:
       type: object
       required: [failed, name, total]
@@ -5559,6 +5910,12 @@ components:
             type: string
         operation:
           type: string
+        permission_scope:
+          type: string
+        permission_scopes:
+          type: array
+          items:
+            type: string
         resource_key:
           type: string
         resource_keys:
@@ -5634,6 +5991,11 @@ components:
       type: object
       required: [name, word]
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           items:
@@ -5648,6 +6010,11 @@ components:
       type: object
       required: [name, word]
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           items:
@@ -5667,6 +6034,11 @@ components:
       type: object
       required: [challenge_id, credential, username]
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           items:
@@ -5680,7 +6052,14 @@ components:
         metadata:
           type: object
           additionalProperties:
-            type: object
+            oneOf:
+              - type: object
+              - type: array
+                items: {}
+              - type: string
+                nullable: true
+              - type: number
+              - type: boolean
         role_id:
           type: integer
           nullable: true
@@ -5795,81 +6174,15 @@ components:
           type: string
         msg:
           type: string
-    Event:
-      type: object
-      required: [duration_ms, error_code, header, id, ip, kind, method, module, occurred_at, operation, path, request_params, resource_id, resource_type, response_params, status, trace_id, user_agent, user_id, username]
-      properties:
-        duration_ms:
-          type: integer
-          format: int64
-        error_code:
-          type: string
-        header:
-          oneOf:
-            - type: object
-            - type: array
-              items: {}
-            - type: string
-              nullable: true
-            - type: number
-            - type: boolean
-        id:
-          type: integer
-          format: int64
-        ip:
-          type: string
-        kind:
-          type: string
-        method:
-          type: string
-        module:
-          type: string
-        occurred_at:
-          type: integer
-          format: int64
-        operation:
-          type: string
-        path:
-          type: string
-        request_params:
-          oneOf:
-            - type: object
-            - type: array
-              items: {}
-            - type: string
-              nullable: true
-            - type: number
-            - type: boolean
-        resource_id:
-          type: string
-        resource_type:
-          type: string
-        response_params:
-          oneOf:
-            - type: object
-            - type: array
-              items: {}
-            - type: string
-              nullable: true
-            - type: number
-            - type: boolean
-        status:
-          type: integer
-          format: int32
-        trace_id:
-          type: string
-        user_agent:
-          type: string
-        user_id:
-          type: integer
-          format: int64
-        username:
-          type: string
     Feature:
       type: object
       required: [btn, grpc, http]
       properties:
         btn:
+          type: array
+          items:
+            type: string
+        entry_keys:
           type: array
           items:
             type: string
@@ -5881,6 +6194,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HTTPPath"
+        permission_resource:
+          type: string
     HTTPPath:
       type: object
       required: [method, path]
@@ -6053,7 +6368,11 @@ components:
       required: [captcha_required, error_code, msg]
       properties:
         captcha:
-          $ref: "#/components/schemas/PointCaptchaChallenge"
+          anyOf:
+            - $ref: "#/components/schemas/PointCaptchaChallenge"
+            - type: object
+              nullable: true
+              enum: [null]
         captcha_required:
           type: boolean
         error_code:
@@ -6078,7 +6397,11 @@ components:
       required: [captcha_required]
       properties:
         captcha:
-          $ref: "#/components/schemas/PointCaptchaChallenge"
+          anyOf:
+            - $ref: "#/components/schemas/PointCaptchaChallenge"
+            - type: object
+              nullable: true
+              enum: [null]
         captcha_required:
           type: boolean
     ManagementGroup:
@@ -6187,11 +6510,25 @@ components:
         frontend:
           type: object
           additionalProperties:
-            type: object
+            oneOf:
+              - type: object
+              - type: array
+                items: {}
+              - type: string
+                nullable: true
+              - type: number
+              - type: boolean
         shared:
           type: object
           additionalProperties:
-            type: object
+            oneOf:
+              - type: object
+              - type: array
+                items: {}
+              - type: string
+                nullable: true
+              - type: number
+              - type: boolean
     Page:
       type: object
       required: [items, p, s, t]
@@ -6199,7 +6536,7 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/Event"
+            $ref: "#/components/schemas/modules.audit.Event"
         p:
           type: integer
           format: int32
@@ -6214,7 +6551,11 @@ components:
       required: [captcha_required, error_code, msg]
       properties:
         captcha:
-          $ref: "#/components/schemas/PointCaptchaChallenge"
+          anyOf:
+            - $ref: "#/components/schemas/PointCaptchaChallenge"
+            - type: object
+              nullable: true
+              enum: [null]
         captcha_required:
           type: boolean
         error_code:
@@ -6233,6 +6574,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PermissionNavigation"
+        permission_scope:
+          type: string
+        permission_scopes:
+          type: array
+          items:
+            type: string
         words:
           type: array
           items:
@@ -6292,7 +6639,11 @@ components:
       required: [verified]
       properties:
         captcha:
-          $ref: "#/components/schemas/PointCaptchaChallenge"
+          anyOf:
+            - $ref: "#/components/schemas/PointCaptchaChallenge"
+            - type: object
+              nullable: true
+              enum: [null]
         verified:
           type: boolean
     PublicCatalog:
@@ -6380,8 +6731,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ResourceChildOrder"
-        collection:
-          type: string
         entries:
           type: object
           additionalProperties:
@@ -6397,6 +6746,16 @@ components:
             $ref: "#/components/schemas/ResourceOperation"
         parent:
           type: string
+        permission_group:
+          type: string
+        permission_scope:
+          type: string
+        reference_operations:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
         references:
           type: array
           items:
@@ -6419,16 +6778,12 @@ components:
           type: string
     ResourceCatalog:
       type: object
-      required: [buttons, defaults, resources]
+      required: [buttons, resources]
       properties:
         buttons:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Feature"
-        defaults:
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/ResourceGrant"
         resources:
           type: object
           additionalProperties:
@@ -6459,18 +6814,6 @@ components:
           type: string
         path:
           type: string
-    ResourceGrant:
-      type: object
-      required: [endpoints, ui]
-      properties:
-        endpoints:
-          type: array
-          items:
-            $ref: "#/components/schemas/ResourceEndpoint"
-        ui:
-          type: array
-          items:
-            $ref: "#/components/schemas/ResourceUI"
     ResourceOperation:
       type: object
       required: [button_keys, entry_keys]
@@ -6511,11 +6854,11 @@ components:
           type: array
           nullable: true
           items:
-            $ref: "#/components/schemas/Summary"
+            $ref: "#/components/schemas/modules.action.Summary"
         actions:
           type: array
           items:
-            $ref: "#/components/schemas/ActionView"
+            $ref: "#/components/schemas/modules.role.ActionView"
         created_at:
           type: integer
           format: int64
@@ -6540,7 +6883,7 @@ components:
         actions:
           type: array
           items:
-            $ref: "#/components/schemas/ActionView"
+            $ref: "#/components/schemas/modules.user.ActionView"
         created_at:
           type: integer
           format: int64
@@ -6610,17 +6953,6 @@ components:
           type: string
         username:
           type: string
-    Summary:
-      type: object
-      required: [id, name, word]
-      properties:
-        id:
-          type: integer
-          format: int64
-        name:
-          type: string
-        word:
-          type: string
     UnreadStatus:
       type: object
       required: [count, latest_unread_at, observed_at, user_id]
@@ -6642,7 +6974,11 @@ components:
       type: object
       properties:
         config:
-          $ref: "#/components/schemas/Config"
+          anyOf:
+            - $ref: "#/components/schemas/Config"
+            - type: object
+              nullable: true
+              enum: [null]
         group:
           type: string
           nullable: true
@@ -6701,6 +7037,11 @@ components:
     UpdateRoleInput:
       type: object
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           nullable: true
@@ -6715,6 +7056,11 @@ components:
     UpdateUserGroupInput:
       type: object
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           nullable: true
@@ -6747,6 +7093,11 @@ components:
     UpdateUserRequest:
       type: object
       properties:
+        action_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ResourceBinding"
         action_codes:
           type: array
           nullable: true
@@ -6764,7 +7115,14 @@ components:
           type: object
           nullable: true
           additionalProperties:
-            type: object
+            oneOf:
+              - type: object
+              - type: array
+                items: {}
+              - type: string
+                nullable: true
+              - type: number
+              - type: boolean
         role_id:
           type: integer
           nullable: true
@@ -6787,7 +7145,7 @@ components:
         actions:
           type: array
           items:
-            $ref: "#/components/schemas/ActionView"
+            $ref: "#/components/schemas/modules.user.ActionView"
         code:
           type: string
         created_at:
@@ -6806,15 +7164,30 @@ components:
         metadata:
           type: object
           additionalProperties:
-            type: object
+            oneOf:
+              - type: object
+              - type: array
+                items: {}
+              - type: string
+                nullable: true
+              - type: number
+              - type: boolean
         role:
-          $ref: "#/components/schemas/RoleView"
+          anyOf:
+            - $ref: "#/components/schemas/RoleView"
+            - type: object
+              nullable: true
+              enum: [null]
         role_id:
           type: integer
           nullable: true
           format: int64
         role_summary:
-          $ref: "#/components/schemas/Summary"
+          anyOf:
+            - $ref: "#/components/schemas/modules.role.Summary"
+            - type: object
+              nullable: true
+              enum: [null]
         status:
           type: integer
           format: int32
@@ -6838,11 +7211,11 @@ components:
           type: array
           nullable: true
           items:
-            $ref: "#/components/schemas/Summary"
+            $ref: "#/components/schemas/modules.action.Summary"
         actions:
           type: array
           items:
-            $ref: "#/components/schemas/ActionView"
+            $ref: "#/components/schemas/modules.usergroup.ActionView"
         created_at:
           type: integer
           format: int64
@@ -6881,7 +7254,11 @@ components:
         permission:
           $ref: "#/components/schemas/Permission"
         role:
-          $ref: "#/components/schemas/UserRole"
+          anyOf:
+            - $ref: "#/components/schemas/UserRole"
+            - type: object
+              nullable: true
+              enum: [null]
         scope:
           type: string
         username:
@@ -6936,3 +7313,240 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CaptchaPoint"
+    modules.action.Summary:
+      type: object
+      required: [code, group, name]
+      properties:
+        code:
+          type: string
+        group:
+          type: string
+        name:
+          type: string
+    modules.audit.Event:
+      type: object
+      required: [duration_ms, error_code, header, id, ip, kind, method, module, occurred_at, operation, path, request_params, resource_id, resource_type, response_params, status, trace_id, user_agent, user_id, username]
+      properties:
+        duration_ms:
+          type: integer
+          format: int64
+        error_code:
+          type: string
+        header:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
+        id:
+          type: integer
+          format: int64
+        ip:
+          type: string
+        kind:
+          type: string
+        method:
+          type: string
+        module:
+          type: string
+        occurred_at:
+          type: integer
+          format: int64
+        operation:
+          type: string
+        path:
+          type: string
+        request_params:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
+        resource_id:
+          type: string
+        resource_type:
+          type: string
+        response_params:
+          oneOf:
+            - type: object
+            - type: array
+              items: {}
+            - type: string
+              nullable: true
+            - type: number
+            - type: boolean
+        status:
+          type: integer
+          format: int32
+        trace_id:
+          type: string
+        user_agent:
+          type: string
+        user_id:
+          type: integer
+          format: int64
+        username:
+          type: string
+    modules.audit.Summary:
+      type: object
+      required: [from, to]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Breakdown"
+        average_ms:
+          type: number
+          format: double
+        bucket_ms:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+        from:
+          type: integer
+          nullable: true
+          format: int64
+        heatmap:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatCell"
+        heatmap_granularity:
+          type: string
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Breakdown"
+        p95_ms:
+          type: number
+          format: double
+        repeated_failures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Breakdown"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/Breakdown"
+        success:
+          type: integer
+          format: int64
+        success_rate:
+          type: number
+          format: double
+        to:
+          type: integer
+          nullable: true
+          format: int64
+        total:
+          type: integer
+          format: int64
+        trend:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bucket"
+        unique_ips:
+          type: integer
+          format: int64
+        unique_users:
+          type: integer
+          format: int64
+    modules.role.ActionView:
+      type: object
+      required: [button, code, created_at, group, id, menu, name, resource, updated_at, word]
+      properties:
+        button:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        group:
+          type: string
+        id:
+          type: integer
+          format: int64
+        menu:
+          type: string
+        name:
+          type: string
+        resource:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        word:
+          type: string
+    modules.role.Summary:
+      type: object
+      required: [id, name, word]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        word:
+          type: string
+    modules.user.ActionView:
+      type: object
+      required: [button, code, created_at, group, id, menu, name, resource, updated_at, word]
+      properties:
+        button:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        group:
+          type: string
+        id:
+          type: integer
+          format: int64
+        menu:
+          type: string
+        name:
+          type: string
+        resource:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        word:
+          type: string
+    modules.usergroup.ActionView:
+      type: object
+      required: [button, code, created_at, group, id, menu, name, resource, updated_at, word]
+      properties:
+        button:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        group:
+          type: string
+        id:
+          type: integer
+          format: int64
+        menu:
+          type: string
+        name:
+          type: string
+        resource:
+          type: string
+        updated_at:
+          type: integer
+          format: int64
+        word:
+          type: string

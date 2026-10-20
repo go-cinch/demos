@@ -2,12 +2,39 @@ package msg
 
 import (
 	"auth/internal/common/authn"
+	"bytes"
+	"encoding/json"
 	"github.com/DATA-DOG/go-sqlmock"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestDetailFailureLogIncludesMessageID(t *testing.T) {
+	m, mock := testModule(t)
+
+	handler := m.HTTP()
+
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	mock.ExpectQuery("SELECT m.title FROM t_msg").WillReturnError(sqlmock.ErrCancelled)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/sent/42?f=title&token=private-query-value", nil))
+	var entry map[string]any
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 500 || entry["message_id"] != float64(42) || entry["operation"] != "get_sent_message" || entry["outcome"] != "failure" || !strings.Contains(entry["msg"].(string), "message 42 failed") || entry["error"] == nil {
+		t.Fatalf("failure log: %s", output.String())
+	}
+	if strings.Contains(output.String(), "private-query-value") {
+		t.Fatal("query secret leaked")
+	}
+}
 
 func TestHTTP(t *testing.T) {
 	m, mock := testModule(t)
@@ -42,6 +69,11 @@ func TestHTTP(t *testing.T) {
 		request(route.method, route.path, "", 401, false)
 	}
 	request("GET", "/missing/route", "", 404, true)
+	for _, query := range []string{"f=", "f=unknown", "f=title,title", "f=title,", "f=title&f=content", "bad=%zz"} {
+		request("GET", "/sent/1?"+query, "", 400, true)
+	}
+	mock.ExpectQuery("SELECT m.title FROM t_msg").WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows([]string{"title"}).AddRow("selected"))
+	request("GET", "/sent/1?f=title", "", 200, true)
 	for _, path := range []string{"/inbox/bad", "/sent/0"} {
 		request("GET", path, "", 400, true)
 	}

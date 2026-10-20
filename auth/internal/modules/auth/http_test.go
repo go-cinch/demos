@@ -191,11 +191,15 @@ func TestAuthHTTP(t *testing.T) {
 	}
 	request(http.MethodPost, "/pub/register", string(missingRegisterProof), "", http.StatusBadRequest)
 	request(http.MethodPost, "/pub/register", registerBody("new-user", "   "), "", http.StatusBadRequest)
+	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(int64(36)))
 	mock.ExpectExec("INSERT INTO t_user").WillReturnError(&pq.Error{Code: "23505", Constraint: "uk_user_username"})
+	mock.ExpectRollback()
 	request(http.MethodPost, "/pub/register", registerBody("new-user", "secret1"), "", http.StatusConflict)
+	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(int64(37)))
 	mock.ExpectExec("INSERT INTO t_user").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	request(http.MethodPost, "/pub/register", registerBody("new-user", "secret1"), "", http.StatusOK)
 	challengeResponse := request(http.MethodPost, "/pub/challenge", `{"purpose":"login"}`, "", http.StatusOK)
 	if challengeResponse.Header().Get("Cache-Control") != "no-store" {
@@ -581,11 +585,11 @@ func TestConfiguredAuthHTTPPath(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			canonical, err := localization.New(authn.AuthHTTPPaths("")).CanonicalCatalog(raw)
+			canonical, err := localization.New(AuthHTTPPaths("")).CanonicalCatalog(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
-			catalog := localization.New(authn.AuthHTTPPaths(prefix))
+			catalog := localization.New(AuthHTTPPaths(prefix))
 			if err := catalog.Install(canonical); err != nil {
 				t.Fatal(err)
 			}
@@ -701,7 +705,7 @@ func TestAuthHTTPPathMappingsCoverRegisteredRoutes(t *testing.T) {
 			t.Fatal(err)
 		}
 		mapped := map[string]bool{}
-		for _, actual := range authn.AuthHTTPPaths(prefix) {
+		for _, actual := range AuthHTTPPaths(prefix) {
 			mapped[actual] = true
 		}
 		registered := map[string]bool{}

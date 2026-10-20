@@ -22,7 +22,7 @@ func permissionRows() *sqlmock.Rows { return sqlmock.NewRows([]string{"word", "c
 
 func installAuthCatalog(t *testing.T, localizer *localization.Module) {
 	t.Helper()
-	c := localization.Catalog{SchemaVersion: 2, DefaultLocale: "en-US", Scopes: []string{"admin"}, Operations: []string{"read", "create", "update", "delete"}, Locales: []localization.Language{{Tag: "en-US", Name: "English", Enabled: true}}, Messages: map[string]localization.Messages{"en-US": {}}, ResourceCatalog: localization.ResourceCatalog{Resources: map[string]localization.Resource{}, Buttons: map[string]localization.Feature{}, Defaults: map[string]localization.ResourceGrant{}}}
+	c := localization.Catalog{SchemaVersion: 2, DefaultLocale: "en-US", Scopes: []string{"admin"}, Operations: []string{"read", "create", "update", "delete"}, Locales: []localization.Language{{Tag: "en-US", Name: "English", Enabled: true}}, Messages: map[string]localization.Messages{"en-US": {}}, ResourceCatalog: localization.ResourceCatalog{Resources: map[string]localization.Resource{}, Buttons: map[string]localization.Feature{}}}
 	for _, key := range []string{"admin:system:user", "admin:system:info", "admin:account:profile"} {
 		c.ResourceCatalog.Resources[key] = localization.Resource{Kind: "resource", Operations: map[string]localization.ResourceOperation{
 			"read": {EntryKeys: []string{}, ButtonKeys: []string{key + ":transport"}}, "update": {EntryKeys: []string{}, ButtonKeys: []string{key + ":modify"}}}}
@@ -37,6 +37,7 @@ func installAuthCatalog(t *testing.T, localizer *localization.Module) {
 	c.ResourceCatalog.Buttons["admin:system:user:query"] = localization.Feature{Btn: []string{"admin:btn:system:user:query"}, HTTP: []localization.HTTPPath{{Method: "GET", Path: "/user"}}, GRPC: []string{}}
 	c.ResourceCatalog.Buttons["admin:system:user:edit"] = localization.Feature{Btn: []string{"admin:btn:system:user:edit"}, HTTP: []localization.HTTPPath{{Method: "PATCH", Path: "/user/{id}"}}, GRPC: []string{}}
 	delete(c.ResourceCatalog.Buttons, "admin:system:user:modify")
+	c.ResourceCatalog.Resources["admin:system:scope"] = localization.Resource{Kind: "resource", PermissionScope: "*"}
 	current := localizer.Current()
 	c.Messages = current.Messages
 	c.Locales = current.Locales
@@ -300,13 +301,12 @@ func (s selectedPermissionCatalog) Select(fields []string) localization.Catalog 
 
 func TestHTTPPermissionSelectionSkipsUIAndOtherProtocols(t *testing.T) {
 	m, _, mock := newAuthTestModule(t)
-	catalog := localization.Catalog{ResourceCatalog: localization.ResourceCatalog{Defaults: map[string]localization.ResourceGrant{
-		"admin": {UI: []localization.ResourceUI{{MenuKey: "invalid", MenuPath: "invalid"}}, Endpoints: []localization.ResourceEndpoint{
-			{Protocol: "http", Method: "GET", Path: "/user"}, {Protocol: "grpc", Method: "INVALID", Path: "invalid"},
-		}},
-	}}}
+	catalog := localization.Catalog{ResourceCatalog: localization.ResourceCatalog{
+		Resources: map[string]localization.Resource{"admin:system:user": {Kind: "resource", Entries: map[string]localization.ResourceEntry{"invalid": {Path: "invalid"}}, Operations: map[string]localization.ResourceOperation{"read": {EntryKeys: []string{"invalid"}, ButtonKeys: []string{"admin:system:user:query"}}}}},
+		Buttons:   map[string]localization.Feature{"admin:system:user:query": {Btn: []string{"invalid"}, HTTP: []localization.HTTPPath{{Method: "GET", Path: "/user"}}, GRPC: []string{"invalid"}}},
+	}}
 	m.catalogSource = selectedPermissionCatalog{catalog}
-	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(permissionRows().AddRow("admin:default:system:general", `{"builtin":"default","ui":[],"endpoints":[]}`))
+	mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(permissionRows().AddRow("admin:default:system:default", `{"builtin":"default","resource_keys":["admin:system:user"],"feature_keys":null,"ui":[],"endpoints":[]}`))
 	permission, err := m.permissionsFor(t.Context(), 3, "admin", report.Fields{"http"})
 	if err != nil {
 		t.Fatal(err)

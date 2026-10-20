@@ -194,6 +194,7 @@ func TestGRPCLifecycle(t *testing.T) {
 	}
 	probe.Close()
 }
+
 func TestRunStopsMessageExpiryWorker(t *testing.T) {
 	database, mock, err := sqlmock.New()
 	if err != nil {

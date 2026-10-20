@@ -40,11 +40,11 @@ func (m *Module) HTTP() http.Handler {
 
 func (m *Module) listGroups(w http.ResponseWriter, r *http.Request) {
 
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	query := r.URL.Query()
 	if values, provided := query["keyword"]; provided && len(values) != 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.KeywordQuery)
 		return

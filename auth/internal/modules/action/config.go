@@ -13,14 +13,16 @@ import (
 // Config stores selected logical features and generated display projections.
 // FeatureKeys nil selects the registered set; an explicit empty array selects none.
 type Config struct {
-	Bindings     *[]ResourceBinding `json:"bindings,omitempty"`
-	ResourceKey  string             `json:"resource_key,omitempty"`
-	Operation    string             `json:"operation,omitempty"`
-	Builtin      string             `json:"builtin,omitempty"`
-	FeatureKeys  []string           `json:"feature_keys" nullable:"true"`
-	ResourceKeys *[]string          `json:"resource_keys,omitempty"`
-	UI           []UIBinding        `json:"ui"`
-	Endpoints    []Endpoint         `json:"endpoints"`
+	PermissionScopes []string           `json:"permission_scopes,omitempty"`
+	PermissionScope  string             `json:"permission_scope,omitempty"`
+	Bindings         *[]ResourceBinding `json:"bindings,omitempty"`
+	ResourceKey      string             `json:"resource_key,omitempty"`
+	Operation        string             `json:"operation,omitempty"`
+	Builtin          string             `json:"builtin,omitempty"`
+	FeatureKeys      []string           `json:"feature_keys" nullable:"true"`
+	ResourceKeys     *[]string          `json:"resource_keys,omitempty"`
+	UI               []UIBinding        `json:"ui"`
+	Endpoints        []Endpoint         `json:"endpoints"`
 }
 
 type ResourceBinding struct {
@@ -44,7 +46,7 @@ func validResourceBinding(word string, binding ResourceBinding) bool {
 		return false
 	}
 	switch binding.Operation {
-	case "read", "create", "update", "delete":
+	case "read", "create", "update", "delete", "*":
 		return true
 	default:
 		return false
@@ -105,8 +107,7 @@ func GroupForConfig(word string, config Config) string {
 	if config.ResourceKey != "" {
 		return config.ResourceKey
 	}
-	parts := strings.Split(word, ":")
-	if config.Builtin != "" || (len(parts) >= 4 && word == parts[0]+":grant:system:permission-admin") {
+	if config.Builtin != "" {
 		return GroupForWord(word)
 	}
 	return ""
@@ -151,7 +152,7 @@ func (c *Config) Validate(word string) error {
 	parts := strings.Split(word, ":")
 	scope := parts[0]
 	bindings, explicit := configBindings(*c)
-	special := c.Builtin != "" || word == scope+":grant:system:permission-admin"
+	special := c.Builtin != ""
 	if special == explicit || (c.Bindings != nil && (c.ResourceKey != "" || c.Operation != "")) {
 		return ErrInvalid
 	}
@@ -169,7 +170,7 @@ func (c *Config) Validate(word string) error {
 	if c.Builtin != "" && c.Builtin != "all" && c.Builtin != "default" {
 		return ErrInvalid
 	}
-	if (c.Builtin != "" || parts[1] == "all" || parts[1] == "default") && parts[1] != c.Builtin {
+	if c.Builtin != "" && parts[1] != c.Builtin {
 		return ErrInvalid
 	}
 	seen := map[string]bool{}
@@ -245,7 +246,7 @@ func ResolveConfig(catalog localization.Catalog, word string, config Config, sel
 	var err error
 	var normalized []ResourceBinding
 	if explicit {
-		if config.Builtin != "" || word == parts[0]+":grant:system:permission-admin" || (config.Bindings != nil && (config.ResourceKey != "" || config.Operation != "")) {
+		if config.Builtin != "" || (config.Bindings != nil && (config.ResourceKey != "" || config.Operation != "")) {
 			return Config{}, ErrInvalid
 		}
 		normalized = []ResourceBinding{}
@@ -260,12 +261,16 @@ func ResolveConfig(catalog localization.Catalog, word string, config Config, sel
 			if resolveErr != nil {
 				return Config{}, ErrInvalid
 			}
+			if resolved.PermissionScope == "*" {
+				grant.PermissionScope = "*"
+			}
+			grant.PermissionScopes = append(grant.PermissionScopes, resolved.PermissionScopes...)
 			grant.UI = append(grant.UI, resolved.UI...)
 			grant.Endpoints = append(grant.Endpoints, resolved.Endpoints...)
 			normalized = append(normalized, binding)
 		}
 	} else {
-		if config.Builtin == "" && word != parts[0]+":grant:system:permission-admin" {
+		if config.Builtin == "" {
 			return Config{}, ErrInvalid
 		}
 		var selections [][]string
@@ -277,7 +282,7 @@ func ResolveConfig(catalog localization.Catalog, word string, config Config, sel
 	if err != nil {
 		return Config{}, ErrInvalid
 	}
-	result := Config{Builtin: config.Builtin, FeatureKeys: config.FeatureKeys, ResourceKeys: config.ResourceKeys, UI: grant.UI, Endpoints: grant.Endpoints}
+	result := Config{PermissionScopes: grant.PermissionScopes, PermissionScope: grant.PermissionScope, Builtin: config.Builtin, FeatureKeys: config.FeatureKeys, ResourceKeys: config.ResourceKeys, UI: grant.UI, Endpoints: grant.Endpoints}
 	if explicit {
 		result.Bindings = &normalized
 		result.FeatureKeys = nil
@@ -326,5 +331,8 @@ func resolveStoredConfig(catalog localization.Catalog, word string, config *Conf
 		return err
 	}
 	*config = resolved
+	if config.PermissionScope == "*" {
+		config.UI, config.Endpoints = []UIBinding{}, []Endpoint{}
+	}
 	return config.Validate(word)
 }

@@ -488,6 +488,7 @@ func (s *redisChallengeStore) Take(ctx context.Context, id string) (string, erro
 	}
 	return keyID, err
 }
+
 func (c *Credentials) PasswordResetChallenge(ctx context.Context, userID int64) (*CredentialChallenge, error) {
 	if userID <= 0 {
 		return nil, ErrInvalidPasswordCredential

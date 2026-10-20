@@ -6,6 +6,7 @@ import (
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
+	actionmodule "auth/internal/modules/action"
 	authmodule "auth/internal/modules/auth"
 	"encoding/json"
 	"errors"
@@ -22,22 +23,24 @@ var _ modules.HTTPModule = (*Module)(nil)
 var _ modules.IdempotentHTTPModule = (*Module)(nil)
 
 type CreateUserRequest struct {
-	ChallengeID string         `json:"challenge_id" example:"u7rUnVYJdWzvX41WeyuR1J6mM8Xr0jYjNQQHf9U5gEo"`
-	Credential  string         `json:"credential" example:"eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0..."`
-	Username    string         `json:"username" example:"operator"`
-	RoleID      *int64         `json:"role_id,omitempty"`
-	ActionCodes []string       `json:"action_codes,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
+	ActionBindings *[]actionmodule.ResourceBinding `json:"action_bindings,omitempty"`
+	ChallengeID    string                          `json:"challenge_id" example:"u7rUnVYJdWzvX41WeyuR1J6mM8Xr0jYjNQQHf9U5gEo"`
+	Credential     string                          `json:"credential" example:"eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0..."`
+	Username       string                          `json:"username" example:"operator"`
+	RoleID         *int64                          `json:"role_id,omitempty"`
+	ActionCodes    []string                        `json:"action_codes,omitempty"`
+	Metadata       map[string]any                  `json:"metadata,omitempty"`
 }
 
 type UpdateUserRequest struct {
-	ChallengeID *string         `json:"challenge_id,omitempty" example:"u7rUnVYJdWzvX41WeyuR1J6mM8Xr0jYjNQQHf9U5gEo"`
-	Credential  *string         `json:"credential,omitempty" example:"eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0..."`
-	Username    *string         `json:"username,omitempty"`
-	RoleID      *int64          `json:"role_id,omitempty"`
-	ActionCodes *[]string       `json:"action_codes,omitempty"`
-	Status      *int16          `json:"status,omitempty"`
-	Metadata    *map[string]any `json:"metadata,omitempty"`
+	ActionBindings *[]actionmodule.ResourceBinding `json:"action_bindings,omitempty"`
+	ChallengeID    *string                         `json:"challenge_id,omitempty" example:"u7rUnVYJdWzvX41WeyuR1J6mM8Xr0jYjNQQHf9U5gEo"`
+	Credential     *string                         `json:"credential,omitempty" example:"eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0..."`
+	Username       *string                         `json:"username,omitempty"`
+	RoleID         *int64                          `json:"role_id,omitempty"`
+	ActionCodes    *[]string                       `json:"action_codes,omitempty"`
+	Status         *int16                          `json:"status,omitempty"`
+	Metadata       *map[string]any                 `json:"metadata,omitempty"`
 }
 
 func (*Module) Name() string { return "/user" }
@@ -63,7 +66,17 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.UserID)
 		return
 	}
-	value, err := m.Get(r.Context(), id)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, listFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	value, err := m.GetSelected(r.Context(), id, fields)
 	if errors.Is(err, ErrInvalid) {
 		server.WriteError(w, r, http.StatusBadRequest, ErrInvalid)
 		return
@@ -107,11 +120,12 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := CreateUserInput{
-		Username:    request.Username,
-		Password:    password,
-		RoleID:      request.RoleID,
-		ActionCodes: request.ActionCodes,
-		Metadata:    request.Metadata,
+		Username:       request.Username,
+		Password:       password,
+		RoleID:         request.RoleID,
+		ActionCodes:    request.ActionCodes,
+		ActionBindings: request.ActionBindings,
+		Metadata:       request.Metadata,
 	}
 	value, err := m.Create(r.Context(), input)
 	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
@@ -158,11 +172,12 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := UpdateUserInput{
-		Username:    request.Username,
-		RoleID:      request.RoleID,
-		ActionCodes: request.ActionCodes,
-		Status:      request.Status,
-		Metadata:    request.Metadata,
+		Username:       request.Username,
+		RoleID:         request.RoleID,
+		ActionCodes:    request.ActionCodes,
+		ActionBindings: request.ActionBindings,
+		Status:         request.Status,
+		Metadata:       request.Metadata,
 	}
 	if request.ChallengeID != nil || request.Credential != nil {
 		challengeID, credential := "", ""
@@ -181,7 +196,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			slog.ErrorContext(r.Context(), "decrypt user update credential failed: "+err.Error(), "operation", "decrypt_user_update_credential", "outcome", "failure", "error", err, "user_id", id)
+			slog.ErrorContext(r.Context(), "decrypt user "+strconv.FormatInt(id, 10)+" update credential failed: "+err.Error(), "operation", "decrypt_user_update_credential", "outcome", "failure", "error", err, "user_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 			return
 		}

@@ -31,7 +31,7 @@ func TestHTTP(t *testing.T) {
 		}
 		return w.Body.String()
 	}
-	for _, q := range []string{"p=", "p=1&p=2", "p=bad", "s=2147483648", "from=bad", "from=0", "to=-1", "result=bad", "time_zone=missing", "q=%ZZ", "weekday=0", "hour=8", "weekday=0&hour=24", "weekday=7&hour=0", "weekday=0&weekday=1&hour=8", "hour=no&weekday=0", "sort=invalid", "username=a&username=b"} {
+	for _, q := range []string{"p=", "p=1&p=2", "p=bad", "s=2147483648", "from=bad", "from=-1", "to=-1", "result=bad", "time_zone=missing", "q=%ZZ", "weekday=0", "hour=8", "weekday=0&hour=24", "weekday=7&hour=0", "weekday=0&weekday=1&hour=8", "hour=no&weekday=0", "sort=invalid", "username=a&username=b"} {
 		call("/audit/login?"+q, 400)
 	}
 	for _, route := range []string{"summary", "option", "export"} {
@@ -43,6 +43,9 @@ func TestHTTP(t *testing.T) {
 	mock.ExpectQuery("SELECT module").WillReturnRows(sqlmock.NewRows([]string{"name", "total", "failed"}))
 	if body := call("/audit/operation/summary?f=modules", 200); !strings.Contains(body, `"modules":[]`) || strings.Contains(body, `"total":`) || strings.Contains(body, `"trend":`) {
 		t.Fatal(body)
+	}
+	for _, q := range []string{"f=", "f=id,id", "f=unknown", "f=id&f=header", "broken=%ZZ"} {
+		call("/audit/login/detail/1?"+q, 400)
 	}
 	call("/audit/login/detail/abc", 400)
 	call("/audit/login/detail/0", 400)

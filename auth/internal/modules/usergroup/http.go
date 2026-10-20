@@ -363,7 +363,7 @@ func (m *Module) members(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "list group members failed: "+err.Error(), "operation", "list_group_members", "outcome", "failure", "error", err, "user_group_id", id)
+		slog.ErrorContext(r.Context(), "list group "+strconv.FormatInt(id, 10)+" members failed: "+err.Error(), "operation", "list_group_members", "outcome", "failure", "error", err, "user_group_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}

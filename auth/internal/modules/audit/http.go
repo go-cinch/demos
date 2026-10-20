@@ -3,10 +3,10 @@ package audit
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
-	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
+	"auth/internal/modules/auth"
 	"encoding/csv"
 	"errors"
 	"log/slog"
@@ -70,13 +70,13 @@ func parseQuery(r *http.Request, q url.Values) (Filter, error) {
 	f.Module = q.Get("module")
 	f.Result = q.Get("result")
 	f.Timezone = q.Get("time_zone")
-	for key, target := range map[string]*int64{"from": &f.From, "to": &f.To} {
+	for key, target := range map[string]**int64{"from": &f.From, "to": &f.To} {
 		if v, ok := q[key]; ok {
 			n, e := strconv.ParseInt(v[0], 10, 64)
-			if e != nil || n <= 0 {
+			if e != nil || n < 0 {
 				return f, ErrFilter
 			}
-			*target = n
+			*target = &n
 		}
 	}
 	for key, target := range map[string]**int32{"p": &f.Page, "s": &f.Size, "weekday": &f.Weekday, "hour": &f.Hour} {
@@ -110,12 +110,17 @@ func replyError(w http.ResponseWriter, r *http.Request, err error) {
 
 func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 
-	f, err := parse(r)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		replyError(w, r, ErrFilter)
+		return
+	}
+	f, err := parseQuery(r, query)
 	if err != nil {
 		replyError(w, r, err)
 		return
 	}
-	f.Fields, err = report.ParseFields(r.URL.Query(), listFields...)
+	f.Fields, err = report.ParseFields(query, listFields...)
 	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
@@ -176,7 +181,17 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		replyError(w, r, ErrFilter)
 		return
 	}
-	result, err := m.Get(r.Context(), kind(r), id)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		replyError(w, r, ErrFilter)
+		return
+	}
+	fields, err := report.ParseFields(query, detailFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	result, err := m.GetSelected(r.Context(), kind(r), id, fields)
 	if err != nil {
 		replyError(w, r, err)
 		return
@@ -216,7 +231,7 @@ func (m *Module) export(w http.ResponseWriter, r *http.Request) {
 
 // AuditTarget keeps business scope and operation semantics in the owning capability.
 func (m *Module) AuditTarget(method, path string) auditctx.Target {
-	relative, authEndpoint := authn.RelativeAuthHTTPPath(path, m.authHTTPPath)
+	relative, authEndpoint := auth.RelativeAuthHTTPPath(path, m.authHTTPPath)
 	if authEndpoint {
 		path = "/auth" + relative
 	}

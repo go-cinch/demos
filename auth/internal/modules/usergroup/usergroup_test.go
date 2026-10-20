@@ -254,6 +254,7 @@ func (p groupPermissionPolicy) RequirePermissionGrant(context.Context) error {
 }
 
 func (groupPermissionPolicy) LockPermissionMutation(context.Context) error { return nil }
+
 func TestGroupGrantPolicyIncludesMembership(t *testing.T) {
 	m, mock := newTestModule(t)
 	m.SetPermissionAdministration(groupPermissionPolicy{})
@@ -300,4 +301,12 @@ func TestGroupGrantPolicyIncludesMembership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func (p groupPermissionPolicy) RequirePermissionEndpoint(ctx context.Context, method, path string) error {
+	return p.RequirePermissionGrant(ctx)
+}
+
+func (p groupPermissionPolicy) RequirePermissionOperation(ctx context.Context, resource, operation string) error {
+	return p.RequirePermissionGrant(ctx)
 }

@@ -33,7 +33,7 @@ func TestSummary(t *testing.T) {
 	for _, span := range []int64{3600000, 7 * 86400000} {
 		m, mock := setup(t)
 		expectSummary(mock, -1)
-		s, err := m.Summary(t.Context(), Filter{Kind: "login", From: 1, To: span, Timezone: "Asia/Shanghai"})
+		s, err := m.Summary(t.Context(), Filter{Kind: "login", From: auditTime(1), To: auditTime(span), Timezone: "Asia/Shanghai"})
 		if err != nil || s.Total != 10 || s.Failed != 3 || s.SuccessRate != 70 || len(s.Heatmap) == 0 || s.Heatmap[0].StartedAt != 1 || s.Heatmap[len(s.Heatmap)-1].EndedAt != span || s.Heatmap[0].Count != 10 || len(s.Modules) != 1 || len(s.RepeatedFailures) != 1 {
 			t.Fatal(s, err)
 		}
@@ -75,7 +75,7 @@ func TestSummarySelectionSkipsUnrequestedQueries(t *testing.T) {
 					mock.ExpectQuery("SELECT " + item.column).WillReturnRows(sqlmock.NewRows([]string{"name", "total", "failed"}))
 				}
 			}
-			value, err := m.Summary(t.Context(), Filter{Kind: "operation", From: 1, To: 3600000}, fields...)
+			value, err := m.Summary(t.Context(), Filter{Kind: "operation", From: auditTime(1), To: auditTime(3600000)}, fields...)
 			if err != nil {
 				t.Fatal(err)
 			}

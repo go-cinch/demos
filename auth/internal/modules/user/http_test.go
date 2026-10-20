@@ -63,6 +63,7 @@ func TestUserHTTP(t *testing.T) {
 	request(http.MethodPost, "/", `{"username":"operator","challenge_id":"challenge","credential":"encrypted","status":0}`, http.StatusBadRequest)
 	request(http.MethodPost, "/", `{"username":"operator","challenge_id":"challenge","credential":"server-error"}`, http.StatusInternalServerError)
 	mock.ExpectBegin()
+	expectDefaultUserPermissions(mock)
 	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(6))
 	mock.ExpectExec("INSERT INTO t_user").WillReturnResult(sqlmock.NewResult(0, 1))
 	expectUserGet(mock, 6, "operator", "ABCDEFGH")
@@ -123,9 +124,17 @@ func TestUserHTTP(t *testing.T) {
 	request(http.MethodGet, "/?p=1&s=2&status=1", "", http.StatusOK)
 	mock.ExpectQuery("SELECT COUNT.*FROM t_user WHERE.*END.* = ANY").WithArgs(sqlmock.AnyArg(), pq.Array([]int16{StatusPending, StatusLocked})).WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(0))
 	request(http.MethodGet, "/?status=0,2", "", http.StatusOK)
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT id FROM t_user .* FOR UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE t_msg SET sender_id = NULL, updated_at").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM t_user").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	request(http.MethodDelete, "/1", "", http.StatusOK)
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT id FROM t_user .* FOR UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE t_msg SET sender_id = NULL, updated_at").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM t_user").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
 	request(http.MethodDelete, "/99", "", http.StatusNotFound)
 	mock.ExpectQuery("SELECT COUNT.*FROM t_user").WillReturnError(sqlmock.ErrCancelled)
 	request(http.MethodGet, "/", "", http.StatusInternalServerError)
@@ -195,7 +204,11 @@ func TestUserHTTPFailureLogsAreQueryableWithoutCredentials(t *testing.T) {
 			name: "delete", method: http.MethodDelete, target: "/42,43?token=query-secret", operation: "delete_users", count: 2,
 			message: "delete 2 users failed: delete user: database unavailable", logError: "delete user: database unavailable",
 			prepare: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectExec("SELECT id FROM t_user .* FOR UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectExec("UPDATE t_msg SET sender_id = NULL, updated_at").WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectExec("DELETE FROM t_user").WithArgs(pq.Array([]int64{42, 43})).WillReturnError(errors.New("database unavailable"))
+				mock.ExpectRollback()
 			},
 		},
 		{

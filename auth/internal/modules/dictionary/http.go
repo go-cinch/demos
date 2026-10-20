@@ -56,7 +56,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "get dictionary failed: "+err.Error(), "operation", "get_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
+		slog.ErrorContext(r.Context(), "get dictionary "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "get_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -122,7 +122,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "update dictionary failed: "+err.Error(), "operation", "update_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
+		slog.ErrorContext(r.Context(), "update dictionary "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "update_dictionary", "outcome", "failure", "error", err, "dictionary_id", id)
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -177,7 +177,7 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "delete dictionaries failed: "+err.Error(), "operation", "delete_dictionaries", "outcome", "failure", "error", err, "count", len(ids))
+		slog.ErrorContext(r.Context(), "delete "+strconv.Itoa(len(ids))+" dictionaries failed: "+err.Error(), "operation", "delete_dictionaries", "outcome", "failure", "error", err, "count", len(ids))
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
@@ -186,11 +186,11 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	query := r.URL.Query()
 	fields, fieldErr := report.ParseFields(query, listFields...)
 	if fieldErr != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)

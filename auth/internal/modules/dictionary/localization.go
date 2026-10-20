@@ -101,7 +101,24 @@ func (m *Module) prepareLocalization(value *Dictionary) error {
 			}
 		}
 	}
-	if reflect.DeepEqual(original, catalog.Messages) && !hadAliases {
+	// Validate first, then persist only enabled default groups. Missing means false.
+	defaultsChanged := false
+	for group, enabled := range catalog.GroupDefaults {
+		if !enabled {
+			delete(catalog.GroupDefaults, group)
+			defaultsChanged = true
+		}
+	}
+	if _, exists := document["group_defaults"]; exists && len(catalog.GroupDefaults) == 0 {
+		delete(document, "group_defaults")
+		defaultsChanged = true
+	} else if defaultsChanged {
+		document["group_defaults"], err = json.Marshal(catalog.GroupDefaults)
+		if err != nil {
+			return ErrInvalid
+		}
+	}
+	if reflect.DeepEqual(original, catalog.Messages) && !hadAliases && !defaultsChanged {
 		return nil
 	}
 	document["messages"], err = json.Marshal(catalog.Messages)

@@ -60,7 +60,7 @@ func TestCredentialVersionTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, auth.Switches{PasswordResetRequired: true}, localizer)
+	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, auth.Switches{PasswordResetRequired: true}, localizer, nil)
 	actions := action.New(store, limits, false, localizer)
 	users := user.New(store, limits, nil, guard, actions, role.New(store, limits, actions, false), auth.Switches{PasswordResetRequired: true})
 	login := func(password string) *auth.LoginResult {

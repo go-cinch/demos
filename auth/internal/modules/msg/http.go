@@ -66,7 +66,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "create message failed: "+err.Error(), "operation", "create_message", "outcome", "failure", "error", err, "sender_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "create message from user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "create_message", "outcome", "failure", "error", err, "sender_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -95,7 +95,7 @@ func (m *Module) getInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "get inbox message failed: "+err.Error(), "operation", "get_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "get inbox message "+strconv.FormatInt(id, 10)+" for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "get_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -105,13 +105,23 @@ func (m *Module) getInbox(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) getSent(w http.ResponseWriter, r *http.Request) {
 
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, sentDetailFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 
 	if err != nil || id <= 0 {
 		server.WriteError(w, r, http.StatusBadRequest, ErrInvalid)
 		return
 	}
-	value, err := m.GetSent(r.Context(), id)
+	value, err := m.GetSentSelected(r.Context(), id, fields)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalid), errors.Is(err, ErrRecipient):
@@ -119,7 +129,7 @@ func (m *Module) getSent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "get sent message failed: "+err.Error(), "operation", "get_sent_message", "outcome", "failure", "error", err, "message_id", id)
+			slog.ErrorContext(r.Context(), "get sent message "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "get_sent_message", "outcome", "failure", "error", err, "message_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -165,7 +175,7 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "mark message read failed: "+err.Error(), "operation", "mark_message_read", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "mark message "+strconv.FormatInt(id, 10)+" read for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "mark_message_read", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -194,7 +204,7 @@ func (m *Module) deleteInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "delete inbox message failed: "+err.Error(), "operation", "delete_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "delete inbox message "+strconv.FormatInt(id, 10)+" for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "delete_inbox_message", "outcome", "failure", "error", err, "message_id", id, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -218,7 +228,7 @@ func (m *Module) deleteSent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "delete sent message failed: "+err.Error(), "operation", "delete_sent_message", "outcome", "failure", "error", err, "message_id", id)
+			slog.ErrorContext(r.Context(), "delete sent message "+strconv.FormatInt(id, 10)+" failed: "+err.Error(), "operation", "delete_sent_message", "outcome", "failure", "error", err, "message_id", id)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -241,7 +251,7 @@ func (m *Module) readAll(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "mark all inbox messages read failed: "+err.Error(), "operation", "mark_all_inbox_messages_read", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "mark all inbox messages read for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "mark_all_inbox_messages_read", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -264,7 +274,7 @@ func (m *Module) unreadCount(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "count unread messages failed: "+err.Error(), "operation", "count_unread_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "count unread messages for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "count_unread_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return
@@ -378,7 +388,7 @@ func (m *Module) listInbox(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
-			slog.ErrorContext(r.Context(), "list inbox messages failed: "+err.Error(), "operation", "list_inbox_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
+			slog.ErrorContext(r.Context(), "list inbox messages for user "+strconv.FormatInt(identity.UserID, 10)+" failed: "+err.Error(), "operation", "list_inbox_messages", "outcome", "failure", "error", err, "recipient_id", identity.UserID)
 			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		}
 		return

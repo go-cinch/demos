@@ -159,15 +159,18 @@ func (s *Sessions) ValidateSession(ctx context.Context, sessionID string) error 
 // ValidateIdentity binds signed claims to the stored session before checking the user.
 func (s *Sessions) ValidateIdentity(ctx context.Context, identity authn.Identity) error {
 	if identity.SessionID == "" || identity.CredentialVersion <= 0 {
-		return ErrSessionNotFound
+		return fmt.Errorf("%w: %w", authn.ErrUnauthorized, ErrSessionNotFound)
 	}
 	value, err := s.store.Get(ctx, identity.SessionID)
+	if errors.Is(err, ErrSessionNotFound) {
+		return fmt.Errorf("%w: %w", authn.ErrUnauthorized, err)
+	}
 	if err != nil {
 		return err
 	}
 	var record refreshSession
 	if json.Unmarshal([]byte(value), &record) != nil || record.identity() != identity {
-		return ErrSessionNotFound
+		return fmt.Errorf("%w: %w", authn.ErrUnauthorized, ErrSessionNotFound)
 	}
 	return nil
 }
@@ -337,6 +340,7 @@ func (s *redisSessionStore) Delete(ctx context.Context, sessionID, digest string
 		"session:data:"+sessionID, "session:refresh:"+digest,
 	).Err()
 }
+
 func (s *Sessions) authenticatedSession(ctx context.Context, identity authn.Identity) (refreshSession, error) {
 	identity.PasswordResetRequired = false
 	value, err := s.store.Get(ctx, identity.SessionID)

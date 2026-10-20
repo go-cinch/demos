@@ -4,6 +4,7 @@ import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
+	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strings"
 )
 
+var _ modules.HTTPAuthenticationPolicy = (*Module)(nil)
 var _ modules.HTTPModule = (*Module)(nil)
 var _ modules.ConfigurableHTTPModule = (*Module)(nil)
 var _ modules.HTTPPermissionAuthorizer = (*Module)(nil)
@@ -135,11 +137,12 @@ func (m *Module) checkPermission(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) usernameAvailability(w http.ResponseWriter, r *http.Request) {
 
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	usernames, provided := r.URL.Query()["username"]
+	usernames, provided := query["username"]
 	if !provided || len(usernames) != 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.UsernameQuery)
 		return
@@ -413,11 +416,12 @@ func (m *Module) changePassword(w http.ResponseWriter, r *http.Request) {
 func (m *Module) loginVerification(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "no-store")
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	usernames, provided := r.URL.Query()["username"]
+	usernames, provided := query["username"]
 	if !provided || len(usernames) != 1 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.UsernameQuery)
 		return
@@ -670,11 +674,17 @@ func (m *Module) login(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) info(w http.ResponseWriter, r *http.Request) {
 
-	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
 		return
 	}
-	info, err := m.Info(r.Context(), authn.PermissionScope(r.Context()))
+	fields, err := report.ParseFields(query, infoFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	info, err := m.InfoSelected(r.Context(), authn.PermissionScope(r.Context()), fields)
 	if errors.Is(err, ErrInfoScopeInvalid) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return

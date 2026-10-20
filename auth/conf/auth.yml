@@ -13,7 +13,7 @@ auth:
     enableE2ETestFile: ""
   jwt:
     issuer: "auth"
-    key: "Rx1QxRVsT4wmbO34J7reA5ghXP3BDsw3gtIM866MTK0PNyleDkhzmSmlbVW7qXqa"
+    key: "iQbd3trKTDhWxQdFOYqspF42DctH3DtcawDtBvy2T6DBuOnhiyqm73QUacgv7YkZ"
     lifetime: 15m
   refresh:
     sessionLifetime: 12h

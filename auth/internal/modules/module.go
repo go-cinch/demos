@@ -77,3 +77,10 @@ type HTTPLocalizer interface {
 	HTTPModule
 	Translator() i18n.Translator
 }
+
+// HTTPAuthenticationPolicy describes requests allowed during account recovery.
+// The capability owns its paths; shared authentication only enforces the policy.
+type HTTPAuthenticationPolicy interface {
+	HTTPModule
+	AllowRestrictedHTTP(method, path string) bool
+}

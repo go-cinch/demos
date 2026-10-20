@@ -3,8 +3,10 @@ package server
 import (
 	"encoding/json"
 
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 
 	"net/http"
 	"net/http/httptest"
@@ -164,9 +166,11 @@ func TestHTTPPermissionAuthorization(t *testing.T) {
 
 type rootPathTestModule struct{}
 
-func (rootPathTestModule) Name() string           { return "" }
+func (rootPathTestModule) Name() string { return "" }
+
 func (rootPathTestModule) HTTPPathConfig() string { return "auth.path" }
-func (rootPathTestModule) Public() bool           { return true }
+
+func (rootPathTestModule) Public() bool { return true }
 
 func (rootPathTestModule) HTTP() http.Handler {
 	r := chi.NewRouter()
@@ -207,5 +211,58 @@ func TestConfiguredRootModulePreservesRouteAndMiddleware(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest("GET", "/missing", nil))
 	if response.Code != 404 {
 		t.Fatal(response.Code)
+	}
+}
+
+type authenticationFailureValidator struct{ err error }
+
+func (v authenticationFailureValidator) ValidateIdentity(context.Context, authn.Identity) error {
+	return v.err
+}
+
+func TestHTTPAuthenticationFailureLogging(t *testing.T) {
+	failure := errors.New("authentication storage unavailable")
+	manager, err := authn.New("test", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", time.Hour, authenticationFailureValidator{failure})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := manager.Issue(authn.Identity{UserID: 7, Username: "operator", Code: "ABCDEFGH", SessionID: "session-1", CredentialVersion: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewRouter(&config.Config{}, manager, nil, protectedTestModule{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	request := httptest.NewRequest(http.MethodGet, "/private", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError || response.Body.String() != `{"error_code":"HTTP_INTERNAL","msg":"internal server error"}` {
+		t.Fatalf("authentication failure response = %d %s", response.Code, response.Body.String())
+	}
+	found := false
+	for _, line := range bytes.Split(bytes.TrimSpace(logs.Bytes()), []byte("\n")) {
+		var record map[string]any
+		if err := json.Unmarshal(line, &record); err != nil {
+			t.Fatal(err)
+		}
+		if record["operation"] != "authenticate_http_request" {
+			continue
+		}
+		found = true
+		if record["level"] != "ERROR" || record["outcome"] != "failure" || record["method"] != "GET" || record["error"] != failure.Error() || record["msg"] != "authenticate http request failed: "+failure.Error() {
+			t.Fatalf("authentication failure log = %#v", record)
+		}
+	}
+	if !found {
+		t.Fatal("authentication storage failure was not logged")
+	}
+	if bytes.Contains(logs.Bytes(), []byte(token)) {
+		t.Fatal("authentication log contains the bearer token")
 	}
 }

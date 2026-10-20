@@ -43,7 +43,17 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.RoleID)
 		return
 	}
-	value, err := m.Get(r.Context(), id)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
+		return
+	}
+	fields, err := report.ParseFields(query, listFields...)
+	if err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	value, err := m.GetSelected(r.Context(), id, fields)
 	if errors.Is(err, ErrInvalid) {
 		server.WriteError(w, r, http.StatusBadRequest, ErrInvalid)
 		return

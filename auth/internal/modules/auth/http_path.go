@@ -1,7 +1,7 @@
-package authn
+package auth
 
 import (
-	"auth/internal/common/config"
+	"net/http"
 	"strings"
 )
 
@@ -21,15 +21,6 @@ func AuthHTTPPaths(prefix string) map[string]string {
 	return paths
 }
 
-func (m *Manager) SetHTTPPath(prefix string) error {
-	value, err := config.NormalizeHTTPPath(prefix)
-	if err != nil {
-		return err
-	}
-	m.httpPath = value
-	return nil
-}
-
 // RelativeAuthHTTPPath recognizes only endpoints owned by the auth module.
 func RelativeAuthHTTPPath(path, prefix string) (string, bool) {
 	for canonical, actual := range AuthHTTPPaths(prefix) {
@@ -38,4 +29,19 @@ func RelativeAuthHTTPPath(path, prefix string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// PasswordResetAllowedHTTP is owned by the auth capability, independently of
+// permission definitions. Gateway checks are added only to the login boundary.
+func PasswordResetAllowedHTTP(method, path string, prefixes ...string) bool {
+	prefix := ""
+	if len(prefixes) > 0 {
+		prefix = prefixes[0]
+	}
+	return (method == http.MethodPatch && path == prefix+"/reset/pwd") ||
+		(method == http.MethodPost && (path == prefix+"/challenge" || path == prefix+"/logout" || path == prefix+"/pub/logout" || path == prefix+"/pub/refresh"))
+}
+
+func (m *Module) AllowRestrictedHTTP(method, path string) bool {
+	return PasswordResetAllowedHTTP(method, path, m.httpPath) || (method == http.MethodGet && path == m.httpPath+m.PermissionEndpoint())
 }

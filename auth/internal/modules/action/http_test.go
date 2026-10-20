@@ -88,9 +88,9 @@ func TestActionHTTP(t *testing.T) {
 	if !strings.Contains(listBody, `"t":0`) || strings.Contains(listBody, `"total"`) {
 		t.Fatalf("list response: %s", listBody)
 	}
-	mock.ExpectExec("DELETE FROM t_action").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(regexp.QuoteMeta(deleteAssignedActionsSQL)).WithArgs(pq.Array([]int64{1}), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	request(http.MethodDelete, "/1", "", http.StatusOK)
-	mock.ExpectExec("DELETE FROM t_action").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(regexp.QuoteMeta(deleteAssignedActionsSQL)).WithArgs(pq.Array([]int64{99}), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	request(http.MethodDelete, "/99", "", http.StatusNotFound)
 }
 
