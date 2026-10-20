@@ -57,7 +57,7 @@ export function ServerSlider({
     d.tracks = [{ x: 0, t: 0 }];
     d.active = true;
     d.inputMode = inputMode;
-    d.challenge = request('/auth/pub/slider/challenge', {
+    d.challenge = request('/pub/slider/challenge', {
       method: 'POST',
       public: true,
       body: { purpose, username: username.trim() },
@@ -80,7 +80,7 @@ export function ServerSlider({
     const tracks = [...d.tracks, { x: Math.round(d.width), t: duration }];
     try {
       const challenge = await d.challenge;
-      const result = await request<{ proof: string }>('/auth/pub/slider/verify', {
+      const result = await request<{ proof: string }>('/pub/slider/verify', {
         method: 'POST',
         public: true,
         body: {
@@ -200,7 +200,7 @@ export function PointCaptcha({
     [error, setError] = useState<Feedback>('');
   const image = useRef<HTMLImageElement>(null);
   const generation = useRef(0);
-  const path = authenticated ? '/auth/captcha' : '/auth/pub/captcha';
+  const path = authenticated ? '/captcha' : '/pub/captcha';
   useEffect(() => {
     generation.current++;
     setSelected([]);
