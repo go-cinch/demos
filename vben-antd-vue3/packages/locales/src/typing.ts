@@ -6,7 +6,7 @@ export type ImportLocaleFn = () => Promise<{ default: Record<string, string> }>;
 
 export type LoadMessageFn = (
   lang: SupportedLanguagesType,
-) => Promise<Record<string, string> | undefined>;
+) => Promise<Record<string, any> | undefined>;
 
 export interface LocaleSetupOptions {
   /**

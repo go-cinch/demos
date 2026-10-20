@@ -56,7 +56,6 @@
   "lastLogin": "最近登录",
   "neverLoggedIn": "从未登录",
   "filterEnabled": "筛选{status}字典",
-  "filterCategory": "筛选{category}白名单",
   "noSummary": "暂无统计数据",
   "recentLoginUsers": "最近登录用户数",
   "userTrend": "新增与最近登录",

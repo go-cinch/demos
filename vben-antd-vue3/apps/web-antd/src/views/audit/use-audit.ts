@@ -19,7 +19,7 @@ import {
 } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { useAccess } from '@vben/access';
+import { usePermissions } from '#/composables/use-permissions';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
@@ -34,11 +34,12 @@ export function useAudit(kind: AuditKind) {
     return route.path === `/audit/${kind}` && typeof route.query.username === 'string'
       ? route.query.username.trim() : '';
   }
-  const { hasAccessByCodes } = useAccess();
+  const { hasButton, hasPage } = usePermissions();
+  const canControl = (control: string) => hasButton(`admin:btn:audit:${kind}:${control}`);
   const timezone = useTimezoneStore();
   const user = useUserStore();
-  const canRead = computed(() => hasAccessByCodes([`audit.${kind}.read`]));
-  const canExport = computed(() => hasAccessByCodes([`audit.${kind}.export`]));
+  const canRead = computed(() => hasPage(`/audit/${kind}`));
+  const canExport = computed(() => canControl('export-report'));
   const days = ref(profileFilter() && route.query.days === '30' ? 30 : 1);
   const module = ref('');
     const q = ref('');
@@ -142,6 +143,7 @@ export function useAudit(kind: AuditKind) {
     detailError.value = false;
   }
   async function detail(id: number) {
+    if (!canControl('view-detail')) return;
     const run = ++detailRun;
     selectedID.value = id;
     selected.value = rows.value.find((row) => row.id === id) ?? selected.value;
@@ -456,6 +458,7 @@ export function useAudit(kind: AuditKind) {
   onBeforeUnmount(invalidate);
   return {
     canRead,
+    canControl,
     canExport,
     timezone,
     days,

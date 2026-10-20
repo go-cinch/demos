@@ -114,7 +114,11 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
           <div class="relative flex size-full items-center px-3">
             <!-- extra -->
             <div
-              :class="!tab.affixTab && tabsView.length > 1 && tab.closable ? 'ml-3' : 'ml-0 group-hover:ml-3 group-focus-within:ml-3'"
+              :class="
+                !tab.affixTab && tabsView.length > 1 && tab.closable
+                  ? 'ml-3'
+                  : 'ml-0 group-hover:ml-3 group-focus-within:ml-3'
+              "
               class="relative z-3 flex shrink-0 items-center overflow-hidden transition-[margin] duration-200"
             >
               <!-- pin-icon -->
@@ -129,13 +133,19 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
                 <Pin aria-hidden="true" class="size-3.5 shrink-0" />
               </button>
               <!-- close-icon -->
-              <X
+              <button
                 v-show="!tab.affixTab && tabsView.length > 1 && tab.closable"
                 :aria-label="closeTitle"
-                class="size-3 cursor-pointer rounded-full stroke-accent-foreground/80 transition-all group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
                 :title="closeTitle"
+                class="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                type="button"
                 @click.stop="() => emit('close', tab.key)"
-              />
+              >
+                <X
+                  aria-hidden="true"
+                  class="size-3 cursor-pointer rounded-full stroke-accent-foreground/80 transition-all group-[.is-active]:text-primary hover:bg-accent hover:stroke-accent-foreground group-[.is-active]:dark:text-accent-foreground"
+                />
+              </button>
               <button
                 v-show="tab.affixTab"
                 :aria-label="unpinTitle"

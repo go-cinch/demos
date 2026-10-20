@@ -1,0 +1,18 @@
+{
+  "relatedMenus": "关联菜单",
+  "allResources": "全部资源",
+  "allOperations": "全部操作",
+  "allFeatures": "全部功能",
+  "noResource": "无关联菜单",
+  "unresolvedLabel": "名称待核对",
+  "unavailable": "权限内容待核对",
+  "viewAll": "查看全部 {count} 项",
+  "total": "共 {count} 项",
+  "loadError": "权限内容暂时无法加载，请重试。完整 JSON 中仍保留原始记录。",
+  "unresolved": "{count} 项权限无法解析，请核对完整 JSON；其余权限正常展示。",
+  "readOnly": "只读权限",
+  "selected": "已选",
+  "unselected": "未选",
+  "noFeatures": "未配置功能",
+  "allMenus": "全部菜单"
+}

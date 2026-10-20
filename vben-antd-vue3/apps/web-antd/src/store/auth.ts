@@ -62,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
   let loginCaptchaUsername = '';
   let loginVerificationRequest = 0;
   let sessionRestoreAttempted = false;
+  let sessionEpoch = 0;
 
   function resetLoginVerification() {
     loginVerificationRequest += 1;
@@ -135,6 +136,10 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
+          const currentPath = router.currentRoute.value.path;
+          if (!fetchUserInfoResult.permission.menus.some((menu) => menu.menu_path === currentPath)) {
+            await router.replace(fetchUserInfoResult.homePath || '/forbidden');
+          }
         } else {
           loginEntering.value = true;
           await playLoginTransition();
@@ -210,6 +215,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout(redirect: boolean = true) {
+    const epoch = ++sessionEpoch;
     try {
       if (accessStore.refreshToken) {
         await logoutApi(accessStore.refreshToken);
@@ -217,6 +223,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // 不做任何处理
     }
+    if (epoch !== sessionEpoch) return;
     resetAllStores();
     resetLoginVerification();
     sessionRestoreAttempted = true;
@@ -233,11 +240,45 @@ export const useAuthStore = defineStore('auth', () => {
     });
   }
 
-  async function fetchUserInfo() {
-    const userInfo = await getUserInfoApi();
-    accessStore.setAccessCodes(userInfo.permission.btns);
-    userStore.setUserInfo(userInfo);
-    return userInfo;
+  let userInfoFlight: { epoch: number; request: ReturnType<typeof getUserInfoApi> } | undefined;
+  async function fetchUserInfo(options: { fresh?: boolean } = {}): Promise<Awaited<ReturnType<typeof getUserInfoApi>>> {
+    const epoch = sessionEpoch;
+    const previousFlight = userInfoFlight;
+    if (previousFlight?.epoch === epoch) {
+      if (!options.fresh) return previousFlight.request;
+      // A write/403 can invalidate a request that started before the change.
+      // Serialize behind it, then issue (or join) a request started afterwards.
+      try { await previousFlight.request; } catch { /* Still refresh if this session is current. */ }
+      if (sessionEpoch !== epoch || !accessStore.accessToken) throw new Error('Permission response belongs to an expired session');
+      if (userInfoFlight?.request === previousFlight.request) userInfoFlight = undefined;
+      return fetchUserInfo();
+    }
+    const request = (async () => {
+      const previousPaths = JSON.stringify(userStore.userInfo?.roles ?? []);
+      const previousNavigation = JSON.stringify((userStore.userInfo as Awaited<ReturnType<typeof getUserInfoApi>> | null)?.permission?.navigation);
+      const userInfo = await getUserInfoApi();
+      const assertSession = () => {
+        if (sessionEpoch !== epoch || !accessStore.accessToken) throw new Error('Permission response belongs to an expired session');
+      };
+      assertSession();
+      accessStore.setAccessCodes([...userInfo.permission.words, ...userInfo.permission.menus.flatMap((menu) => menu.btns)]);
+      userStore.setUserInfo(userInfo);
+      if (accessStore.isAccessChecked && (previousPaths !== JSON.stringify(userInfo.roles) || previousNavigation !== JSON.stringify(userInfo.permission.navigation))) {
+        const [{ generateAccess }, { accessRoutes }, { resetRoutes }] = await Promise.all([
+          import('#/router/access'), import('#/router/routes'), import('#/router'),
+        ]);
+        assertSession();
+        resetRoutes();
+        const { accessibleMenus, accessibleRoutes } = await generateAccess({ roles: userInfo.roles, router, routes: accessRoutes, permissionMenus: userInfo.permission.menus, navigation: userInfo.permission.navigation });
+        assertSession();
+        accessStore.setAccessMenus(accessibleMenus);
+        accessStore.setAccessRoutes(accessibleRoutes);
+      }
+      return userInfo;
+    })();
+    userInfoFlight = { epoch, request };
+    try { return await request; }
+    finally { if (userInfoFlight?.request === request) userInfoFlight = undefined; }
   }
 
   async function restoreSession() {
@@ -252,17 +293,22 @@ export const useAuthStore = defineStore('auth', () => {
     if (!refreshToken) {
       return false;
     }
+    const epoch = sessionEpoch;
     try {
-      acceptSession(await refreshTokenApi(refreshToken));
+      const result = await refreshTokenApi(refreshToken);
+      if (epoch !== sessionEpoch || accessStore.refreshToken !== refreshToken) return Boolean(accessStore.accessToken);
+      acceptSession(result);
       return true;
     } catch {
+      if (epoch !== sessionEpoch || accessStore.refreshToken !== refreshToken) return Boolean(accessStore.accessToken);
       accessStore.setRefreshToken(null);
       accessStore.setAccessToken(null);
       return false;
     }
   }
 
-  function acceptSession(result: AuthApi.LoginResult) {
+  function acceptSession(result: AuthApi.LoginResult, refreshCurrentSession = false) {
+    if (!refreshCurrentSession) sessionEpoch += 1;
     sessionRestoreAttempted = true;
     passwordResetRequired.value = result.password_reset_required;
     accessStore.setRefreshToken(result.refresh_token);
@@ -289,6 +335,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function $reset() {
+    sessionEpoch += 1;
     pendingRegistrationLogin = null;
     passwordResetRequired.value = false;
     loginLoading.value = false;

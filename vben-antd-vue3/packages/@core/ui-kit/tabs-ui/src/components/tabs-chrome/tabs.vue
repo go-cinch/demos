@@ -139,7 +139,11 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
 
             <!-- extra -->
             <div
-              :class="!tab.affixTab && tabsView.length > 1 && tab.closable ? 'ml-4' : 'ml-0 group-hover:ml-4 group-focus-within:ml-4'"
+              :class="
+                !tab.affixTab && tabsView.length > 1 && tab.closable
+                  ? 'ml-4'
+                  : 'ml-0 group-hover:ml-4 group-focus-within:ml-4'
+              "
               class="tabs-chrome__extra relative z-3 mr-[calc(var(--gap)*2)] flex h-4 shrink-0 items-center transition-[margin] duration-200"
             >
               <!-- pin-icon -->
@@ -154,13 +158,19 @@ function onMouseDown(e: MouseEvent, tab: TabConfig) {
                 <Pin aria-hidden="true" class="size-3.5 shrink-0" />
               </button>
               <!-- close-icon -->
-              <X
+              <button
                 v-show="!tab.affixTab && tabsView.length > 1 && tab.closable"
                 :aria-label="closeTitle"
-                class="mt-0.5 size-3 cursor-pointer rounded-full stroke-accent-foreground/80 text-accent-foreground/80 transition-all group-[.is-active]:text-accent-foreground hover:bg-accent hover:stroke-accent-foreground"
                 :title="closeTitle"
+                class="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                type="button"
                 @click.stop="() => emit('close', tab.key)"
-              />
+              >
+                <X
+                  aria-hidden="true"
+                  class="mt-0.5 size-3 cursor-pointer rounded-full stroke-accent-foreground/80 text-accent-foreground/80 transition-all group-[.is-active]:text-accent-foreground hover:bg-accent hover:stroke-accent-foreground"
+                />
+              </button>
               <button
                 v-show="tab.affixTab"
                 :aria-label="unpinTitle"

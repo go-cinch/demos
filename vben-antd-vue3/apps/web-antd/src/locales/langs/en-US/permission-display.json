@@ -1,0 +1,18 @@
+{
+  "relatedMenus": "Related menus",
+  "allResources": "All resources",
+  "allOperations": "All operations",
+  "allFeatures": "All features",
+  "noResource": "No related menus",
+  "unresolvedLabel": "Unresolved name",
+  "unavailable": "Permission details unavailable",
+  "viewAll": "View all {count}",
+  "total": "{count} total",
+  "loadError": "Permission details could not be loaded. Try again. The original record remains available in Full JSON.",
+  "unresolved": "{count} permissions could not be resolved. Check Full JSON; other permissions are shown below.",
+  "readOnly": "Read-only permissions",
+  "selected": "Selected",
+  "unselected": "Not selected",
+  "noFeatures": "No features configured",
+  "allMenus": "All menus"
+}

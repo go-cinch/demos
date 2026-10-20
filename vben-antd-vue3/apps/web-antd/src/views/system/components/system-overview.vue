@@ -20,7 +20,7 @@ import {
 import LoadWarning from '#/components/load-warning.vue';
 import { useStatisticsWarning } from '#/composables/use-statistics-warning';
 import { vSkeleton } from '#/directives/skeleton';
-import { $t } from '#/locales';
+import { $t, catalogLabel } from '#/locales';
 
 const props = defineProps<{
   resource: SystemResource;
@@ -489,7 +489,7 @@ kind="statistics"
                 class="group-bar"
                 :aria-label="
                   $t('system-insights.selectGroup', {
-                    name: group.name || $t('system-insights.ungrouped'),
+                    name: (group.name ? catalogLabel('groups', group.name) : $t('system-insights.ungrouped')),
                   })
                 "
                 :aria-pressed="selectedGroups?.includes(group.name) ?? false"
@@ -497,7 +497,7 @@ kind="statistics"
                 @click="emit('permissionGroup', group.name)"
               >
                 <span class="bar-label">{{
-                  group.name || $t('system-insights.ungrouped')
+                  (group.name ? catalogLabel('groups', group.name) : $t('system-insights.ungrouped'))
                 }}</span><span class="bar-track"><i
                     :style="{ width: `${(group.count / groupMaximum) * 100}%` }"
                   ></i></span><strong>{{ group.count }}</strong>

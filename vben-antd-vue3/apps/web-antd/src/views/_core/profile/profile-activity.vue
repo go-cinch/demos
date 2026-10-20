@@ -13,7 +13,7 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useAccess } from '@vben/access';
+import { usePermissions } from '#/composables/use-permissions';
 import { IconifyIcon } from '@vben/icons';
 import { preferences } from '@vben/preferences';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
@@ -34,10 +34,10 @@ import {
 const router = useRouter();
 const user = useUserStore();
 const timezone = useTimezoneStore();
-const { hasAccessByCodes } = useAccess();
+const { hasPage } = usePermissions();
 const kinds = computed(() =>
   (['login', 'operation'] as const).filter((kind) =>
-    hasAccessByCodes([`audit.${kind}.read`]),
+    hasPage(`/audit/${kind}`),
   ),
 );
 const kind = ref<AuditKind>('login');

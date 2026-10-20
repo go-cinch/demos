@@ -39,7 +39,6 @@ const segmentedOptions = computed(() =>
 }
 .management-view-switch :deep(.ant-segmented-item-selected) {
   color: hsl(var(--primary));
-  font-weight: 600;
 }
 .management-view-switch :deep(.ant-segmented-item:has(input:focus-visible)) {
   outline: 2px solid hsl(var(--primary));

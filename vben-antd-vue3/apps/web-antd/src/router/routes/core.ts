@@ -34,7 +34,7 @@ const coreRoutes: RouteRecordRaw[] = [
     name: 'Root',
     path: '/',
     redirect: preferences.app.defaultHomePath,
-    children: [],
+    children: [{ name: 'PermissionForbidden', path: 'forbidden', component: () => import('#/views/_core/fallback/forbidden.vue'), meta: { hideInMenu: true, hideInTab: true, title: '403' } }],
   },
   {
     component: AuthPageLayout,

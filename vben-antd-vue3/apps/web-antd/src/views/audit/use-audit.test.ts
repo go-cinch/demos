@@ -10,7 +10,7 @@ import { auditApi } from '#/api/audit';
 
 import { useAudit } from './use-audit';
 
-vi.mock('@vben/access', () => ({ useAccess: () => ({ hasAccessByCodes: () => true }) }));
+vi.mock('#/composables/use-permissions', () => ({ usePermissions: () => ({ hasPage: () => true, hasButton: () => true }) }));
 vi.mock('@vben/stores', () => ({
   useTimezoneStore: () => ({ timezone: 'Asia/Shanghai' }),
   useUserStore: () => ({ userInfo: { userId: 1 } }),

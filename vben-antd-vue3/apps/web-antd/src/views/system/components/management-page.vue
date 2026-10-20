@@ -4,6 +4,8 @@ import type { Dayjs } from 'dayjs';
 
 import type { Recordable } from '@vben/types';
 
+import type { ActionRecordMode } from './action-detail';
+
 import type {
   ActionPayload,
   DictionaryPayload,
@@ -13,7 +15,7 @@ import type {
   UserGroupPayload,
   UserPayload,
   UserRecord,
-  WhitelistPayload,
+
 } from '#/api';
 import type {
   SystemSummary,
@@ -32,11 +34,11 @@ import {
   ref,
   watch,
 } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { useRoute } from 'vue-router';
 
-import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
+import { $te, i18n } from '@vben/locales';
 import { useTimezoneStore } from '@vben/stores';
 
 import {
@@ -74,13 +76,14 @@ import {
   createRole,
   createUser,
   createUserGroup,
-  createWhitelist,
+
   deleteActions,
   deleteDictionaries,
   deleteRoles,
   deleteUserGroups,
   deleteUsers,
-  deleteWhitelists,
+
+  getAction,
   getSystemRecord,
   listActionGroups,
   listActions,
@@ -88,35 +91,48 @@ import {
   listRoles,
   listUserGroups,
   listUsers,
-  listWhitelists,
+
   updateAction,
   updateDictionary,
   updateRole,
   updateUser,
   updateUserGroup,
-  updateWhitelist,
+
 } from '#/api';
 import { getSystemSummary } from '#/api/system/insights';
 import LoadWarning from '#/components/load-warning.vue';
+import PermissionLink from '#/components/permission-link.vue';
 import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { renderSkeletonOptions } from '#/components/skeleton-options';
 import Table from '#/components/skeleton-table.vue';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
+import { usePermissions } from '#/composables/use-permissions';
 import { vSkeleton } from '#/directives/skeleton';
-import { $t } from '#/locales';
+import { $t, catalogLabel } from '#/locales';
+import { catalogDefaultLocale, catalogGroupOrder, catalogGroupWords } from '#/locales/catalog';
 
+import { actionWordPattern, isValidActionGroup } from './action-config';
+import { actionEditorName, actionListFields, loadActionRecord } from './action-detail';
+import ActionEditor from './action-editor.vue';
+import ActionGroupDialog from './action-group-dialog.vue';
+import ActionGroupNav from './action-group-nav.vue';
+import { applyGroupOrder, deletePermissionGroup } from './action-groups';
+import { actionDisplayName } from './action-name';
+import { authorizedEditorPayload, canDeleteAssignedRecord, canManageDefinition, isAssignmentField, isExistingCredentialField } from './assignment-policy';
 import AssociationEditor from './association-editor.vue';
+import GroupMembers from './group-members.vue';
 import ManagementCard from './management-card.vue';
 import ManagementDrawer from './management-drawer.vue';
 import ManagementForm from './management-form.vue';
 import ManagementSearch from './management-search.vue';
 import ManagementToolbar from './management-toolbar.vue';
 import ManagementViewSwitch from './management-view-switch.vue';
+import PermissionAssignment from './permission-assignment.vue';
+import PermissionResultCell from './permission-result-cell.vue';
 import RuleListEditor from './rule-list-editor.vue';
 import SystemOverview from './system-overview.vue';
 import SystemRecordDetail from './system-record-detail.vue';
-import GroupMembers from './group-members.vue';
-import { memberCount, memberPreview } from './system-record-format';
+import { actionMapping, memberCount, memberPreview } from './system-record-format';
 import SystemResourceCards from './system-resource-cards.vue';
 import { buildChangedPayload, buildUserGroupChanges, snapshotPayload } from './update-payload';
 import {
@@ -131,8 +147,7 @@ type ResourceKind =
   | 'dictionary'
   | 'role'
   | 'user'
-  | 'user-group'
-  | 'whitelist';
+  | 'user-group';
 type LockMode = 'permanent' | 'until';
 type TableSize = 'large' | 'middle' | 'small';
 type SystemRecord = import('./system-record-format').SystemRecord;
@@ -249,27 +264,29 @@ interface ResourceConfig {
 
 const props = defineProps<{ resource: ResourceKind }>();
 const route = useRoute();
-const { hasAccessByCodes } = useAccess();
-
-const permissionPrefixByResource: Record<ResourceKind, string> = {
-  action: 'system.action',
-  dictionary: 'system.dictionary',
-  role: 'system.role',
-  user: 'system.user',
-  'user-group': 'system.user.group',
-  whitelist: 'system.whitelist',
+const { canManagePermission, hasButton, hasPage, hasAllPermissions, canManageDeveloper } = usePermissions();
+const editorOperation = ref<'create' | 'update'>('create');
+const hasButtonAccess = (control: string) => {
+  const operation = ({ create: 'create', edit: 'update', delete: 'delete', 'delete-selected': 'delete' } as Record<string, string>)[control];
+  return (props.resource !== 'action' || !operation || canManagePermission('action', operation)) && hasButton(`admin:btn:system:${props.resource}:${control}`, `/system/${props.resource}`);
 };
-
-function hasButtonAccess(operation: 'create' | 'delete' | 'read' | 'update') {
-  return hasAccessByCodes([
-    `${permissionPrefixByResource[props.resource]}.${operation}`,
-  ]);
-}
-
+const canAssignPermissions = computed(() => canManagePermission(props.resource, editorOperation.value));
+const buttonLabel = (control: string, fallback: string) => {
+  const key = `buttons.admin:btn:system:${props.resource}:${control}`;
+  return $te(key) ? $t(key) : $t(fallback);
+};
 const canCreate = computed(() => hasButtonAccess('create'));
 const canDelete = computed(() => hasButtonAccess('delete'));
-const canRead = computed(() => hasButtonAccess('read'));
-const canUpdate = computed(() => hasButtonAccess('update'));
+const canRead = computed(() => hasPage(`/system/${props.resource}`));
+const canUpdate = computed(() => hasButtonAccess('edit'));
+const canDetail = computed(() => hasButtonAccess('view-detail'));
+const canManageDefinitionRecord = (record: Recordable<any>) => {
+  if (props.resource !== 'action') return true;
+  if (!record.config) return false;
+  return canManageDefinition(record.word, record.config?.builtin, hasAllPermissions.value, canManageDeveloper.value, record.config?.permission_scope);
+};
+const canRemoveRecord = (record: Recordable<any>, control = 'delete') => canManageDefinitionRecord(record) && hasButtonAccess(control) && canDeleteAssignedRecord(props.resource, record, canManagePermission(props.resource, 'delete'));
+const canSelectRecord = (record: Recordable<any>) => canRemoveRecord(record, 'delete-selected');
 
 const apiByResource: Record<ResourceKind, CrudApi> = {
   action: {
@@ -304,13 +321,7 @@ const apiByResource: Record<ResourceKind, CrudApi> = {
       listUserGroups(params) as Promise<PageResult<SystemRecord>>,
     update: (id, data) => updateUserGroup(id, data as UserGroupPayload),
   },
-  whitelist: {
-    create: (key, data) => createWhitelist(key, data as WhitelistPayload),
-    delete: deleteWhitelists,
-    list: (params) =>
-      listWhitelists(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateWhitelist(id, data as WhitelistPayload),
-  },
+
 };
 
 const configs = computed<Record<ResourceKind, Omit<ResourceConfig, 'api'>>>(
@@ -383,35 +394,10 @@ const configs = computed<Record<ResourceKind, Omit<ResourceConfig, 'api'>>>(
       ],
       entity: $t('system.action.entity'),
       fields: [
-        {
-          key: 'name',
-          label: $t('system.fields.name'),
-          required: true,
-          type: 'input',
-        },
-        {
-          key: 'group',
-          label: $t('system.fields.group'),
-          required: true,
-          type: 'action-group',
-        },
-        {
-          key: 'word',
-          label: $t('system.fields.word'),
-          required: true,
-          type: 'input',
-        },
-        {
-          key: 'resource',
-          label: $t('system.fields.resourceRules'),
-          type: 'textarea',
-        },
-        { key: 'menu', label: $t('system.fields.menuPaths'), type: 'textarea' },
-        {
-          key: 'button',
-          label: $t('system.fields.buttonPermission'),
-          type: 'textarea',
-        },
+        { key: 'word', label: $t('system.fields.word'), required: true, type: 'input' },
+        { key: 'names', label: $t('action-editor.names'), defaultValue: {}, type: 'json' },
+        { key: 'group', label: $t('system.fields.group'), required: true, type: 'input' },
+        { key: 'config', label: $t('action-editor.config'), defaultValue: { ui: [], endpoints: [] }, type: 'json' },
       ],
       filters: [
         { key: 'name', label: $t('system.fields.name'), type: 'input' },
@@ -835,74 +821,7 @@ const configs = computed<Record<ResourceKind, Omit<ResourceConfig, 'api'>>>(
       ],
       title: $t('system.dictionary.title'),
     },
-    whitelist: {
-      columns: [
-        {
-          dataIndex: 'id',
-          key: 'id',
-          title: $t('system.fields.id'),
-          width: 90,
-        },
-        {
-          dataIndex: 'category',
-          display: 'category',
-          key: 'category',
-          title: $t('system.fields.category'),
-          width: 120,
-        },
-        {
-          dataIndex: 'resource',
-          display: 'resource-rules',
-          key: 'resource',
-          title: $t('system.fields.resourceRules'),
-          width: 240,
-        },
-        {
-          dataIndex: 'created_at',
-          display: 'date',
-          key: 'created_at',
-          title: $t('system.fields.createdAt'),
-          width: 180,
-        },
-        {
-          dataIndex: 'updated_at',
-          display: 'date',
-          key: 'updated_at',
-          title: $t('system.fields.updatedAt'),
-          width: 180,
-        },
-      ],
-      entity: $t('system.whitelist.entity'),
-      fields: [
-        {
-          defaultValue: 0,
-          key: 'category',
-          label: $t('system.fields.category'),
-          required: true,
-          type: 'category',
-        },
-        {
-          key: 'resource',
-          label: $t('system.fields.resourceRules'),
-          required: true,
-          type: 'textarea',
-        },
-      ],
-      filters: [
-        {
-          key: 'category',
-          label: $t('system.fields.category'),
-          type: 'category',
-        },
-        {
-          key: 'resource',
-          label: $t('system.fields.resource'),
-          splitLines: true,
-          type: 'input-multi-select',
-        },
-      ],
-      title: $t('system.whitelist.title'),
-    },
+
   }),
 );
 
@@ -960,6 +879,23 @@ const viewOptions = computed(() => [
   { value: 'table', label: $t('system-insights.table'), icon: 'lucide:list' },
 ]);
 const summary = ref<SystemSummary>();
+const groupDialogOpen = ref(false);
+const permissionGroups = computed(() => {
+  const groups = summary.value?.groups ?? [];
+  const used = new Set(groups.map((group) => group.name));
+  return applyGroupOrder([...groups, ...catalogGroupWords().filter((name) => !used.has(name)).map((name) => ({ name, count: 0 }))], catalogGroupOrder());
+});
+function openGroupEditor() { if (canManagePermission('action', 'update') && hasButtonAccess('create-group')) groupDialogOpen.value = true; }
+async function groupSaved() { await refreshAll(); }
+function removeGroup(word: string) {
+  if (!canManagePermission('action', 'update') || !hasButtonAccess('delete-group')) return;
+  if (permissionGroups.value.find((group) => group.name === word)?.count !== 0) return;
+  Modal.confirm({
+    title: $t('action-editor.deleteGroup'), content: $t('action-editor.deleteGroupConfirm', { name: catalogLabel('groups', word) }),
+    okText: $t('system.common.delete'), cancelText: $t('system-editor.cancel'), okButtonProps: { danger: true },
+    async onOk() { await deletePermissionGroup(word); filters.groups_exact = selectedExactGroups.value.filter((key) => key !== word); await refreshAll(); },
+  });
+}
 const summaryLoading = ref(false);
 const summaryError = ref(false);
 const summaryDays = ref(14);
@@ -1126,10 +1062,13 @@ async function clearPermissionGroup(name: string) {
     await selectPermissionGroup(name);
   }
 }
+function permissionGroupLabel(name: string) {
+  return name ? catalogLabel('groups', name) : $t('system-insights.ungrouped');
+}
 function clearPermissionGroupLabel(name: string) {
   return props.resource === 'role'
     ? $t('system-insights.clearRoleGroup', {
-        name: name || $t('system-insights.ungrouped'),
+        name: permissionGroupLabel(name),
       })
     : $t('system-insights.clearGroup');
 }
@@ -1137,7 +1076,7 @@ async function selectUserGroup(group: SystemSummaryGroup) {
   detailRecordID = group.id;
   await loadRecordDetail();
 }
-async function loadRecordDetail() {
+async function loadRecordDetail(mode: ActionRecordMode = 'detail') {
   if (!detailRecordID || !canRead.value || !active) return;
   const request = ++detailRequest;
   selectedRecord.value = records.value.find((record) => record.id === detailRecordID)
@@ -1146,7 +1085,9 @@ async function loadRecordDetail() {
   detailError.value = false;
   detailsOpen.value = true;
   try {
-    const record = await getSystemRecord<SystemRecord>(props.resource, detailRecordID);
+    const record = props.resource === 'action'
+      ? await loadActionRecord(detailRecordID, mode)
+      : await getSystemRecord<SystemRecord>(props.resource, detailRecordID);
     if (request === detailRequest && active && canRead.value) {
       selectedRecord.value = record;
       return record;
@@ -1159,11 +1100,11 @@ async function loadRecordDetail() {
 }
 function selectAllCards(checked: boolean) {
   selectedRowKeys.value = checked
-    ? records.value.map((record) => record.id)
+    ? records.value.filter(canSelectRecord).map((record) => record.id)
     : [];
 }
 async function openDetail(record: Recordable<any>) {
-  if (loading.value) return;
+  if (loading.value || !canDetail.value) return;
   detailRecordID = record.id;
   return loadRecordDetail();
 }
@@ -1172,6 +1113,7 @@ function editDetail(record: SystemRecord) {
   void openEditor(record);
 }
 function confirmRemove(record: SystemRecord) {
+  if (!canRemoveRecord(record)) return;
   Modal.confirm({
     title: $t('system.confirm.delete', { name: getRecordLabel(record) }),
     onOk: () => removeRecords([record.id]),
@@ -1268,34 +1210,43 @@ const visibleColumnKeys = ref<string[]>([
       ]
     : config.value.columns.map((column) => column.key)),
 ]);
+const matrixColumnKeys = ['name', 'menu', 'resource', 'button'];
+const displayColumns = computed(() => props.resource === 'action' && viewMode.value === 'matrix'
+  ? matrixColumnKeys.flatMap((key) => {
+      const column = config.value.columns.find((item) => item.key === key);
+      const titles: Record<string, string> = { menu: 'permission-display.relatedMenus', resource: 'action-editor.operation', button: 'action-editor.features' };
+      return column ? [{ ...column, title: titles[key] ? $t(titles[key]!) : column.title }] : [];
+    }) : config.value.columns);
 const listFields = computed(() => {
   const base: Record<ResourceKind, string[]> = {
     user: ['id', 'username', 'code', 'status', 'metadata'],
-    action: ['id', 'name', 'word'],
+    action: actionListFields,
     role: ['id', 'name', 'word'],
     'user-group': ['id', 'name', 'word'],
     dictionary: ['id', 'name', 'key'],
-    whitelist: ['id', 'resource', 'category'],
+
   };
   const cards: Partial<Record<ResourceKind, string[]>> = {
     role: ['action_summaries', 'created_at', 'updated_at'],
     'user-group': ['action_summaries', 'member_count', 'member_preview', 'created_at', 'updated_at'],
     dictionary: ['enabled', 'description', 'value', 'created_at', 'updated_at'],
-    whitelist: ['created_at', 'updated_at'],
+
   };
-  const columns = viewMode.value === 'cards' ? cards[props.resource] ?? []
+  const columns = props.resource === 'action' && viewMode.value === 'matrix' ? [] : viewMode.value === 'cards' ? cards[props.resource] ?? []
     : config.value.columns.filter((column) => visibleColumnKeys.value.includes(column.key)
-      && (viewMode.value !== 'matrix' || ['name', 'resource', 'menu', 'button'].includes(column.key)))
+      && (viewMode.value !== 'matrix' || ['button', 'menu', 'name', 'resource'].includes(column.key)))
       .flatMap((column) => column.display === 'role' ? ['role_summary']
         : column.display === 'users' ? ['member_count', 'member_preview'] : [column.dataIndex]);
-  return [...new Set([...base[props.resource], ...columns])].join(',');
+  const deletionFields = !canAssignPermissions.value && ['role', 'user-group'].includes(props.resource) && (canDelete.value || hasButtonAccess('delete-selected'))
+    ? ['action_codes', ...(props.resource === 'user-group' ? ['member_count'] : [])] : [];
+  return [...new Set([...base[props.resource], ...columns, ...deletionFields])].join(',');
 });
 watch(listFields, () => { void loadData(); });
 const { isFullscreen, toggle: toggleFullscreen } =
   useFullscreen(tableContainerRef);
 const { start: scheduleFilterSearch, stop: cancelFilterSearch } = useTimeoutFn(
   async () => {
-    if (!filtersDirty.value || !canRead.value) return;
+    if (!filtersDirty.value || !canRead.value || !hasButtonAccess('query')) return;
     filtersDirty.value = false;
     const key = listQueryKey(buildListParams(1));
     if (key === lastLoadedQuery || key === pendingListQuery) return;
@@ -1312,23 +1263,60 @@ const visibleFilters = computed(() =>
 );
 
 const editorFields = computed(() =>
-  editingRecord.value
-    ? config.value.fields
-    : config.value.fields.filter((field) => field.createVisible !== false),
+  config.value.fields.filter((field) =>
+    (editingRecord.value || field.createVisible !== false) &&
+    (canAssignPermissions.value || !isAssignmentField(props.resource, field.key)) &&
+    (!editingRecord.value || canAssignPermissions.value || !isExistingCredentialField(props.resource, field.key))),
 );
 
 const editorSnapshot = ref('');
 const editorError = ref('');
 let editorRequest = 0;
+let editorNameRequest = 0;
 const editorDirty = computed(() => modalOpen.value && editorSnapshot.value !== JSON.stringify(
-  snapshotPayload(formModel, editorFields.value.map((field) => field.key)),
+  snapshotPayload(formModel, [...editorFields.value.map((field) => field.key), 'action_bindings']),
 ));
-const drawerTitle = computed(() => $t(
-  modalOpen.value
-    ? (editingRecord.value ? 'system.common.editTitle' : 'system.common.createTitle')
-    : 'system-editor.detailTitle',
-  { entity: config.value.entity },
-));
+const editingPermission = computed(() => {
+  const record = editingRecord.value;
+  if (props.resource !== 'action' || !modalOpen.value || !record || !('word' in record)) return null;
+  const word = String(formModel.word || '');
+  const names = formModel.names as Record<string, string> | undefined;
+  const name = actionEditorName(word, names, String(i18n.global.locale.value), catalogDefaultLocale(), actionDisplayName(word, formModel.config, 'name' in record ? record.name : undefined));
+  return { word, name };
+});
+async function refreshEditorName() {
+  const locale = i18n.global.locale.value;
+  const record = editingRecord.value;
+  if (props.resource !== 'action' || !modalOpen.value || !record || !active || !canRead.value) return;
+  const request = ++editorNameRequest;
+  const editor = editorRequest;
+  const current = () => request === editorNameRequest && editor === editorRequest
+    && active && canRead.value && modalOpen.value && editingRecord.value === record
+    && locale === i18n.global.locale.value;
+  // Refresh only the translated title; keep unsaved definition edits intact.
+  if ('name' in record) record.name = undefined;
+  try {
+    const translated = await getAction(record.id, { f: 'name' });
+    if (current()) Object.assign(record, translated);
+  } catch {
+    // Editable names and the stable word remain available when translation fails.
+  }
+}
+watch(() => i18n.global.locale.value, refreshEditorName);
+const drawerTitle = computed(() => {
+  if (editingPermission.value) {
+    const record = editingPermission.value;
+    return $t('action-editor.editTitle', {
+      name: record.name || record.word,
+    });
+  }
+  return $t(
+    modalOpen.value
+      ? (editingRecord.value ? 'system.common.editTitle' : 'system.common.createTitle')
+      : 'system-editor.detailTitle',
+    { entity: config.value.entity },
+  );
+});
 function closeEditorPanel(returnToDetail = false) {
   if (submitting.value) return;
   const close = () => {
@@ -1340,6 +1328,10 @@ function closeEditorPanel(returnToDetail = false) {
     modalOpen.value = false;
     editorError.value = '';
     formModel.password = '';
+    if (returnToDetail && editingRecord.value && props.resource === 'action') {
+      detailRecordID = editingRecord.value.id;
+      void loadRecordDetail();
+    }
   };
   if (editorDirty.value) {
     Modal.confirm({
@@ -1354,12 +1346,7 @@ function closeEditorPanel(returnToDetail = false) {
 
 const columnOptions = computed(() => [
   { label: $t('system.common.selection'), value: selectionColumnKey },
-  ...config.value.columns
-    .filter(
-      (column) =>
-        viewMode.value !== 'matrix' ||
-        ['button', 'menu', 'name', 'resource'].includes(column.key),
-    )
+  ...displayColumns.value
     .map((column) => ({ label: column.title, value: column.key })),
 ]);
 const showSelectionColumn = computed(() =>
@@ -1390,7 +1377,7 @@ function adaptiveColumnValues(
     return memberPreview(record).map((user) => user.username);
   }
   if (column.display === 'resource-rules') {
-    return 'resource' in record ? resourceRules(record.resource) : [];
+    return resourceRules(columnValue(record, column));
   }
   if (column.display === 'json') {
     return formatJSON(columnValue(record, column)).split('\n');
@@ -1530,7 +1517,7 @@ useResizeObserver(operationActions, measureOperationActions);
 
 const contentTableColumns = computed<TableColumnsType<SystemRecord>>(() => {
   const matrix = props.resource === 'action' && viewMode.value === 'matrix';
-  const columns: TableColumnsType<SystemRecord> = config.value.columns
+  const columns: TableColumnsType<SystemRecord> = displayColumns.value
     .filter((column) =>
       matrix
         ? ['button', 'menu', 'name', 'resource'].includes(column.key) &&
@@ -1540,7 +1527,7 @@ const contentTableColumns = computed<TableColumnsType<SystemRecord>>(() => {
     .map((column) => ({
       ...column,
       width: matrix
-        ? ({ name: 160, resource: 240, menu: 110, button: 110 }[column.key] ??
+        ? ({ name: 180, resource: 140, menu: 150, button: 240 }[column.key] ??
           120)
         : adaptiveColumnWidth(column),
     }));
@@ -1595,11 +1582,14 @@ const tableScrollWidth = computed(() => {
 const rowSelection = computed(() => ({
   columnWidth: selectionColumnWidth,
   onChange: (keys: (number | string)[]) => {
-    selectedRowKeys.value = keys.map(Number);
+    selectedRowKeys.value = keys.map(Number).filter((id) => records.value.some((record) => record.id === id && canSelectRecord(record)));
   },
   selectedRowKeys: selectedRowKeys.value,
+  getCheckboxProps: (record: SystemRecord) => ({ disabled: !canSelectRecord(record) }),
 }));
 
+const actionValidation = ref('');
+const assignmentValidation = ref('');
 const formRules = computed(() => {
   const result: Record<string, FormValidationRule[]> = {};
   for (const field of editorFields.value) {
@@ -1613,6 +1603,19 @@ const formRules = computed(() => {
         },
       ];
     }
+  }
+  if (['role', 'user', 'user-group'].includes(props.resource) && canAssignPermissions.value) {
+    result.action_codes = [{ async validator() { if (assignmentValidation.value) throw new Error($t(assignmentValidation.value)); } }];
+  }
+  if (props.resource === 'action') {
+    result.group ||= [];
+    result.group.push({ async validator(_rule, value) {
+      if (!isValidActionGroup(String(value || ''), String(formModel.word || '').split(':')[0] || formModel.scope || 'admin')) throw new Error($t('action-editor.invalidGroupWord'));
+    } });
+    result.word ||= [];
+    result.word.push({ async validator(_rule, value) {
+      if (!actionWordPattern.test(String(value)) || actionValidation.value) throw new Error($t(actionValidation.value || 'action-editor.invalidWord'));
+    } });
   }
   if (props.resource === 'user') {
     result.username ||= [];
@@ -1666,6 +1669,7 @@ function getRecordID(record: Recordable<any>) {
 }
 
 function getRecordLabel(record: Recordable<any>) {
+  if (props.resource === 'action' && record.word) return actionDisplayName(record.word, record.config, record.name);
   if ('name' in record) return record.name;
   if ('key' in record) return record.key;
   if ('username' in record) return record.username;
@@ -1678,6 +1682,9 @@ function columnDisplay(column: Recordable<any>) {
 }
 
 function columnValue(record: Recordable<any>, column: Recordable<any>) {
+  if (props.resource === 'action' && ['button', 'menu', 'resource'].includes(column.dataIndex)) return actionMapping(record, column.dataIndex);
+  if (props.resource === 'action' && column.dataIndex === 'group') return catalogLabel('groups', record.group || '');
+  if (props.resource === 'action' && column.dataIndex === 'name') return actionDisplayName(record.word || '', record.config, record.name);
   return record[String(column.dataIndex)];
 }
 
@@ -1727,6 +1734,7 @@ function resourceRuleColor(rule: string, category?: unknown) {
     {
       DELETE: 'red',
       GET: 'green',
+      GRPC: 'purple',
       PATCH: 'orange',
       POST: 'blue',
     }[method || ''] || 'default'
@@ -2146,12 +2154,14 @@ async function runSearch() {
 }
 
 async function search() {
+  if (!hasButtonAccess('query')) return;
   cancelFilterSearch();
   filtersDirty.value = false;
   await runSearch();
 }
 
 async function resetSearch() {
+  if (!hasButtonAccess('reset-query')) return;
   cancelFilterSearch();
   filtersDirty.value = false;
   resetObject(filters);
@@ -2335,12 +2345,19 @@ function handleRoleDropdownVisibleChange(open: boolean) {
 }
 
 async function openEditor(record?: Recordable<any>) {
+  if (record ? !canUpdate.value : !canCreate.value) return;
+  editorOperation.value = record ? 'update' : 'create';
   if (loading.value || detailLoading.value) return;
   const request = ++editorRequest;
+  const requestedLocale = i18n.global.locale.value;
   editorError.value = '';
+  actionValidation.value = '';
+  assignmentValidation.value = '';
   if (record) {
-    const full = await openDetail(record);
+    detailRecordID = record.id;
+    const full = await loadRecordDetail('edit');
     if (request !== editorRequest || !full || !detailsOpen.value) return;
+    if (!canUpdate.value || !canManageDefinitionRecord(full)) return;
     record = full;
   }
   selectedRecord.value = (record as SystemRecord | undefined) ?? null;
@@ -2359,12 +2376,15 @@ async function openEditor(record?: Recordable<any>) {
   roleOptionsRequestId += 1;
   roleOptionsLoading.value = false;
   roleOptionsQuery.value = '';
+  const currentRole = record && props.resource === 'user'
+    ? record.role_summary ?? record.role
+    : undefined;
   roleOptions.value =
-    record && props.resource === 'user' && record.role
+    currentRole
       ? [
           {
-            label: `${record.role.name} · ${record.role.word}`,
-            value: record.role.id,
+            label: `${currentRole.name} · ${currentRole.word}`,
+            value: currentRole.id,
           },
         ]
       : [];
@@ -2392,13 +2412,25 @@ async function openEditor(record?: Recordable<any>) {
         editorFields.value.map((field) => field.key),
       )
     : {};
-  editorSnapshot.value = JSON.stringify(snapshotPayload(formModel, editorFields.value.map((field) => field.key)));
+  editorSnapshot.value = JSON.stringify(snapshotPayload(formModel, [...editorFields.value.map((field) => field.key), 'action_bindings']));
   modalOpen.value = true;
+  if (record && props.resource === 'action' && requestedLocale !== i18n.global.locale.value) {
+    void refreshEditorName();
+  }
   await nextTick();
   formRef.value?.clearValidate();
 }
 
 function buildPayload() {
+  const payload = buildEditablePayload();
+  if (['role', 'user', 'user-group'].includes(props.resource) && formModel.action_bindings !== undefined) {
+    payload.action_bindings = formModel.action_bindings;
+    delete payload.action_codes;
+  }
+  return authorizedEditorPayload(props.resource, payload, canAssignPermissions.value, canAssignPermissions.value, Boolean(editingRecord.value));
+}
+
+function buildEditablePayload() {
   const payload: FormModel = {};
   for (const field of editorFields.value) {
     const value = formModel[field.key];
@@ -2407,7 +2439,7 @@ function buildPayload() {
   if (props.resource === 'user') {
     if (editingRecord.value && !payload.password) delete payload.password;
     if (editingRecord.value) {
-      payload.role_id = Number(payload.role_id || 0);
+      if (canAssignPermissions.value) payload.role_id = Number(payload.role_id || 0);
       const initial = {
         ...initialEditorValues.value,
         role_id: Number(initialEditorValues.value.role_id || 0),
@@ -2430,6 +2462,18 @@ function buildPayload() {
     }
   } else if (props.resource === 'user-group' && editingRecord.value) {
     return buildUserGroupChanges(initialEditorValues.value, payload);
+  } else if (props.resource === 'action' && editingRecord.value) {
+    const changes = buildChangedPayload(initialEditorValues.value, payload);
+    if (changes.names) {
+      const initial = (initialEditorValues.value.names ?? {}) as Record<string, string>;
+      const current = (payload.names ?? {}) as Record<string, string>;
+      const names = Object.fromEntries(
+        Object.entries(current).filter(([tag, name]) => name !== (initial[tag] ?? '')),
+      );
+      if (Object.keys(names).length) changes.names = names;
+      else delete changes.names;
+    }
+    return changes;
   } else if (editingRecord.value) {
     return buildChangedPayload(initialEditorValues.value, payload);
   }
@@ -2437,6 +2481,7 @@ function buildPayload() {
 }
 
 async function submitEditor() {
+  if (editingRecord.value ? !canUpdate.value : !canCreate.value) return;
   if (submitting.value || !modalOpen.value) return;
   const currentEditor = editorRequest;
   try {
@@ -2472,8 +2517,9 @@ async function submitEditor() {
     detailRecordID = undefined;
     selectedRecord.value = saved;
     modalOpen.value = false;
-    detailsOpen.value = canRead.value;
+    detailsOpen.value = canDetail.value;
     formModel.password = '';
+    if (['action', 'role', 'user', 'user-group'].includes(props.resource)) window.dispatchEvent(new Event('auth-permissions-changed'));
   } catch (error) {
     if (!active || currentEditor !== editorRequest) return;
     const status =
@@ -2508,6 +2554,7 @@ function clearApprovalWarning() {
 }
 
 async function submitApproval() {
+  if (!hasButtonAccess('approve')) return;
   const user = approvalUser.value;
   if (!user) return;
   const reason = rejectReason.value.trim();
@@ -2553,6 +2600,7 @@ function clearLockWarning() {
 }
 
 async function submitLock() {
+  if (!hasButtonAccess('lock')) return;
   const user = lockUser.value;
   if (!user || lockSubmitting.value) return;
   if (
@@ -2583,6 +2631,7 @@ async function submitLock() {
 }
 
 async function unlockUser(record: Recordable<any>) {
+  if (!hasButtonAccess('unlock')) return;
   const metadata = { ...(record.metadata || {}) };
   delete metadata.lock_expired_at;
   await updateUser(Number(record.id), { metadata, status: 1 });
@@ -2591,6 +2640,7 @@ async function unlockUser(record: Recordable<any>) {
 }
 
 async function unlockPasswordChange(record: Recordable<any>) {
+  if (!hasButtonAccess('unlock-password')) return;
   const metadata = { ...(record.metadata || {}) };
   delete metadata.password_change_failures;
   await updateUser(Number(record.id), { metadata });
@@ -2598,8 +2648,13 @@ async function unlockPasswordChange(record: Recordable<any>) {
   await refreshAll();
 }
 
-async function removeRecords(ids: number[]) {
+async function removeRecords(ids: number[], control = 'delete') {
+  if (!hasButtonAccess(control) || ids.some((id) => {
+    const record = records.value.find((item) => item.id === id) ?? (selectedRecord.value?.id === id ? selectedRecord.value : undefined);
+    return !record || !canRemoveRecord(record, control);
+  })) return;
   await config.value.api.delete(ids);
+  if (['action', 'role', 'user', 'user-group'].includes(props.resource)) window.dispatchEvent(new Event('auth-permissions-changed'));
   message.success($t('system.messages.deleted'));
   if (records.value.length === ids.length && pagination.current > 1) {
     pagination.current -= 1;
@@ -2609,10 +2664,10 @@ async function removeRecords(ids: number[]) {
 
 function removeSelected() {
   const ids = [...selectedRowKeys.value];
-  if (ids.length === 0 || loading.value || !canDelete.value) return;
+  if (ids.length === 0 || loading.value || !hasButtonAccess('delete-selected') || ids.some((id) => !records.value.some((record) => record.id === id && canSelectRecord(record)))) return;
   Modal.confirm({
     content: $t('system.confirm.deleteDescription', { count: ids.length }),
-    onOk: () => removeRecords(ids),
+    onOk: () => removeRecords(ids, 'delete-selected'),
     title: $t('system.confirm.deleteSelected'),
   });
 }
@@ -2661,9 +2716,9 @@ onBeforeUnmount(() => {
         </div>
       </header>
       <SystemOverview
-        v-if="canRead && props.resource !== 'dictionary' && props.resource !== 'whitelist'"
+        v-if="canRead && props.resource !== 'dictionary'"
         :resource="props.resource"
-        :summary="summary"
+        :summary="props.resource === 'action' && summary ? { ...summary, groups: permissionGroups } : summary"
         :loading="summaryLoading"
         :error="summaryError"
         :days="summaryDays"
@@ -2693,7 +2748,7 @@ onBeforeUnmount(() => {
       >
         <template #extra>
           <Button v-if="canCreate" type="primary" @click="openEditor()">
-            <IconifyIcon icon="lucide:plus" />{{ $t('system.common.create') }}
+            <IconifyIcon icon="lucide:plus" />{{ buttonLabel('create', 'system.common.create') }}
           </Button>
         </template>
       </Result>
@@ -2788,7 +2843,7 @@ onBeforeUnmount(() => {
                   ? 'system-insights.roleGroupFilter'
                   : 'system-insights.groupFilter',
                 {
-                  name: group || $t('system-insights.ungrouped'),
+                  name: permissionGroupLabel(group),
                 },
               )
             }}
@@ -2984,11 +3039,11 @@ onBeforeUnmount(() => {
             />
           </FormItem>
           <template #actions>
-            <Button v-if="canRead" html-type="button" @click="resetSearch">
-              {{ $t('system.common.reset') }}
+            <Button v-if="hasButtonAccess('reset-query')" html-type="button" @click="resetSearch">
+              {{ buttonLabel('reset-query', 'system.common.reset') }}
             </Button>
-            <Button v-if="canRead" html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
-              {{ $t('system.common.search') }}
+            <Button v-if="hasButtonAccess('query')" html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
+              {{ buttonLabel('query', 'system.common.search') }}
             </Button>
             <Button
               v-if="canRead && config.filters.length > 3"
@@ -3015,36 +3070,7 @@ onBeforeUnmount(() => {
         class="system-results-layout"
         :class="{ 'with-group-nav': props.resource === 'action' }"
       >
-        <nav
-          v-if="props.resource === 'action'"
-          class="system-group-nav"
-          v-skeleton="summaryLoading"
-          :aria-label="$t('system-insights.businessGroups')"
-          data-testid="management-permission-groups"
-        >
-          <h2>{{ $t('system-insights.businessGroups') }}</h2>
-          <button
-            type="button"
-            :aria-pressed="selectedExactGroups.length === 0"
-            @click="selectPermissionGroup()"
-          >
-            <span>{{ $t('system-insights.allGroups') }}</span><b v-if="summary">{{ summary.total }}</b>
-          </button>
-          <button
-            v-for="group in summary?.groups ?? []"
-            :key="group.name"
-            type="button"
-            :aria-pressed="selectedExactGroups.includes(group.name)"
-            :aria-label="
-              $t('system-insights.selectGroup', {
-                name: group.name || $t('system-insights.ungrouped'),
-              })
-            "
-            @click="selectPermissionGroup(group.name)"
-          >
-            <span>{{ group.name || $t('system-insights.ungrouped') }}</span><b>{{ group.count }}</b>
-          </button>
-        </nav>
+        <ActionGroupNav v-if="props.resource === 'action'" :groups="permissionGroups" :selected="selectedExactGroups" :total="summary?.total" :editable="canManagePermission('action', 'update')" :show-create="hasButtonAccess('create-group')" :show-delete="hasButtonAccess('delete-group')" :allow-reorder="hasButtonAccess('reorder-groups')" :loading="summaryLoading" @select="selectPermissionGroup" @create="openGroupEditor()" @remove="removeGroup" />
         <ManagementCard
           class="system-section-card system-results-card"
         >
@@ -3060,15 +3086,15 @@ onBeforeUnmount(() => {
             <Space wrap>
               <Button v-if="canCreate" type="primary" @click="openEditor()">
                 <IconifyIcon icon="lucide:plus" />
-                {{ $t('system.common.create') }}
+                {{ buttonLabel('create', 'system.common.create') }}
               </Button>
               <Button
-                v-if="canDelete && selectedRowKeys.length > 0"
+                v-if="hasButtonAccess('delete-selected') && selectedRowKeys.length > 0"
                 :disabled="loading"
                 danger
                 @click="removeSelected"
               >
-                {{ $t('system.common.deleteSelected') }}
+                {{ buttonLabel('delete-selected', 'system.common.deleteSelected') }}
               </Button>
             </Space>
 
@@ -3111,7 +3137,8 @@ onBeforeUnmount(() => {
               v-model:bordered="tableSettings.bordered"
               v-model:striped="tableSettings.striped"
               v-model:sticky="tableSettings.sticky"
-              :can-read="canRead"
+              :can-read="hasButtonAccess('refresh')"
+              :refresh-label="buttonLabel('refresh', 'system.common.refresh')"
               :loading="loading"
               :is-fullscreen="isFullscreen"
               @refresh="refreshAll"
@@ -3153,10 +3180,10 @@ onBeforeUnmount(() => {
           <template v-if="viewMode === 'cards'">
             <div class="system-card-selection">
               <Checkbox
-                :checked="records.length > 0 && selectedRowKeys.length === records.length"
+                :checked="records.filter(canSelectRecord).length > 0 && selectedRowKeys.length === records.filter(canSelectRecord).length"
                 :indeterminate="
                   selectedRowKeys.length > 0 &&
-                  selectedRowKeys.length < records.length
+                  selectedRowKeys.length < records.filter(canSelectRecord).length
                 "
                 :disabled="loading"
                 :aria-label="$t('system-insights.selectAllPage')"
@@ -3175,6 +3202,9 @@ onBeforeUnmount(() => {
               :selectable="true"
               :can-update="canUpdate"
               :can-delete="canDelete"
+              :can-remove-record="canRemoveRecord"
+              :can-select-record="canSelectRecord"
+              :can-detail="canDetail"
               :loading="loading"
               @detail="openDetail"
               @edit="openEditor"
@@ -3230,16 +3260,16 @@ onBeforeUnmount(() => {
                   class="system-operation-actions"
                 >
                   <Button
-                    v-if="canRead"
+                    v-if="canDetail"
                     size="small"
                     type="link"
                     @click="openDetail(record)"
                   >
-                    {{ $t('system-insights.details') }}
+                    {{ buttonLabel('view-detail', 'system-insights.details') }}
                   </Button>
                   <Button
                     v-if="
-                      canUpdate &&
+                      hasButtonAccess('approve') &&
                       props.resource === 'user' &&
                       record.status === 0
                     "
@@ -3247,19 +3277,19 @@ onBeforeUnmount(() => {
                     type="link"
                     @click="openApproval(record)"
                   >
-                    {{ $t('system.user.approve') }}
+                    {{ buttonLabel('approve', 'system.user.approve') }}
                   </Button>
                   <Button
-                    v-if="canUpdate"
+                    v-if="canUpdate && canManageDefinitionRecord(record)"
                     size="small"
                     type="link"
                     @click="openEditor(record)"
                   >
-                    {{ $t('system.common.edit') }}
+                    {{ buttonLabel('edit', 'system.common.edit') }}
                   </Button>
                   <Button
                     v-if="
-                      canUpdate &&
+                      hasButtonAccess('lock') &&
                       props.resource === 'user' &&
                       record.status === 1
                     "
@@ -3267,11 +3297,11 @@ onBeforeUnmount(() => {
                     type="link"
                     @click="openLock(record)"
                   >
-                    {{ $t('system.user.lock') }}
+                    {{ buttonLabel('lock', 'system.user.lock') }}
                   </Button>
                   <Popconfirm
                     v-if="
-                      canUpdate &&
+                      hasButtonAccess('unlock') &&
                       props.resource === 'user' &&
                       record.status === 2
                     "
@@ -3281,12 +3311,12 @@ onBeforeUnmount(() => {
                     @confirm="unlockUser(record)"
                   >
                     <Button size="small" type="link">
-                      {{ $t('system.user.unlock') }}
+                      {{ buttonLabel('unlock', 'system.user.unlock') }}
                     </Button>
                   </Popconfirm>
                   <Popconfirm
                     v-if="
-                      canUpdate &&
+                      hasButtonAccess('unlock-password') &&
                       props.resource === 'user' &&
                       userPasswordChangeFailures(record) > 0
                     "
@@ -3298,11 +3328,11 @@ onBeforeUnmount(() => {
                     @confirm="unlockPasswordChange(record)"
                   >
                     <Button size="small" type="link">
-                      {{ $t('system.user.unlockPassword') }}
+                      {{ buttonLabel('unlock-password', 'system.user.unlockPassword') }}
                     </Button>
                   </Popconfirm>
                   <Popconfirm
-                    v-if="canDelete"
+                    v-if="canRemoveRecord(record)"
                     :title="
                       $t('system.confirm.delete', {
                         name: getRecordLabel(record),
@@ -3311,7 +3341,7 @@ onBeforeUnmount(() => {
                     @confirm="removeRecords([getRecordID(record)])"
                   >
                     <Button danger size="small" type="link">
-                      {{ $t('system.common.delete') }}
+                      {{ buttonLabel('delete', 'system.common.delete') }}
                     </Button>
                   </Popconfirm>
                 </Space>
@@ -3329,6 +3359,7 @@ onBeforeUnmount(() => {
                     <Button
                       type="link"
                       size="small"
+                      :disabled="!canDetail"
                       @click="openDetail(record)"
                     >
                       {{ record.username }}
@@ -3343,28 +3374,19 @@ onBeforeUnmount(() => {
                   column.key === 'name'
                 "
               >
-                <strong>{{ record.name }}</strong>
-                <div class="system-matrix-word">
-                  {{ record.word }}
-                </div>
+                <strong>{{ actionDisplayName(record.word || '', record.config, record.name) }}</strong>
+</template>
+              <template v-else-if="props.resource === 'action' && viewMode === 'matrix' && ['menu', 'resource', 'button'].includes(String(column.key))">
+                <PermissionResultCell :config="'config' in record ? record.config : undefined" :field="String(column.key)" :can-detail="canRead" @detail="openDetail(record)" />
               </template>
               <template
                 v-else-if="
                   props.resource === 'action' &&
-                  viewMode === 'matrix' &&
-                  (column.key === 'menu' || column.key === 'button')
+                  ['button', 'menu', 'resource'].includes(String(column.key)) &&
+                  columnValue(record, column) === '*'
                 "
               >
-                <Tag
-                  v-if="String(record[column.key] || '').trim()"
-                  color="green"
-                >
-                  {{ $t('system-insights.configured') }} ({{
-                    resourceRules(record[column.key]).length
-                  }})
-</Tag><span v-else class="text-muted-foreground">{{
-                  $t('system-insights.notConfigured')
-                }}</span>
+                <Tag :color="column.key === 'resource' ? 'default' : 'blue'">*</Tag>
               </template>
               <template v-else-if="columnDisplay(column) === 'date'">
                 {{
@@ -3398,48 +3420,42 @@ onBeforeUnmount(() => {
               </template>
               <template v-else-if="columnDisplay(column) === 'actions'">
                 <Space v-if="record.action_codes?.length" wrap>
-                  <RouterLink
+                  <PermissionLink
                     v-for="code in record.action_codes"
                     :key="code"
-                    :to="{
-                      name: 'SystemAction',
-                      query: { code: record.action_codes.join(',') },
-                    }"
+                    path="/system/action"
+                    :query="{ code: record.action_codes.join(',') }"
                   >
-                    <Tag class="cursor-pointer" color="blue">
+                    <Tag color="blue">
                       {{ code }}
                     </Tag>
-                  </RouterLink>
+                  </PermissionLink>
                 </Space>
                 <span v-else>-</span>
               </template>
               <template v-else-if="columnDisplay(column) === 'users'">
                 <Space v-if="memberPreview(record).length" wrap>
-                  <RouterLink
+                  <PermissionLink
                     v-for="item in memberPreview(record)"
                     :key="item.id"
-                    :to="{
-                      name: 'SystemUser',
-                      query: { username: item.username },
-                    }"
+                    path="/system/user"
+                    :query="{ username: item.username }"
                   >
-                    <Tag class="cursor-pointer">{{ item.username }}</Tag>
-                  </RouterLink>
+                    <Tag>{{ item.username }}</Tag>
+                  </PermissionLink>
                 </Space>
                 <span v-else>-</span>
-                <Button v-if="memberCount(record)" type="link" size="small" @click="openDetail(record)">{{ $t('system-members.viewAll', { count: memberCount(record) }) }}</Button>
+                <Button v-if="memberCount(record) && hasButtonAccess('view-members')" type="link" size="small" @click="openDetail(record)">{{ $t('system-members.viewAll', { count: memberCount(record) }) }}</Button>
               </template>
               <template v-else-if="columnDisplay(column) === 'role'">
-                <RouterLink
+                <PermissionLink
                   v-if="record.role"
                   class="text-primary hover:underline"
-                  :to="{
-                    name: 'SystemRole',
-                    query: { word: record.role.word },
-                  }"
+                  path="/system/role"
+                  :query="{ word: record.role.word }"
                 >
                   {{ record.role.name }}
-                </RouterLink>
+                </PermissionLink>
                 <span v-else>-</span>
               </template>
               <template v-else-if="columnDisplay(column) === 'status'">
@@ -3528,8 +3544,13 @@ onBeforeUnmount(() => {
       :mode="modalOpen ? (editingRecord ? 'edit' : 'create') : 'detail'"
       :busy="submitting"
       :wide="props.resource === 'dictionary' || props.resource === 'action'"
+      :width="['action', 'role', 'user', 'user-group'].includes(props.resource) ? 'min(1000px, 100vw)' : undefined"
       @close="closeEditorPanel()"
     >
+      <template v-if="editingPermission" #description>
+        <span>{{ $t('system.fields.word') }}</span>
+        <code data-testid="action-editing-word">{{ editingPermission.word }}</code>
+      </template>
       <SystemRecordDetail
         v-if="!modalOpen"
         :record="selectedRecord"
@@ -3538,8 +3559,9 @@ onBeforeUnmount(() => {
         :error="detailError"
         @retry="loadRecordDetail"
       />
-      <ManagementForm v-else ref="formRef" :model="formModel" :rules="formRules" :disabled="submitting" vertical data-testid="management-editor">
-        <SystemRecordDetail :record="editingRecord" :resource="props.resource" editing>
+      <ManagementForm v-else ref="formRef" :model="formModel" :rules="formRules" :disabled="submitting || !(editingRecord ? canUpdate : canCreate)" vertical data-testid="management-editor">
+        <ActionEditor v-if="props.resource === 'action'" :record-id="editingRecord?.id" :record-scope="formModel.scope" :groups="permissionGroups.map((group) => group.name)" @edit-existing="openEditor({ id: $event })" v-model:word="formModel.word" v-model:names="formModel.names" v-model:group="formModel.group" v-model:config="formModel.config" :disabled="submitting" @validity="actionValidation = $event" />
+        <SystemRecordDetail v-else :record="editingRecord" :resource="props.resource" editing>
         <template v-for="field in editorFields" :key="field.key" #[`field-${field.key}`]>
         <FormItem
           :class="{ 'editor-code': field.type === 'json' || ['resource', 'menu', 'button'].includes(field.key) }"
@@ -3637,13 +3659,14 @@ onBeforeUnmount(() => {
               { label: $t('system.status.locked'), value: 2 },
             ]"
           />
-          <AssociationEditor
+          <PermissionAssignment
             v-else-if="field.type === 'action-select'"
-            v-model:value="formModel[field.key]"
+            :value="formModel[field.key]"
+            v-model:bindings="formModel.action_bindings"
+            :key="`${props.resource}:${editingRecord?.id ?? 'new'}`"
             :id="`editor-${props.resource}-${field.key}`"
-            kind="action"
-            :disabled="submitting"
-            :records="editingRecord && 'actions' in editingRecord ? editingRecord.actions ?? [] : []"
+            :disabled="submitting || !canAssignPermissions"
+            @validity="assignmentValidation = $event"
           />
           <Select
             v-else-if="field.type === 'role-select'"
@@ -3709,19 +3732,21 @@ onBeforeUnmount(() => {
             {{ $t(editingRecord ? 'system-editor.cancelEdit' : 'system-editor.cancel') }}
           </Button>
           <span v-if="editorDirty" class="editor-dirty">{{ $t('system-editor.unsaved') }}</span>
-          <Button type="primary" :loading="submitting" :aria-busy="submitting" data-testid="management-save" @click="submitEditor">
+          <Button v-if="editorFields.length && (editingRecord ? canUpdate : canCreate)" type="primary" :loading="submitting" :aria-busy="submitting" data-testid="management-save" @click="submitEditor">
             <IconifyIcon :icon="editingRecord ? 'lucide:check' : 'lucide:plus'" />
             {{ editingRecord ? $t('system-editor.save') : $t('system.common.createTitle', { entity: config.entity }) }}
           </Button>
         </template>
         <template v-else>
           <Button @click="closeEditorPanel()">{{ $t('system-cards.backToList') }}</Button>
-          <Button v-if="canUpdate && selectedRecord" type="primary" :disabled="detailLoading || detailError" @click="editDetail(selectedRecord)">
-            <IconifyIcon icon="lucide:pencil" />{{ $t('system.common.edit') }}
+          <Button v-if="canUpdate && selectedRecord && canManageDefinitionRecord(selectedRecord)" type="primary" :disabled="detailLoading || detailError" @click="editDetail(selectedRecord)">
+            <IconifyIcon icon="lucide:pencil" />{{ buttonLabel('edit', 'system.common.edit') }}
           </Button>
         </template>
       </template>
     </ManagementDrawer>
+
+    <ActionGroupDialog v-if="props.resource === 'action'" v-model:open="groupDialogOpen" :existing-words="permissionGroups.map((group) => group.name)" @saved="groupSaved" />
 
     <Modal
       v-model:open="lockModalOpen"
@@ -3774,7 +3799,7 @@ onBeforeUnmount(() => {
           <Select
             v-model:value="approvalDecision"
             :options="[
-              { label: $t('system.user.approve'), value: 'approve' },
+              { label: buttonLabel('approve', 'system.user.approve'), value: 'approve' },
               { label: $t('system.user.reject'), value: 'reject' },
             ]"
             @change="clearApprovalWarning"
@@ -3855,57 +3880,6 @@ onBeforeUnmount(() => {
 }
 .system-view-switch {
   margin-left: auto;
-}
-.system-group-nav {
-  max-height: calc(clamp(360px, 52vh, 620px) + 150px);
-  overflow: auto;
-  scrollbar-gutter: stable;
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  padding: 12px;
-  min-width: 0;
-}
-.system-group-nav h2 {
-  font-size: 12px;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  margin: 7px 9px 12px;
-}
-.system-group-nav button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 9px;
-  border: 0;
-  border-radius: calc(var(--radius) * 0.75);
-  cursor: pointer;
-  background: transparent;
-  font-size: 12px;
-  text-align: left;
-  line-height: 1.6;
-}
-.system-group-nav button span {
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-.system-group-nav button b {
-  font-size: 11px;
-  font-weight: 500;
-  background: hsl(var(--muted));
-  border-radius: calc(var(--radius) * 0.5);
-  padding: 0 5px;
-}
-.system-group-nav button:hover,
-.system-group-nav button[aria-pressed='true'] {
-  background: hsl(var(--primary) / 0.08);
-  color: hsl(var(--primary));
-}
-.system-group-nav button:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 2px;
 }
 .system-card-selection {
   display: flex;
@@ -4019,26 +3993,10 @@ onBeforeUnmount(() => {
   .system-results-layout.with-group-nav {
     grid-template-columns: 160px minmax(0, 1fr);
   }
-  .system-group-nav {
-    padding: 8px;
-  }
 }
 @media (max-width: 700px) {
   .system-results-layout.with-group-nav {
     grid-template-columns: 1fr;
-  }
-  .system-group-nav {
-    display: flex;
-    align-items: center;
-    overflow: auto;
-    gap: 6px;
-  }
-  .system-group-nav h2 {
-    display: none;
-  }
-  .system-group-nav button {
-    width: auto;
-    white-space: nowrap;
   }
   .system-page-heading h1 {
     font-size: 22px;

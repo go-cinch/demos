@@ -62,7 +62,7 @@ export function buildChangedPayload(
 // Existing groups carry only pending membership changes, never a partial replacement.
 export function buildUserGroupChanges(original: Payload, current: Payload): Payload {
   const { user_ids, ...base } = current;
-  const delta = user_ids as { added: number[]; removed: number[] };
+  const delta = (user_ids as { added: number[]; removed: number[] } | undefined) ?? { added: [], removed: [] };
   const payload = buildChangedPayload(original, base);
   if (delta.added.length) payload.add_user_ids = [...delta.added];
   if (delta.removed.length) payload.remove_user_ids = [...delta.removed];

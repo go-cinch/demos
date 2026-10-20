@@ -1,30 +1,26 @@
 <script setup lang="ts">
 import type { MsgRecipient } from '#/api/msg';
 
-import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
-
-import { useAccess } from '@vben/access';
+import PermissionLink from '#/components/permission-link.vue';
 
 import { Tag } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
 defineProps<{ recipients?: MsgRecipient[] }>();
-const { hasAccessByCodes } = useAccess();
-const canReadUsers = computed(() => hasAccessByCodes(['system.user.read']));
 </script>
 <template>
   <div class="message-recipients" data-testid="message-recipients">
     <template v-if="recipients?.length">
       <Tag v-for="recipient in recipients" :key="recipient.id" :color="recipient.username ? 'blue' : undefined">
-        <RouterLink
-          v-if="recipient.username && recipient.code && canReadUsers"
-          :to="{ name: 'SystemUser', query: { code: recipient.code } }"
+        <PermissionLink
+          v-if="recipient.username && recipient.code"
+          path="/system/user"
+          :query="{ code: recipient.code }"
           :aria-label="$t('msg.viewRecipient', { username: recipient.username })"
         >
 {{ recipient.username }}
-</RouterLink>
+</PermissionLink>
         <span v-else>{{ recipient.username || $t('msg.deletedRecipient') }}</span>
       </Tag>
     </template>

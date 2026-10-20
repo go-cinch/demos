@@ -1,6 +1,7 @@
 import {
   i18n,
   loadLocaleMessages,
+  loadBundledLocaleMessages,
   loadLocalesMap,
   loadLocalesMapFromDir,
   setupI18n,
@@ -14,6 +15,7 @@ export {
   $te,
   i18n,
   loadLocaleMessages,
+  loadBundledLocaleMessages,
   loadLocalesMap,
   loadLocalesMapFromDir,
   setupI18n,

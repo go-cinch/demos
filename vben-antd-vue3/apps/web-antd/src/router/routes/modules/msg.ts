@@ -7,10 +7,10 @@ const routes: RouteRecordRaw[] = [
     meta: {
       hideInMenu: true,
       hideInTab: true,
-      authority: ['*', '/msg/inbox'],
+      authority: ['/msg/inbox'],
       icon: 'lucide:inbox',
       order: 90,
-      title: 'msg.inbox',
+      title: 'menus.admin:menu:msg:inbox',
     },
   },
 ];

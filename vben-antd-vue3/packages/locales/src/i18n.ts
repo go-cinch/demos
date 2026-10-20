@@ -30,6 +30,10 @@ const localesMap = loadLocalesMapFromDir(
 );
 let loadMessages: LoadMessageFn;
 
+async function loadBundledLocaleMessages(locale: string) {
+  return (await localesMap[locale]?.())?.default ?? {};
+}
+
 /**
  * Load locale modules
  * @param modules
@@ -128,9 +132,7 @@ async function loadLocaleMessages(lang: SupportedLanguagesType) {
 
   const message = await localesMap[lang]?.();
 
-  if (message?.default) {
-    i18n.global.setLocaleMessage(lang, message.default);
-  }
+  i18n.global.setLocaleMessage(lang, message?.default ?? {});
 
   const mergeMessage = await loadMessages(lang);
   i18n.global.mergeLocaleMessage(lang, mergeMessage);
@@ -141,6 +143,7 @@ async function loadLocaleMessages(lang: SupportedLanguagesType) {
 export {
   i18n,
   loadLocaleMessages,
+  loadBundledLocaleMessages,
   loadLocalesMap,
   loadLocalesMapFromDir,
   setupI18n,

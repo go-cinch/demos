@@ -56,7 +56,6 @@
   "lastLogin": "Last login",
   "neverLoggedIn": "Never signed in",
   "filterEnabled": "Filter {status} dictionaries",
-  "filterCategory": "Filter {category} whitelist entries",
   "noSummary": "No statistics available",
   "recentLoginUsers": "Users with recent logins",
   "userTrend": "New users and recent logins",

@@ -7,7 +7,6 @@
   "loading": "Loading records",
   "loadError": "Could not load the record",
   "retry": "Retry",
-  "whitelistEntry": "Whitelist entry #{id}",
   "associatedPermissions": "Associated permissions",
   "permissionGroups": "Permission groups",
   "noPermissions": "No permissions assigned",

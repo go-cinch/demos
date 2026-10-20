@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listUserGroupMembers } from '#/api';
 
 import GroupMembers from './group-members.vue';
+vi.mock('#/composables/use-permissions', () => ({ usePermissions: () => ({ hasButton: () => true, canAssignPermissions: { value: true } }) }));
 vi.mock('#/api', () => ({ listUserGroupMembers: vi.fn() }));
 vi.mock('#/locales', () => ({ $t: (key: string, params?: unknown) => `${key}${params ? JSON.stringify(params) : ''}` }));
 vi.mock('./association-editor.vue', () => ({ default: { props: ['value', 'groupId'], emits: ['update:value'], template: '<button class="add-test" @click="$emit(\'update:value\', [1001])">Add</button>' } }));

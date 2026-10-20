@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import { Avatar, Button, FormItemRest, Pagination } from 'ant-design-vue';
 
+import { usePermissions } from '#/composables/use-permissions';
 import { listUserGroupMembers } from '#/api';
 import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { searchSuggestionGroups } from '#/components/search-suggestions';
@@ -15,6 +16,9 @@ import { $t } from '#/locales';
 import AssociationEditor from './association-editor.vue';
 
 interface Delta { added: number[]; removed: number[] }
+const { hasButton, canAssignPermissions } = usePermissions();
+const canAdd = () => canAssignPermissions.value && hasButton('admin:btn:system:user-group:add-members');
+const canRemove = () => canAssignPermissions.value && hasButton('admin:btn:system:user-group:remove-members');
 const props = withDefaults(defineProps<{
   groupId: number; count: number; editable?: boolean; disabled?: boolean; value?: Delta;
 }>(), { editable: false, disabled: false, value: () => ({ added: [], removed: [] }) });
@@ -32,12 +36,12 @@ let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const displayedCount = computed(() => props.count + props.value.added.length - props.value.removed.length);
 function remove(id: number) {
-  if (props.disabled) return;
+  if (props.disabled || !canRemove()) return;
   const removed = props.value.removed.includes(id) ? props.value.removed.filter((value) => value !== id) : [...props.value.removed, id];
   emit('update:value', { added: [...props.value.added], removed });
 }
 function updateAdded(values: (number | string)[]) {
-  if (!props.disabled) emit('update:value', { added: values.map(Number), removed: [...props.value.removed] });
+  if (!props.disabled && canAdd()) emit('update:value', { added: values.map(Number), removed: [...props.value.removed] });
 }
 async function load(request = ++generation) {
   loading.value = true; failed.value = false;
@@ -101,13 +105,13 @@ onBeforeUnmount(() => { ++generation; clearTimeout(timer); });
             <strong><span v-for="(part, index) in segments(member.username)" :key="index" :class="{ matched: part.match }">{{ part.text }}</span></strong>
             <span><span v-for="(part, index) in segments(member.code)" :key="index" :class="{ matched: part.match }">{{ part.text }}</span></span>
           </div>
-          <Button v-if="editable" size="small" :disabled="disabled || loading" :aria-label="value.removed.includes(member.id) ? $t('system-editor.undo') : $t('system-editor.removeItem', { name: member.username })" @click="remove(member.id)">{{ $t(value.removed.includes(member.id) ? 'system-editor.undo' : 'system-members.remove') }}</Button>
+          <Button v-if="editable && canRemove()" size="small" :disabled="disabled || loading" :aria-label="value.removed.includes(member.id) ? $t('system-editor.undo') : $t('system-editor.removeItem', { name: member.username })" @click="remove(member.id)">{{ $t(value.removed.includes(member.id) ? 'system-editor.undo' : 'system-members.remove') }}</Button>
         </article>
         <div v-if="loading && !members.length" class="member-placeholder" aria-hidden="true">────────────────</div>
         <p v-else-if="!failed && !members.length">{{ $t(query ? 'system-editor.noMatches' : 'system-cards.noMembers') }}</p>
       </div>
       <Pagination v-if="total > 20" :current="page" :page-size="20" :total="total" :show-size-changer="false" :disabled="disabled || loading" size="small" @change="changePage" />
-      <template v-if="editable">
+      <template v-if="editable && canAdd()">
         <p v-if="value.added.length || value.removed.length" class="member-changes" role="status">{{ $t('system-members.changes', { added: value.added.length, removed: value.removed.length }) }}</p>
         <AssociationEditor kind="user" :group-id="groupId" :value="value.added" :disabled="disabled" @update:value="updateAdded" />
       </template>

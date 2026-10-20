@@ -1,5 +1,5 @@
-import type { SelectedRecord } from './system';
 import type { MessageStatus } from './message-attention';
+import type { SelectedRecord } from './system';
 
 import { authRequestClient as client } from '#/api/request';
 
@@ -23,8 +23,8 @@ export interface Msg {
   recipient_ids?: number[];
   recipients?: MsgRecipient[];
 }
-export type MsgFeedPreview = Pick<Msg, 'id' | 'title' | 'type' | 'published_at' | 'read_at' | 'summary' | 'content'>;
-export type MsgPreview = Pick<Msg, 'id' | 'title'> & Partial<Msg>;
+export type MsgFeedPreview = Pick<Msg, 'content' | 'id' | 'published_at' | 'read_at' | 'summary' | 'title' | 'type'>;
+export type MsgPreview = Partial<Msg> & Pick<Msg, 'id' | 'title'>;
 export interface MsgPage<T = Msg> {
   items: T[];
   t: number;
@@ -58,6 +58,7 @@ export function msgChanged() {
 }
 
 export const msgPreviewFields = 'id,title,summary,type,published_at,read_at';
+export const msgSentDetailFields = 'id,title,content,type,scope,sender_id,published_at,expired_at,read_at,recipients';
 interface MsgListApi {
   <F extends string>(sent: boolean, params: Record<string, boolean | number | string> & { f: F }): Promise<MsgPage<SelectedRecord<Msg, F>>>;
   (sent: boolean, params: Record<string, boolean | number | string> & { f: string }): Promise<MsgPage<MsgPreview>>;
@@ -67,7 +68,9 @@ const listMessages: MsgListApi = (sent: boolean, params: Record<string, boolean 
 const rawMsgApi = {
   list: listMessages,
   sentSummary: () => client.get<MsgSentSummary>('/msg/sent/summary', { params: { f: 'total,counts' } }),
-  get: (id: number, sent: boolean) => client.get<Msg>(`/msg/${sent ? 'sent' : 'inbox'}/${id}`),
+  get: (id: number, sent: boolean) => sent
+    ? client.get<Msg>(`/msg/sent/${id}`, { params: { f: msgSentDetailFields } })
+    : client.get<Msg>(`/msg/inbox/${id}`),
   count: () => client.get<MessageStatus>('/msg/unread-count'),
   read: (id: number) =>
     client.request(`/msg/inbox/${id}`, { method: 'PATCH', data: { read: true } }),

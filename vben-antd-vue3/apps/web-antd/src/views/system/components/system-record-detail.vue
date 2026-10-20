@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ResourceKind, SystemRecord } from './system-record-format';
 
+import type { ActionRecord } from '#/api/system';
+
 import { computed } from 'vue';
 
 import {
@@ -15,8 +17,8 @@ import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
-import PermissionCard from './permission-card.vue';
 import GroupMembers from './group-members.vue';
+import PermissionDetail from './permission-detail.vue';
 import { memberCount } from './system-record-format';
 import {
   jsonStructure,
@@ -24,10 +26,7 @@ import {
   jsonType,
   recordActions,
   recordDate,
-  resourceRules,
-  ruleColor,
   skeletonRecord,
-  splitLines,
   userStatus,
 } from './system-record-format';
 const props = withDefaults(
@@ -48,6 +47,7 @@ const dictionary = computed(() =>
 const user = computed(() =>
   record.value && 'username' in record.value ? record.value : null,
 );
+const userRole = computed(() => user.value?.role_summary ?? user.value?.role);
 const actions = computed(() =>
   record.value ? recordActions(record.value) : [],
 );
@@ -59,24 +59,7 @@ const actionCodes = computed(() =>
     ? record.value.action_codes ?? []
     : [],
 );
-const unresolvedCodes = computed(() =>
-  actionCodes.value.filter(
-    (code) => !actions.value.some((action) => action.code === code),
-  ),
-);
-const primaryRules = computed(() =>
-  record.value && 'resource' in record.value
-    ? resourceRules(record.value.resource)
-    : [],
-);
-const category = computed(() =>
-  record.value && 'category' in record.value
-    ? record.value.category
-    : undefined,
-);
-const action = computed(() =>
-  record.value && 'button' in record.value ? record.value : null,
-);
+const detailActions = computed(() => props.resource === 'action' && record.value ? [record.value as ActionRecord] : actions.value);
 const facts = computed(() => {
   const keys: Record<ResourceKind, string[]> = {
     action: ['name', 'word', 'code', 'group'],
@@ -84,7 +67,7 @@ const facts = computed(() => {
     role: ['name', 'word'],
     user: ['username', 'code'],
     'user-group': ['name', 'word'],
-    whitelist: [],
+
   };
   return keys[props.resource]
     .filter((key) => key !== 'code' || record.value)
@@ -132,18 +115,6 @@ const facts = computed(() => {
             $t(dictionary.enabled ? 'system.enabled.yes' : 'system.enabled.no')
           }}
 </Tag>
-        <Tag
-          v-if="category !== undefined && !editing"
-          :color="category === 0 ? 'blue' : 'green'"
-          >
-{{
-            $t(
-              category === 0
-                ? 'system.category.permission'
-                : 'system.category.jwt',
-            )
-          }}
-</Tag>
         <Tag v-if="user" :color="userStatus(user.status).color">
 {{
           userStatus(user.status).label
@@ -162,14 +133,13 @@ const facts = computed(() => {
           </dl>
         </template>
         <slot v-if="editing" name="field-enabled"></slot>
-        <slot v-if="editing" name="field-category"></slot>
         <template v-if="resource === 'user'">
           <slot v-if="editing && !record" name="field-password"></slot>
-          <slot v-if="editing" name="field-role_id"></slot>
+          <slot v-if="editing && $slots['field-role_id']" name="field-role_id"></slot>
           <dl v-else class="detail-facts">
             <dt>{{ $t('system.fields.role') }}</dt>
             <dd>
-              <Tag v-if="user?.role" color="blue">{{ user.role.name }}</Tag><span v-else>—</span>
+              <Tag v-if="userRole" color="blue">{{ userRole.name }}</Tag><span v-else>—</span>
             </dd>
           </dl>
           <dl v-if="user" class="detail-facts">
@@ -180,7 +150,7 @@ const facts = computed(() => {
             <dt>{{ $t('system-cards.failedLoginCount') }}</dt>
             <dd>{{ user.wrong }}</dd>
           </dl>
-          <Collapse v-if="editing && record" ghost class="detail-password">
+          <Collapse v-if="editing && record && $slots['field-password']" ghost class="detail-password">
 <CollapsePanel
               key="password"
               :header="$t('system.fields.newPassword')"
@@ -213,89 +183,22 @@ const facts = computed(() => {
           :aria-label="$t('system.fields.metadata')"
           >{{ jsonText(user.metadata) }}</pre>
       </section>
-      <section
-        v-if="
-          primaryRules.length ||
-          (editing && ['action', 'whitelist'].includes(resource))
-        "
-        class="detail-section"
-      >
-        <slot v-if="editing" name="field-resource"></slot>
-        <template v-else>
-<h4>{{ $t('system.fields.resourceRules') }}</h4>
-          <div class="detail-rules">
-            <div
-              v-for="(rule, index) in primaryRules"
-              :key="index"
-              class="detail-rule"
-            >
-              <Tag v-if="rule.method" :color="ruleColor(rule, category)">
-{{
-                rule.method
-              }}
-</Tag><code>{{ rule.path }}</code>
-            </div>
-          </div>
-</template>
-      </section>
       <section v-if="resource === 'action'" class="detail-section">
-        <template v-if="editing">
-<slot name="field-menu"></slot><slot name="field-button"></slot>
-</template>
-        <template v-else-if="action">
-<h4>{{ $t('system.fields.menuPaths') }}</h4>
-          <div class="detail-tags">
-            <Tag
-              v-for="path in splitLines(action.menu)"
-              :key="path"
-              color="blue"
-              >
-{{ path }}
-</Tag><span v-if="!action.menu">—</span>
-          </div>
-          <h4 class="detail-subheading">
-            {{ $t('system.fields.buttonPermission') }}
-          </h4>
-          <div class="detail-tags">
-            <Tag
-              v-for="button in splitLines(action.button)"
-              :key="button"
-              color="blue"
-              >
-{{ button }}
-</Tag><span v-if="!action.button">—</span>
-          </div>
-</template>
+        <template v-if="editing"><slot name="field-resource"></slot><slot name="field-menu"></slot><slot name="field-button"></slot></template>
+        <PermissionDetail v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" />
       </section>
       <section v-if="resource === 'user-group'" class="detail-section">
-        <slot v-if="editing" name="field-user_ids"></slot>
+        <slot v-if="editing && $slots['field-user_ids']" name="field-user_ids"></slot>
         <GroupMembers v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :group-id="record.id" :count="memberCount(record)" />
       </section>
       <section v-if="hasPermissions" class="detail-section">
-        <slot v-if="editing" name="field-action_codes"></slot>
+        <slot v-if="editing && $slots['field-action_codes']" name="field-action_codes"></slot>
         <template v-else>
           <h4>
             {{ $t('system.fields.permissions') }}
             <span>{{ actions.length }}</span>
           </h4>
-          <p
-            v-if="!actions.length && !unresolvedCodes.length"
-            class="detail-empty"
-          >
-            {{ $t('system-cards.noPermissions') }}
-          </p>
-          <div class="detail-action-list">
-            <PermissionCard
-              v-for="permission in actions"
-              :key="permission.code"
-              :permission="permission"
-              :code="permission.code"
-            /><PermissionCard
-              v-for="code in unresolvedCodes"
-              :key="code"
-              :code="code"
-            />
-          </div>
+          <PermissionDetail v-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :codes="actionCodes" />
         </template>
       </section>
       <section v-if="record" class="detail-section">

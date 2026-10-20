@@ -3,18 +3,17 @@ import type {
   GenerateMenuAndRoutesOptions,
 } from '@vben/types';
 
+import type { PermissionMenu, PermissionNavigation } from '#/api/core/user';
+import { resourceNavigationRoutes } from './navigation';
+
 import { generateAccessible } from '@vben/access';
-import { preferences } from '@vben/preferences';
 
-import { message } from 'ant-design-vue';
-
-import { getAllMenusApi } from '#/api';
 import { BasicLayout, IFrameView } from '#/layouts';
-import { $t } from '#/locales';
+import { coreRouteNames } from '#/router/routes';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
-async function generateAccess(options: GenerateMenuAndRoutesOptions) {
+async function generateAccess(options: GenerateMenuAndRoutesOptions & { permissionMenus?: PermissionMenu[]; navigation?: PermissionNavigation[] }) {
   const pageMap: ComponentRecordType = import.meta.glob('../views/**/*.vue');
 
   const layoutMap: ComponentRecordType = {
@@ -22,15 +21,12 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     IFrameView,
   };
 
-  return await generateAccessible(preferences.app.accessMode, {
+  // Remove prior business routes before rebuilding the current navigation.
+  const root = options.router.getRoutes().find((route) => route.path === '/');
+  if (root) root.children = root.children.filter((route) => coreRouteNames.includes(route.name as string));
+  return await generateAccessible('frontend', {
     ...options,
-    fetchMenuListAsync: async () => {
-      message.loading({
-        content: `${$t('common.loadingMenu')}...`,
-        duration: 1.5,
-      });
-      return await getAllMenusApi();
-    },
+    routes: resourceNavigationRoutes(options.routes, options.permissionMenus ?? [], options.navigation ?? []),
     // 可以指定没有权限跳转403页面
     forbiddenComponent,
     // 如果 route.meta.menuVisibleWithForbidden = true

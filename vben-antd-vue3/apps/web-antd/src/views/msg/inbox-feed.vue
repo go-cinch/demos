@@ -11,9 +11,12 @@ import LoadWarning from '#/components/load-warning.vue';
 import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import MessageTypeIcon from '#/components/message-type-icon.vue';
 import { $t } from '#/locales';
+import { usePermissions } from '#/composables/use-permissions';
 
 import { useInboxFeed } from './use-inbox-feed';
 
+const { hasButton } = usePermissions();
+const canControl = (control: string) => hasButton(`admin:btn:msg:inbox:${control}`);
 const props = defineProps<{ messageTitle?: string }>();
 const messageId = defineModel<number>('messageId');
 const searchInput = ref<{ focus: () => void }>();
@@ -54,7 +57,7 @@ function setViewport(element: unknown) { viewport.value = element instanceof HTM
       <div class="inbox-title">
         <h2>{{ $t('msg.inbox') }}</h2>
         <Tag v-if="unread !== undefined" color="blue" data-testid="inbox-unread">{{ $t('msg.count', { count: unread }) }}</Tag>
-        <Button type="link" :disabled="busy || loading" @click="readAll">{{ $t('msg.readAll') }}</Button>
+        <Button v-if="canControl('read-all')" type="link" :disabled="busy || loading" @click="readAll">{{ $t('msg.readAll') }}</Button>
       </div>
       <div v-if="messageId !== undefined" class="inbox-active-filters" role="group" :aria-label="$t('msg.activeFilters')" data-testid="inbox-active-filters">
         <Tag color="blue" class="inbox-id-filter">
@@ -65,6 +68,7 @@ function setViewport(element: unknown) { viewport.value = element instanceof HTM
         </Tag>
       </div>
       <SearchAutocomplete
+        v-if="canControl('query')"
         ref="searchInput"
         :id="searchId"
         v-model:value="draft"
@@ -85,14 +89,14 @@ function setViewport(element: unknown) { viewport.value = element instanceof HTM
         <div class="inbox-filters" :aria-label="$t('msg.feedFilters')" role="group">
           <button v-for="item in filters" :key="item.value" type="button" :aria-pressed="filter === item.value" :disabled="busy" @click="changeFilter(item.value)">{{ item.label }}</button>
         </div>
-        <Button type="text" :disabled="busy || loading" :aria-label="$t('msg.refresh')" @click="refresh()"><IconifyIcon icon="lucide:refresh-cw" /></Button>
+        <Button v-if="canControl('refresh')" type="text" :disabled="busy || loading" :aria-label="$t('msg.refresh')" @click="refresh()"><IconifyIcon icon="lucide:refresh-cw" /></Button>
         <Button type="text" :disabled="busy || loading" :aria-pressed="selecting" @click="selecting = !selecting; selected = []">{{ $t(selecting ? 'msg.cancel' : 'msg.select') }}</Button>
       </div>
       <div v-if="selecting" class="inbox-selection">
         <Checkbox :checked="allSelected" :indeterminate="selected.length > 0 && !allSelected" :disabled="busy || loading || !rows.length" :aria-label="$t('msg.feedSelectLoaded')" @change="selected = $event.target.checked ? rows.map((row) => row.id) : []">{{ $t('msg.feedSelectLoaded') }}</Checkbox>
         <template v-if="selected.length">
-          <Button size="small" :disabled="busy || loading" data-testid="message-bulk-read" @click="confirmAction(true, selected, true)">{{ $t('msg.markRead') }}</Button>
-          <Button size="small" danger :disabled="busy || loading" data-testid="message-bulk-delete" @click="confirmAction(false, selected, true)">{{ $t('msg.deleteSelected') }}</Button>
+          <Button size="small" :disabled="busy || loading" v-if="canControl('mark-selected-read')" data-testid="message-bulk-read" @click="confirmAction(true, selected, true)">{{ $t('msg.markRead') }}</Button>
+          <Button size="small" danger :disabled="busy || loading" v-if="canControl('delete-selected')" data-testid="message-bulk-delete" @click="confirmAction(false, selected, true)">{{ $t('msg.deleteSelected') }}</Button>
         </template>
       </div>
     </header>
@@ -112,9 +116,9 @@ function setViewport(element: unknown) { viewport.value = element instanceof HTM
             <p :id="`inbox-content-${row.id}`" class="inbox-content" :class="{ 'is-expanded': expanded.includes(row.id) }">{{ expanded.includes(row.id) ? row.content : row.summary }}</p>
             <LoadWarning v-if="detailError === row.id"><template #action><Button size="small" @click="toggle(row)">{{ $t('msg.retry') }}</Button></template></LoadWarning>
             <div class="inbox-actions">
-              <Button type="link" :loading="detailLoading === row.id" :disabled="busy || loading || (detailLoading !== undefined && detailLoading !== row.id)" :aria-expanded="expanded.includes(row.id)" :aria-controls="`inbox-content-${row.id}`" @click="toggle(row)">{{ $t(expanded.includes(row.id) ? 'msg.feedCollapse' : 'msg.feedExpand') }}</Button>
-              <Button v-if="!row.read_at" type="link" :disabled="busy || loading" @click="mark(row)">{{ $t('msg.markRead') }}</Button>
-              <Button class="inbox-delete" type="text" :disabled="busy || loading" @click="confirmAction(false, [row.id])">{{ $t('msg.delete') }}</Button>
+              <Button v-if="canControl('view-detail')" type="link" :loading="detailLoading === row.id" :disabled="busy || loading || (detailLoading !== undefined && detailLoading !== row.id)" :aria-expanded="expanded.includes(row.id)" :aria-controls="`inbox-content-${row.id}`" @click="toggle(row)">{{ $t(expanded.includes(row.id) ? 'msg.feedCollapse' : 'msg.feedExpand') }}</Button>
+              <Button v-if="!row.read_at && canControl('mark-read')" type="link" :disabled="busy || loading" @click="mark(row)">{{ $t('msg.markRead') }}</Button>
+              <Button v-if="canControl('delete')" class="inbox-delete" type="text" :disabled="busy || loading" @click="confirmAction(false, [row.id])">{{ $t('msg.delete') }}</Button>
             </div>
           </div>
         </article>

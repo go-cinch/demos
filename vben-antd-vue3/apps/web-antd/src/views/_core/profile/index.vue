@@ -5,11 +5,12 @@ import { computed, nextTick, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useUserStore } from '@vben/stores';
 
 import { Alert, Avatar, Badge, Button, Card, Tag } from 'ant-design-vue';
 
 import { $t } from '#/locales';
+import { usePermissions } from '#/composables/use-permissions';
 
 import MessageHistory from '../../msg/history.vue';
 import ProfileBase from './base-setting.vue';
@@ -18,7 +19,7 @@ import ProfileActivity from './profile-activity.vue';
 import ProfileMessages from './profile-messages.vue';
 
 const userStore = useUserStore();
-const accessStore = useAccessStore();
+const { hasAllPermissions } = usePermissions();
 const user = computed(
   () => userStore.userInfo as null | UserInfoWithPermissions,
 );
@@ -34,7 +35,7 @@ function openInbox(id?: number, title = '') {
 }
 const scope = computed(() =>
   $t(
-    accessStore.accessCodes.includes('*')
+    hasAllPermissions.value
       ? 'profile-center.allPermissions'
       : 'profile-center.assignedPermissions',
   ),

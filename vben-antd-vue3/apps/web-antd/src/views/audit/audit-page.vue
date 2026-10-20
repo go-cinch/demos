@@ -239,7 +239,7 @@ const moduleOptions = computed(() =>
     'action',
     'user-group',
     'dictionary',
-    'whitelist',
+
     'msg',
   ].map((value) => ({
     value,
@@ -821,11 +821,11 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
             />
 </FormItem>
             <template #actions>
-              <Button @click="state.reset()">{{ $t('audit.reset') }}</Button>
+              <Button v-if="state.canControl('reset-query')" @click="state.reset()">{{ $t('audit.reset') }}</Button>
               <Button
                 :loading="loading" :aria-busy="loading"
                 type="primary"
-                @click="state.applyFilters()"
+                v-if="state.canControl('query')" @click="state.applyFilters()"
               >
 {{ $t('audit.search') }}
 </Button>
@@ -863,6 +863,7 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
                 v-model:sticky="sticky"
                 :loading="loading || overviewLoading"
                 :is-fullscreen="isFullscreen"
+                :can-read="state.canControl('refresh')"
                 @refresh="state.refresh()"
                 @fullscreen="toggle"
                 >
@@ -1339,7 +1340,6 @@ type="link" size="small" :aria-pressed="exact.ip === item.name"
 }
 .audit-order :deep(.ant-segmented-item-selected) {
   color: hsl(var(--primary));
-  font-weight: 600;
 }
 .audit-search { width: clamp(210px, 30vw, 360px); }
 .audit-suggestion { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; align-items: start; padding: 4px 0; white-space: normal; }

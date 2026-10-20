@@ -136,7 +136,7 @@ async function encryptCredential(
     ? authRequestClient
     : authPublicRequestClient;
   const challenge = await challengeClient.post<AuthApi.CredentialChallenge>(
-    authenticated ? '/auth/challenge' : '/auth/pub/challenge',
+    authenticated ? '/challenge' : '/pub/challenge',
     { purpose },
   );
   const publicKey = await importJWK(challenge.public_key, 'RSA-OAEP-256');
@@ -175,7 +175,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
     slider_proof: data.slider_proof,
   });
   return authPublicRequestClient.post<AuthApi.LoginResult>(
-    '/auth/pub/login',
+    '/pub/login',
     encrypted,
   );
 }
@@ -183,7 +183,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
 /** Refresh an already-issued point-selection challenge without exposing a username. */
 export async function refreshLoginCaptchaApi(captchaId: string) {
   return authPublicRequestClient.post<AuthApi.PointCaptchaChallenge>(
-    '/auth/pub/captcha',
+    '/pub/captcha',
     { captcha_id: captchaId },
   );
 }
@@ -195,7 +195,7 @@ export async function verifyLoginCaptchaApi(
   captchaPoints: AuthApi.CaptchaPoint[],
 ) {
   return authVerificationRequestClient.post<AuthApi.PointCaptchaVerificationResult>(
-    '/auth/pub/captcha/verify',
+    '/pub/captcha/verify',
     {
       captcha_id: captchaId,
       captcha_points: captchaPoints,
@@ -207,7 +207,7 @@ export async function verifyLoginCaptchaApi(
 /** Resolve the verification mode for the current username while reporting gateway outages. */
 export async function getLoginVerificationApi(username: string) {
   return authVerificationRequestClient.get<AuthApi.LoginVerificationResult>(
-    '/auth/pub/login/verification',
+    '/pub/login/verification',
     { params: { username } },
   );
 }
@@ -259,7 +259,7 @@ export async function createRegistrationPasswordCredentialApi(
  */
 export async function registerApi(data: AuthApi.RegisterParams) {
   const encrypted = await createRegistrationCredentialApi(data);
-  return authPublicRequestClient.post('/auth/pub/register', encrypted);
+  return authPublicRequestClient.post('/pub/register', encrypted);
 }
 
 export async function createSliderCaptchaChallengeApi(
@@ -267,7 +267,7 @@ export async function createSliderCaptchaChallengeApi(
   username: string,
 ) {
   return authVerificationRequestClient.post<AuthApi.SliderCaptchaChallenge>(
-    '/auth/pub/slider/challenge',
+    '/pub/slider/challenge',
     { purpose, username },
   );
 }
@@ -276,7 +276,7 @@ export async function verifySliderCaptchaApi(
   data: AuthApi.SliderCaptchaVerification,
 ) {
   return authVerificationRequestClient.post<{ proof: string }>(
-    '/auth/pub/slider/verify',
+    '/pub/slider/verify',
     data,
   );
 }
@@ -294,7 +294,7 @@ export async function changePasswordApi(data: AuthApi.ChangePasswordParams) {
     new_password: data.newPassword,
     old_password: data.oldPassword,
   });
-  return authRequestClient.request('/auth/change/pwd', {
+  return authRequestClient.request('/change/pwd', {
     data: encrypted,
     method: 'PATCH',
   });
@@ -303,7 +303,7 @@ export async function changePasswordApi(data: AuthApi.ChangePasswordParams) {
 /** Refresh an already-issued password-change point-selection challenge. */
 export async function refreshPasswordChangeCaptchaApi(captchaId: string) {
   return authRequestClient.post<AuthApi.PointCaptchaChallenge>(
-    '/auth/captcha',
+    '/captcha',
     { captcha_id: captchaId },
   );
 }
@@ -314,7 +314,7 @@ export async function verifyPasswordChangeCaptchaApi(
   captchaPoints: AuthApi.CaptchaPoint[],
 ) {
   return authRequestClient.post<AuthApi.PointCaptchaVerificationResult>(
-    '/auth/captcha/verify',
+    '/captcha/verify',
     {
       captcha_id: captchaId,
       captcha_points: captchaPoints,
@@ -341,7 +341,7 @@ export function getPasswordChangeFailure(
  */
 export async function getUsernameAvailabilityApi(username: string) {
   return authPublicRequestClient.get<AuthApi.UsernameAvailabilityResult>(
-    '/auth/pub/register/username',
+    '/pub/register/username',
     { params: { username } },
   );
 }
@@ -351,7 +351,7 @@ export async function getUsernameAvailabilityApi(username: string) {
  */
 export async function refreshTokenApi(refreshToken: string) {
   return authSessionRequestClient.post<AuthApi.LoginResult>(
-    '/auth/pub/refresh',
+    '/pub/refresh',
     { refresh_token: refreshToken },
   );
 }
@@ -360,7 +360,7 @@ export async function refreshTokenApi(refreshToken: string) {
  * 退出登录
  */
 export async function logoutApi(refreshToken: string) {
-  return authSessionRequestClient.post('/auth/pub/logout', {
+  return authSessionRequestClient.post('/pub/logout', {
     refresh_token: refreshToken,
   });
 }
@@ -375,7 +375,7 @@ export async function resetPasswordApi(newPassword: string) {
   });
   // A reset changes the credential version; never automatically replay it after a 401.
   return authPublicRequestClient.request<AuthApi.LoginResult>(
-    '/auth/reset/pwd',
+    '/reset/pwd',
     {
       data: encrypted,
       method: 'PATCH',

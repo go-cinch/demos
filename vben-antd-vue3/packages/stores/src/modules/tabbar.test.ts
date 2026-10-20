@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTabbarStore } from './tabbar';
 
-describe('useAccessStore', () => {
+describe('useTabbarStore', () => {
   const router = createRouter({
     history: createWebHistory(),
     routes: [],

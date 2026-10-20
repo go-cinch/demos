@@ -60,10 +60,6 @@
     "entity": "User Group",
     "title": "User Group Management"
   },
-  "whitelist": {
-    "entity": "Whitelist Entry",
-    "title": "Whitelist Management"
-  },
   "dictionary": {
     "entity": "Dictionary",
     "title": "Dictionary Management"
@@ -159,7 +155,6 @@
     "roles": "Roles",
     "groups": "User Groups",
     "actions": "Actions",
-    "whitelist": "Whitelist",
     "dictionary": "Dictionary"
   }
 }

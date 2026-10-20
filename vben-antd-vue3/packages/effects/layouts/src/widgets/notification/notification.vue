@@ -22,6 +22,8 @@ withDefaults(
   defineProps<{
     /** 显示圆点 */
     dot?: boolean;
+    canMarkAll?: boolean;
+    canClear?: boolean;
     disabled?: boolean;
     loading?: boolean;
     triggerLabel?: string;
@@ -30,6 +32,8 @@ withDefaults(
   }>(),
   {
     dot: false,
+    canMarkAll: true,
+    canClear: true,
     disabled: false,
     loading: false,
     triggerLabel: undefined,
@@ -97,6 +101,7 @@ defineExpose({ toggle, close });
       <header class="flex items-center justify-between p-4 py-3">
         <div class="text-foreground">{{ $t('ui.widgets.notifications') }}</div>
         <VbenIconButton
+          v-if="canMarkAll"
           :disabled="disabled || notifications.length <= 0"
           :tooltip="$t('ui.widgets.markAllAsRead')"
           :aria-label="$t('ui.widgets.markAllAsRead')"
@@ -172,6 +177,7 @@ defineExpose({ toggle, close });
 
       <footer class="flex items-center justify-between border-t border-border px-4 py-3">
         <VbenButton
+          v-if="canClear"
           :disabled="disabled || notifications.length <= 0"
           size="sm"
           variant="ghost"

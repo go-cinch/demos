@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import MessageRecipients from './message-recipients.vue';
 
 const access = vi.hoisted(() => ({ allowed: true }));
-vi.mock('@vben/access', () => ({ useAccess: () => ({ hasAccessByCodes: () => access.allowed }) }));
+vi.mock('#/composables/use-permissions', () => ({ usePermissions: () => ({ hasPage: () => access.allowed }) }));
+vi.mock('@vben/stores', () => ({ useAccessStore: () => ({ accessRoutes: [] }) }));
 vi.mock('#/locales', () => ({ $t: (key: string, params?: { username: string }) => params ? `View user ${params.username}` : key }));
 afterEach(() => { access.allowed = true; });
 

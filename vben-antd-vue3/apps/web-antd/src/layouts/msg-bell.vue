@@ -15,9 +15,12 @@ import { messageAttention, visitMessages } from '#/api/message-attention';
 import { msgApi, msgChanged, msgPreviewFields } from '#/api/msg';
 import MessageTypeIcon from '#/components/message-type-icon.vue';
 import { $t } from '#/locales';
+import { usePermissions } from '#/composables/use-permissions';
 import MessageHistory from '#/views/msg/history.vue';
 
 const userStore = useUserStore();
+const { hasButton, hasPage } = usePermissions();
+const canControl = (control: string) => hasButton(`admin:btn:msg:inbox:${control}`);
 const historyOpen = ref(false);
 const historyMessageId = ref<number>();
 const historyMessageTitle = ref('');
@@ -97,6 +100,7 @@ async function mutate(action: () => Promise<unknown>) {
   }
 }
 async function markRead(id: number | string) {
+  if (!canControl('mark-read')) return;
   try {
     await mutate(() => msgApi.read(Number(id)));
   } catch {
@@ -104,6 +108,7 @@ async function markRead(id: number | string) {
   }
 }
 async function readAll() {
+  if (!canControl('read-all')) return;
   try {
     await mutate(() => msgApi.readAll());
   } catch {
@@ -111,6 +116,7 @@ async function readAll() {
   }
 }
 function confirmRemove(ids: number[], clear = false) {
+  if (!canControl(clear ? 'delete-selected' : 'delete')) return;
   Modal.confirm({
     title: clear ? $t('msg.clearPreviewConfirm', { count: ids.length }) : $t('msg.deleteConfirm'),
     okText: $t('msg.confirm'),
@@ -123,7 +129,7 @@ function confirmRemove(ids: number[], clear = false) {
   });
 }
 function openHistory(id?: number | string) {
-  if (busy.value || loading.value) return;
+  if (busy.value || loading.value || !hasPage('/msg/inbox') || (id !== undefined && !canControl('view-detail'))) return;
   popup.value?.close();
   historyMessageId.value = id === undefined ? undefined : Number(id);
   historyMessageTitle.value = rows.value.find((row) => row.id === historyMessageId.value)?.title ?? '';
@@ -156,6 +162,8 @@ onBeforeUnmount(() => {
     :loading="loading"
     :disabled="busy || loading || error"
     :trigger-label="$t('msg.inbox')"
+    :can-mark-all="canControl('read-all')"
+    :can-clear="canControl('delete-selected')"
     @open-change="onOpenChange"
     @make-all="readAll"
     @clear="
@@ -179,6 +187,7 @@ onBeforeUnmount(() => {
     </template>
     <template #action="{ item }">
       <VbenIconButton
+        v-if="canControl(item.isRead ? 'delete' : 'mark-read')"
         size="xs"
         variant="ghost"
         class="h-6 w-6 p-0"

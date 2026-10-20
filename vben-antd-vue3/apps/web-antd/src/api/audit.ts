@@ -1,4 +1,5 @@
 import type { PageResult, SelectedRecord } from './system';
+
 import { authRequestClient as client } from '#/api/request';
 export type AuditKind = 'login' | 'operation';
 export type AuditPayload =
@@ -30,10 +31,16 @@ export interface AuditEvent {
   occurred_at: number;
 }
 // List rows contain only the fields needed by the current view. Details remain complete.
-export type AuditPreview = Pick<AuditEvent, 'id' | 'occurred_at'> & Partial<AuditEvent>;
+export type AuditPreview = Partial<AuditEvent> & Pick<AuditEvent, 'id' | 'occurred_at'>;
 export const auditProfileFields = {
   login: 'id,occurred_at,username,status,user_agent,ip,duration_ms',
   operation: 'id,occurred_at,username,status,user_agent,ip,duration_ms,module,method,path,operation,resource_id',
+} as const;
+// The detail view has no header snapshot or numeric actor-ID UI. Operation
+// payloads are needed only for operation details, not login attempts.
+export const auditDetailFields = {
+  login: 'id,occurred_at,kind,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms',
+  operation: 'id,occurred_at,kind,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params',
 } as const;
 export interface AuditBreakdown {
   name: string;
@@ -74,14 +81,19 @@ function listAudit(kind: AuditKind, params: AuditParams): Promise<PageResult<Aud
 function listAudit(kind: AuditKind, params: AuditParams) {
   return client.get<PageResult<AuditEvent>>(`/audit/${kind}`, { params });
 }
+function getAudit<K extends AuditKind>(kind: K, id: number) {
+  return client.get<SelectedRecord<AuditEvent, (typeof auditDetailFields)[K]>>(
+    `/audit/${kind}/detail/${id}`,
+    { params: { f: auditDetailFields[kind] } },
+  );
+}
 export const auditApi = {
   list: listAudit,
   summary: (kind: AuditKind, params: AuditParams & { f: string }) =>
     client.get<AuditSummary>(`/audit/${kind}/summary`, { params }),
   options: (kind: AuditKind, params: AuditParams) =>
     client.get<string[]>(`/audit/${kind}/option`, { params }),
-  get: (kind: AuditKind, id: number) =>
-    client.get<AuditEvent>(`/audit/${kind}/detail/${id}`),
+  get: getAudit,
   export: (kind: AuditKind, params: AuditParams) =>
     client.get<Blob>(`/audit/${kind}/export`, { params, responseType: 'blob' }),
 };

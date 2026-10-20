@@ -4,10 +4,10 @@ const routes: RouteRecordRaw[] = [
     name: 'Audit',
     path: '/audit',
     meta: {
-      title: 'audit.menu',
+      title: 'menus.admin:menu:audit',
       icon: 'lucide:scan-search',
       order: 110,
-      authority: ['*', '/audit/login', '/audit/operation'],
+      authority: ['/audit/login', '/audit/operation'],
     },
     children: [
       {
@@ -15,9 +15,9 @@ const routes: RouteRecordRaw[] = [
         path: 'login',
         component: () => import('#/views/audit/login.vue'),
         meta: {
-          title: 'audit.login',
+          title: 'menus.admin:menu:audit:login',
           icon: 'lucide:log-in',
-          authority: ['*', '/audit/login'],
+          authority: ['/audit/login'],
         },
       },
       {
@@ -25,9 +25,9 @@ const routes: RouteRecordRaw[] = [
         path: 'operation',
         component: () => import('#/views/audit/operation.vue'),
         meta: {
-          title: 'audit.operation',
+          title: 'menus.admin:menu:audit:operation',
           icon: 'lucide:activity',
-          authority: ['*', '/audit/operation'],
+          authority: ['/audit/operation'],
         },
       },
     ],

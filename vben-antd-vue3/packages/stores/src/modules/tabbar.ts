@@ -21,6 +21,7 @@ import {
 } from '@vben-core/shared/utils';
 
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { canCloseTabPaths } from '../tab-close-guards';
 
 interface RouteCached {
   component: VNode;
@@ -79,6 +80,14 @@ export const useTabbarStore = defineStore('core-tabbar', {
      */
     async _bulkCloseByKeys(keys: string[]) {
       const keySet = new Set(keys);
+      if (
+        !(await canCloseTabPaths(
+          this.tabs
+            .filter((tab) => keySet.has(getTabKeyFromTab(tab)))
+            .map((tab) => tab.path),
+        ))
+      )
+        return;
       this.tabs = this.tabs.filter(
         (item) => !keySet.has(getTabKeyFromTab(item)),
       );
@@ -123,7 +132,11 @@ export const useTabbarStore = defineStore('core-tabbar', {
         path,
         query: query || {},
       };
-      await router.replace(toParams);
+      if (
+        router.resolve(toParams).fullPath === router.currentRoute.value.fullPath
+      )
+        return true;
+      return !(await router.replace(toParams));
     },
     /**
      * @zh_CN 添加标签页
@@ -200,14 +213,25 @@ export const useTabbarStore = defineStore('core-tabbar', {
      */
     async closeAllTabs(router: Router) {
       const newTabs = this.tabs.filter((tab) => isAffixTab(tab));
-      this.tabs = newTabs.length > 0 ? newTabs : [...this.tabs].splice(0, 1);
+      const retained = newTabs.length > 0 ? newTabs : this.tabs.slice(0, 1);
+      const target = retained[0];
+      if (
+        !target ||
+        !(await canCloseTabPaths(
+          this.tabs
+            .filter((tab) => !retained.some((item) => equalTab(item, tab)))
+            .map((tab) => tab.path),
+        ))
+      )
+        return;
+      if (!(await this._goToTab(target, router))) return;
+      this.tabs = retained;
       // 设置访问历史记录
       if (isVisitHistory()) {
         this.visitHistory.retain(
           this.tabs.map((item) => getTabKeyFromTab(item)),
         );
       }
-      await this._goToDefaultTab(router);
       this.updateCacheTabs();
     },
     /**
@@ -281,61 +305,28 @@ export const useTabbarStore = defineStore('core-tabbar', {
      * @param router
      */
     async closeTab(tab: TabDefinition, router: Router) {
-      const { currentRoute } = router;
-      const currentTabKey = getTabKey(currentRoute.value);
-      // 关闭不是激活选项卡
-      if (currentTabKey !== getTabKeyFromTab(tab)) {
-        this._close(tab);
-        this.updateCacheTabs();
-        // 移除访问历史记录
-        if (isVisitHistory()) {
-          this.visitHistory.remove(getTabKeyFromTab(tab));
-        }
-        return;
+      if (isAffixTab(tab) || !(await canCloseTabPaths([tab.path]))) return;
+      const currentKey = getTabKey(router.currentRoute.value);
+      const closingKey = getTabKeyFromTab(tab);
+      if (currentKey === closingKey) {
+        if (this.getTabs.length <= 1) return;
+        const history = isVisitHistory()
+          ? this.visitHistory.toArray().reverse()
+          : [];
+        const previous = history
+          .filter((key) => key !== closingKey)
+          .map((key) => this.getTabByKey(key))
+          .find(Boolean);
+        const index = this.getTabs.findIndex(
+          (item) => getTabKeyFromTab(item) === closingKey,
+        );
+        const target =
+          previous ?? this.getTabs[index + 1] ?? this.getTabs[index - 1];
+        if (!target || !(await this._goToTab(target, router))) return;
       }
-      if (this.getTabs.length <= 1) {
-        console.error('Failed to close the tab; only one tab remains open.');
-        return;
-      }
-      // 从访问历史记录中移除当前关闭的tab
-      if (isVisitHistory()) {
-        this.visitHistory.remove(currentTabKey);
-        this._close(tab);
-
-        let previousTab: TabDefinition | undefined;
-        let previousTabKey: string | undefined;
-        while (true) {
-          previousTabKey = this.visitHistory.pop();
-          if (!previousTabKey) {
-            break;
-          }
-          previousTab = this.getTabByKey(previousTabKey);
-          if (previousTab) {
-            break;
-          }
-        }
-        await (previousTab
-          ? this._goToTab(previousTab, router)
-          : this._goToDefaultTab(router));
-        return;
-      }
-      // 未开启访问历史记录，直接跳转下一个或上一个tab
-      const index = this.getTabs.findIndex(
-        (item) => getTabKeyFromTab(item) === getTabKey(currentRoute.value),
-      );
-
-      const before = this.getTabs[index - 1];
-      const after = this.getTabs[index + 1];
-
-      // 下一个tab存在，跳转到下一个
-      if (after) {
-        this._close(tab);
-        await this._goToTab(after, router);
-        // 上一个tab存在，跳转到上一个
-      } else if (before) {
-        this._close(tab);
-        await this._goToTab(before, router);
-      }
+      this._close(tab);
+      if (isVisitHistory()) this.visitHistory.remove(closingKey);
+      await this.updateCacheTabs();
     },
 
     /**
@@ -410,6 +401,7 @@ export const useTabbarStore = defineStore('core-tabbar', {
 
       const { currentRoute } = router;
       const { name } = currentRoute.value;
+      if (!(await canCloseTabPaths([currentRoute.value.path]))) return;
 
       this.excludeCachedTabs.add(name as string);
       this.renderRouteView = false;
@@ -427,6 +419,12 @@ export const useTabbarStore = defineStore('core-tabbar', {
      * 根据路由名称刷新指定标签页
      */
     async refreshByName(name: string) {
+      if (
+        !(await canCloseTabPaths(
+          this.tabs.filter((tab) => tab.name === name).map((tab) => tab.path),
+        ))
+      )
+        return;
       this.excludeCachedTabs.add(name);
       await new Promise((resolve) => setTimeout(resolve, 200));
       this.excludeCachedTabs.delete(name);

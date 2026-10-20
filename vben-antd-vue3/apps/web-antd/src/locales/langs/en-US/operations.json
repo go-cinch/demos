@@ -1,0 +1,7 @@
+{
+  "read": "View",
+  "create": "Create",
+  "update": "Edit",
+  "delete": "Delete",
+  "*": "All (*)"
+}

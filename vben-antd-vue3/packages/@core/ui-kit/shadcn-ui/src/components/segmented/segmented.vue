@@ -37,9 +37,6 @@ const tabsIndicatorStyle = computed(() => {
   };
 });
 
-function activeClass(tab: string): string[] {
-  return tab === activeTab.value ? ['font-bold!', 'text-primary'] : [];
-}
 </script>
 
 <template>
@@ -52,8 +49,7 @@ function activeClass(tab: string): string[] {
       <template v-for="tab in tabs" :key="tab.value">
         <TabsTrigger
           :value="tab.value"
-          :class="activeClass(tab.value)"
-          class="hover:text-primary z-20 size-full inline-flex items-center justify-center rounded-md text-sm font-medium whitespace-nowrap disabled:pointer-events-none disabled:opacity-50"
+          class="hover:text-primary data-[state=active]:text-primary z-20 size-full inline-flex items-center justify-center rounded-md text-sm font-medium whitespace-nowrap disabled:pointer-events-none disabled:opacity-50"
         >
           <VbenTooltip :delay-duration="300" side="bottom">
             <template #trigger>

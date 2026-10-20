@@ -4,7 +4,7 @@ import type {
   RoleRecord,
   UserGroupRecord,
   UserRecord,
-  WhitelistRecord,
+
 } from '#/api';
 
 import { useTimezoneStore } from '@vben/stores';
@@ -18,17 +18,15 @@ export type ResourceKind =
   | 'dictionary'
   | 'role'
   | 'user'
-  | 'user-group'
-  | 'whitelist';
+  | 'user-group';
 
-type Preview<T extends { id: number }> = Pick<T, 'id'> & Partial<T>;
+type Preview<T extends { id: number }> = Partial<T> & Pick<T, 'id'>;
 export type SystemRecord =
   | Preview<ActionRecord>
   | Preview<DictionaryRecord>
   | Preview<RoleRecord>
   | Preview<UserGroupRecord>
-  | Preview<UserRecord>
-  | Preview<WhitelistRecord>;
+  | Preview<UserRecord>;
 
 export interface ResourceRule {
   method: string;
@@ -39,10 +37,10 @@ export interface ResourceRule {
 export function recordLabel(record: SystemRecord) {
   if ('name' in record) return record.name ?? '';
   if ('username' in record) return record.username ?? '';
-  return $t('system-cards.whitelistEntry', { id: record.id });
+  return String(record.id);
 }
 
-export function recordDate(value: number | undefined) {
+export function recordDate(value: null | number | undefined) {
   return typeof value === 'number' && value > 0
     ? dayjs(value).tz(useTimezoneStore().timezone).format('YYYY-MM-DD HH:mm:ss')
     : '—';
@@ -77,6 +75,16 @@ export function splitLines(value = '') {
     .filter(Boolean);
 }
 
+export function actionMapping(
+  record: Partial<ActionRecord>,
+  field: 'button' | 'menu' | 'resource',
+) {
+  if (record.config?.permission_scope === '*' || record.config?.builtin === 'all') {
+    return '*';
+  }
+  return record[field] ?? '';
+}
+
 export function resourceRules(value = ''): ResourceRule[] {
   return splitLines(value).map((raw) => {
     const separator = raw.indexOf('|');
@@ -94,7 +102,7 @@ export function ruleColor(rule: ResourceRule, category?: number) {
   if (category !== undefined) return category === 0 ? 'blue' : 'green';
   return (
     (
-      { DELETE: 'red', GET: 'green', PATCH: 'orange', POST: 'blue' } as Record<
+      { DELETE: 'red', GET: 'green', GRPC: 'purple', PATCH: 'orange', POST: 'blue' } as Record<
         string,
         string
       >
@@ -148,7 +156,7 @@ export function recordIcon(resource: ResourceKind) {
     role: 'lucide:shield-check',
     user: 'lucide:user-round',
     'user-group': 'lucide:users-round',
-    whitelist: 'lucide:list-checks',
+
   }[resource];
 }
 
@@ -158,7 +166,7 @@ export function skeletonRecord(resource: ResourceKind, id = -1): SystemRecord {
   const named = { ...base, name: '────────', word: '────────' };
   switch (resource) {
     case 'dictionary': return { ...named, key: '────────', description: '────────', enabled: true, value: {} };
-    case 'whitelist': return { ...base, category: 0, resource: 'GET /────────' };
+
     case 'action': return { ...named, code: '────────', group: '────────', resource: 'GET /────────', menu: '', button: '' };
     case 'user': return { ...base, username: '────────', code: '────────', status: 1, actions: [], action_codes: [], metadata: {}, login_count: 0, wrong: 0 };
     case 'user-group': return { ...named, users: [], actions: [], action_codes: [] };
@@ -166,11 +174,11 @@ export function skeletonRecord(resource: ResourceKind, id = -1): SystemRecord {
   }
 }
 
-export function memberPreview(record: SystemRecord | Record<string, any>) {
+export function memberPreview(record: Record<string, any> | SystemRecord) {
   if ('member_preview' in record) return (record.member_preview ?? []) as import('#/api').UserSummary[];
   return ('users' in record ? (record.users ?? []).slice(0, 5) : []) as import('#/api').UserSummary[];
 }
-export function memberCount(record: SystemRecord | Record<string, any>) {
+export function memberCount(record: Record<string, any> | SystemRecord) {
   if ('member_count' in record) return record.member_count ?? 0;
   return 'users' in record ? (record.users ?? []).length : 0;
 }

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { computed, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { usePermissions } from '#/composables/use-permissions';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
@@ -22,6 +23,18 @@ const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { isDark } = usePreferences();
+const { hasPage } = usePermissions();
+async function refreshPermissions(event?: Event) {
+  const fresh = event?.type === 'auth-permissions-changed';
+  if (!accessStore.accessToken || authStore.passwordResetRequired || (document.hidden && !fresh)) return;
+  try {
+    await authStore.fetchUserInfo({ fresh });
+    const path = router.currentRoute.value.path;
+    if (!hasPage(path) && path !== '/forbidden' && !path.startsWith('/auth/')) await router.replace('/forbidden');
+  } catch { /* Authentication failures use the common request handler. */ }
+}
+onMounted(() => { window.addEventListener('focus', refreshPermissions); window.addEventListener('auth-permissions-changed', refreshPermissions); });
+onBeforeUnmount(() => { window.removeEventListener('focus', refreshPermissions); window.removeEventListener('auth-permissions-changed', refreshPermissions); });
 const menus = computed(() => [
   {
     handler: () => {
@@ -95,7 +108,7 @@ watch(
       />
     </template>
     <template #notification>
-      <MsgBell />
+      <MsgBell v-if="hasPage('/msg/inbox')" />
     </template>
     <template #extra>
       <AuthenticationLoginExpiredModal v-model:open="accessStore.loginExpired" :avatar>

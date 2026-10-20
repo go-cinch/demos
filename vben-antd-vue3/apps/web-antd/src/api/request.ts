@@ -25,10 +25,14 @@ import {
 } from './request-error';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+const authApiURL = import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth';
 
 // Share the window across clients so concurrent page requests produce one toast.
 const recentErrorMessages = new Map<string, number>();
 const errorMessageWindowMs = 500;
+let pendingSessionRefresh:
+  | { refreshToken: string; promise: Promise<string> }
+  | undefined;
 
 function showRequestErrorMessage(content: string) {
   const now = performance.now();
@@ -78,10 +82,24 @@ function createRequestClient(
     if (!refreshToken) {
       throw new Error('refresh token is unavailable');
     }
-    const resp = await refreshTokenApi(refreshToken);
-    const newToken = resp.access_token;
-    useAuthStore().acceptSession(resp);
-    return newToken;
+    if (pendingSessionRefresh?.refreshToken === refreshToken) {
+      return pendingSessionRefresh.promise;
+    }
+    const promise = (async () => {
+      const resp = await refreshTokenApi(refreshToken);
+      if (accessStore.refreshToken !== refreshToken) {
+        throw new Error('Refresh response belongs to an expired session');
+      }
+      useAuthStore().acceptSession(resp, true);
+      return resp.access_token;
+    })();
+    const pending = { refreshToken, promise };
+    pendingSessionRefresh = pending;
+    try {
+      return await promise;
+    } finally {
+      if (pendingSessionRefresh === pending) pendingSessionRefresh = undefined;
+    }
   }
 
   function formatToken(token: null | string) {
@@ -95,6 +113,7 @@ function createRequestClient(
 
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
+      config.headers['X-Auth-Scope'] = 'admin';
       return config;
     },
   });
@@ -128,6 +147,12 @@ function createRequestClient(
 
   client.addResponseInterceptor({
     rejected: async (error) => {
+      const isAuthInfoRequest =
+        baseURL === authApiURL &&
+        String(error?.config?.url ?? '').split(/[?#]/, 1)[0] === '/info';
+      if (error?.response?.status === 403 && !isAuthInfoRequest) {
+        window.dispatchEvent(new Event('auth-permissions-changed'));
+      }
       if (
         error?.response?.data?.error_code === 'AUTH_PASSWORD_RESET_REQUIRED'
       ) {
@@ -154,12 +179,19 @@ export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });
 
-/** Direct REST client for the generated auth service. */
-const authApiURL = import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth';
+/** Service clients share session handling while keeping independent base URLs. */
+export function createServiceRequestClient(
+  baseURL: string,
+  options?: RequestClientOptions,
+) {
+  return createRequestClient(baseURL, { responseReturn: 'body', ...options });
+}
 
-export const authRequestClient = createRequestClient(authApiURL, {
-  responseReturn: 'body',
-});
+export const authRequestClient = createServiceRequestClient(authApiURL);
+
+export const orderRequestClient = createServiceRequestClient(
+  import.meta.env.VITE_GLOB_ORDER_API_URL || '/api/order',
+);
 
 /** Auth client for login/logout, where a 401 must not recursively log out. */
 export const authPublicRequestClient = createRequestClient(

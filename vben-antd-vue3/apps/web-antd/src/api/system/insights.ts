@@ -5,8 +5,7 @@ export type SystemResource =
   | 'dictionary'
   | 'role'
   | 'user'
-  | 'user-group'
-  | 'whitelist';
+  | 'user-group';
 
 export interface SystemSummaryGroup {
   id?: number;
@@ -39,7 +38,7 @@ export function getSystemSummary(
     role: 'total,counts,groups',
     user: 'total,counts,trend',
     'user-group': 'total,counts,groups',
-    whitelist: 'total,counts',
+
   };
   return authRequestClient.get<Partial<SystemSummary>>(`/${resource}/summary`, {
     params: { ...params, f: fields[resource] },

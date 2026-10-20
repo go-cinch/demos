@@ -10,6 +10,7 @@ import { $t } from '#/locales';
 withDefaults(
   defineProps<{
     canRead?: boolean;
+    refreshLabel?: string;
     loading?: boolean;
     isFullscreen?: boolean;
   }>(),
@@ -30,11 +31,11 @@ const densityOptions = computed(() => [
 </script>
 <template>
   <Space class="ml-auto" data-testid="management-toolbar" size="small" wrap>
-    <Tooltip :title="$t('system.common.refresh')">
+    <Tooltip :title="refreshLabel || $t('system.common.refresh')">
       <Button
         class="management-tool-button"
         v-if="canRead"
-        :aria-label="$t('system.common.refresh')"
+        :aria-label="refreshLabel || $t('system.common.refresh')"
         :disabled="loading" v-skeleton="loading" :aria-busy="loading"
         size="small"
         @click="emit('refresh')"

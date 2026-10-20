@@ -49,6 +49,11 @@
   }
 }
 
+/* Keep label widths stable before, during and after the selection animation. */
+.ant-segmented .ant-segmented-item {
+  font-weight: 500;
+}
+
 .ant-message-notice-content,
 .ant-notification-notice {
   &:is(.dark *) {

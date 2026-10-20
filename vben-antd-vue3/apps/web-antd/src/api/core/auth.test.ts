@@ -102,7 +102,7 @@ describe('changePasswordApi', () => {
       }),
     );
     expect(authPublicRequestClient.post).toHaveBeenLastCalledWith(
-      '/auth/pub/login',
+      '/pub/login',
       {
         challenge_id: 'challenge-id',
         credential: 'encrypted-password-change',
@@ -132,7 +132,7 @@ describe('changePasswordApi', () => {
       },
     );
     expect(authPublicRequestClient.post).toHaveBeenLastCalledWith(
-      '/auth/pub/register',
+      '/pub/register',
       {
         challenge_id: 'register-id',
         credential: 'encrypted-password-change',
@@ -160,7 +160,7 @@ describe('changePasswordApi', () => {
       oldPassword: 'current-password',
     });
 
-    expect(authRequestClient.post).toHaveBeenCalledWith('/auth/challenge', {
+    expect(authRequestClient.post).toHaveBeenCalledWith('/challenge', {
       purpose: 'password_change',
     });
     expect(encryption.header).toEqual({
@@ -182,7 +182,7 @@ describe('changePasswordApi', () => {
         old_password: 'current-password',
       },
     );
-    expect(authRequestClient.request).toHaveBeenCalledWith('/auth/change/pwd', {
+    expect(authRequestClient.request).toHaveBeenCalledWith('/change/pwd', {
       data: {
         challenge_id: 'challenge-id',
         credential: 'encrypted-password-change',
@@ -209,7 +209,7 @@ describe('changePasswordApi', () => {
 
     await refreshPasswordChangeCaptchaApi('captcha-id');
 
-    expect(authRequestClient.post).toHaveBeenCalledWith('/auth/captcha', {
+    expect(authRequestClient.post).toHaveBeenCalledWith('/captcha', {
       captcha_id: 'captcha-id',
     });
   });
@@ -223,7 +223,7 @@ describe('changePasswordApi', () => {
     ]);
 
     expect(authRequestClient.post).toHaveBeenCalledWith(
-      '/auth/captcha/verify',
+      '/captcha/verify',
       {
         captcha_id: 'captcha-id',
         captcha_points: [
@@ -238,7 +238,7 @@ describe('changePasswordApi', () => {
     vi.mocked(authVerificationRequestClient.get).mockResolvedValue({ captcha_required: false });
     await getLoginVerificationApi('example');
     expect(authVerificationRequestClient.get).toHaveBeenCalledWith(
-      '/auth/pub/login/verification',
+      '/pub/login/verification',
       { params: { username: 'example' } },
     );
   });
@@ -254,7 +254,7 @@ describe('changePasswordApi', () => {
     ]);
 
     expect(authVerificationRequestClient.post).toHaveBeenCalledWith(
-      '/auth/pub/captcha/verify',
+      '/pub/captcha/verify',
       {
         captcha_id: 'captcha-id',
         captcha_points: [
@@ -273,7 +273,7 @@ describe('changePasswordApi', () => {
 
     await createSliderCaptchaChallengeApi('login', 'readonly');
     expect(authVerificationRequestClient.post).toHaveBeenCalledWith(
-      '/auth/pub/slider/challenge',
+      '/pub/slider/challenge',
       { purpose: 'login', username: 'readonly' },
     );
 
@@ -292,7 +292,7 @@ describe('changePasswordApi', () => {
     };
     await verifySliderCaptchaApi(verification);
     expect(authVerificationRequestClient.post).toHaveBeenLastCalledWith(
-      '/auth/pub/slider/verify',
+      '/pub/slider/verify',
       verification,
     );
   });
@@ -313,7 +313,7 @@ describe('refresh token transport', () => {
     await refreshTokenApi('old-refresh-token');
 
     expect(authSessionRequestClient.post).toHaveBeenCalledWith(
-      '/auth/pub/refresh',
+      '/pub/refresh',
       { refresh_token: 'old-refresh-token' },
     );
   });
@@ -324,7 +324,7 @@ describe('refresh token transport', () => {
     await logoutApi('refresh-token');
 
     expect(authSessionRequestClient.post).toHaveBeenCalledWith(
-      '/auth/pub/logout',
+      '/pub/logout',
       { refresh_token: 'refresh-token' },
     );
   });
@@ -346,7 +346,7 @@ describe('resetPasswordApi', () => {
     };
     vi.mocked(authPublicRequestClient.request).mockResolvedValue(tokens);
     expect(await resetPasswordApi('new-password')).toEqual(tokens);
-    expect(authRequestClient.post).toHaveBeenCalledWith('/auth/challenge', {
+    expect(authRequestClient.post).toHaveBeenCalledWith('/challenge', {
       purpose: 'password_reset',
     });
     expect(encryption.header?.typ).toBe('password-reset+jwe');
@@ -357,7 +357,7 @@ describe('resetPasswordApi', () => {
       },
     );
     expect(authPublicRequestClient.request).toHaveBeenCalledWith(
-      '/auth/reset/pwd',
+      '/reset/pwd',
       {
         method: 'PATCH',
         data: {

@@ -480,7 +480,7 @@ describe('useVbenForm integration', () => {
     const inputs = wrapper.findAll('input');
     expect(inputs).toHaveLength(2);
     expect(inputs[0]?.attributes('aria-invalid')).toBe('true');
-    expect(wrapper.text()).toContain('Name is required');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Name is required'));
     expect(wrapper.text()).toContain('Alias is required');
 
     await inputs[0]?.setValue('Ada');
@@ -965,7 +965,7 @@ describe('useVbenForm integration', () => {
 
     await input.trigger('blur');
     await flushPromises();
-    expect(wrapper.text()).toContain('Name is required');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Name is required'));
 
     await input.setValue('Ada');
     await flushPromises();
@@ -1072,7 +1072,7 @@ describe('useVbenForm integration', () => {
     await wrapper.get('form').trigger('submit');
     await flushPromises();
 
-    expect(onSubmit).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith(undefined);
   });
 

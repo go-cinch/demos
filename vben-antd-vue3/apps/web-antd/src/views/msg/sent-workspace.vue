@@ -167,7 +167,7 @@ function displayTime(value?: number) {
               <template v-else>
                 <p>
                   {{ $t('msg.recipients') }} ·
-                  {{ $t('msg.recipientCount', { count: selected.recipient_ids?.length ?? 0 }) }}
+                  {{ $t('msg.recipientCount', { count: selected.recipients?.length ?? selected.recipient_ids?.length ?? 0 }) }}
                 </p>
                 <MessageRecipients :recipients="selected.recipients" />
               </template>

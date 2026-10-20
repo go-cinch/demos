@@ -1,7 +1,7 @@
 import { message } from 'ant-design-vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { authPublicRequestClient, authRequestClient, authSilentPublicRequestClient, authVerificationRequestClient, requestClient } from './request';
+import { authPublicRequestClient, authRequestClient, authSilentPublicRequestClient, authVerificationRequestClient, createServiceRequestClient, orderRequestClient, requestClient } from './request';
 import { isBadGatewayError } from './request-error';
 
 const state = vi.hoisted(() => ({ locale: 'zh-CN' }));
@@ -25,6 +25,48 @@ function rejectWith(client: typeof authRequestClient, status: number, data: unkn
   const error = Object.assign(new Error('Request failed'), { response: { status, data } });
   return { error, request: client.get('/gateway-test', { adapter: async () => { throw error; } }) };
 }
+
+describe('service request routing', () => {
+  it('joins service-internal paths with independent configured base URLs', async () => {
+    expect(authRequestClient.instance.getUri({ url: '/info' })).toBe(
+      `${import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth'}/info`,
+    );
+    expect(orderRequestClient.instance.getUri({ url: '/list' })).toBe(
+      `${import.meta.env.VITE_GLOB_ORDER_API_URL || '/api/order'}/list`,
+    );
+    const client = createServiceRequestClient('https://orders.example.test/v2');
+    const adapter = vi.fn(async (config) => ({
+      config, data: { items: [{ id: 1 }] }, headers: {}, status: 200, statusText: 'OK',
+    }));
+    await expect(client.get('/list', { adapter })).resolves.toEqual({ items: [{ id: 1 }] });
+    expect(adapter.mock.calls[0]![0]).toMatchObject({
+      baseURL: 'https://orders.example.test/v2', url: '/list',
+      headers: { 'Accept-Language': 'zh-CN', 'X-Auth-Scope': 'admin' },
+    });
+  });
+
+  it('does not retry permission loading for Auth info failures, including query strings', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
+    for (const url of ['/info', '/info?scope=admin']) {
+      await expect(authRequestClient.get(url, {
+        adapter: async (config) => { throw { config, response: { status: 403, data: {} } }; },
+      })).rejects.toBeDefined();
+    }
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('still reloads permissions for other Auth resources and another service info endpoint', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
+    for (const [client, url] of [[authRequestClient, '/user'], [orderRequestClient, '/info']] as const) {
+      await expect(client.get(url, {
+        adapter: async (config) => { throw { config, response: { status: 403, data: {} } }; },
+      })).rejects.toBeDefined();
+    }
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch.mock.calls.every(([event]) => event.type === 'auth-permissions-changed')).toBe(true);
+  });
+});
+
 describe('gateway error handling through application clients', () => {
   it.each([authRequestClient, authPublicRequestClient])('overrides a 502 body and preserves status for page handlers', async (client) => {
     const { error, request } = rejectWith(client, 502, { msg: '服务器内部错误' });

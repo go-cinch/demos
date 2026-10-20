@@ -5,6 +5,7 @@ import { preferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
+import type { UserInfoWithPermissions } from '#/api/core/user';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
@@ -111,6 +112,13 @@ function setupAccessGuard(router: Router) {
 
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
+      // Re-read authorization on navigation so revoked routes cannot remain usable
+      // through a cached tab or a pasted URL. The API independently checks each call.
+      const current = await authStore.fetchUserInfo();
+      const allowed = current.permission.menus.some((menu) => menu.menu_path === to.path);
+      if (!allowed && to.path !== '/forbidden') return { path: '/forbidden', replace: true };
+      const resolved = router.resolve(to.fullPath);
+      if (allowed && resolved.name !== to.name) return { ...resolved, replace: true };
       return true;
     }
 
@@ -122,6 +130,8 @@ function setupAccessGuard(router: Router) {
     // 生成菜单和路由
     const { accessibleMenus, accessibleRoutes } = await generateAccess({
       roles: userRoles,
+      permissionMenus: (userInfo as UserInfoWithPermissions).permission.menus,
+      navigation: (userInfo as UserInfoWithPermissions).permission.navigation,
       router,
       // 则会在菜单中显示，但是访问会被重定向到403
       routes: accessRoutes,

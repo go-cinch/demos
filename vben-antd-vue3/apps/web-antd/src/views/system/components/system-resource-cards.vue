@@ -8,11 +8,11 @@ import { IconifyIcon } from '@vben/icons';
 import { Avatar, Button, Card, Checkbox, Empty, Tag, Tooltip } from 'ant-design-vue';
 
 import { vSkeleton } from '#/directives/skeleton';
-import { $t } from '#/locales';
+import { $t, catalogLabel } from '#/locales';
 
 import {
   memberCount, memberPreview, jsonStructure, jsonText, jsonType, permissionCount, permissionGroups, recordActionSummaries,
-  recordDate, recordIcon, recordLabel, resourceRules, ruleColor, skeletonRecord,
+  recordDate, recordIcon, recordLabel, resourceRules, skeletonRecord,
 } from './system-record-format';
 
 const props = defineProps<{
@@ -20,8 +20,11 @@ const props = defineProps<{
   records: SystemRecord[];
   selectedKeys: number[];
   selectable: boolean;
+  canDetail?: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  canRemoveRecord?: (record: SystemRecord) => boolean;
+  canSelectRecord?: (record: SystemRecord) => boolean;
   loading: boolean;
 }>();
 const emit = defineEmits<{
@@ -49,6 +52,8 @@ const cards = computed(() => displayRecords.value.map((record) => ({
 })));
 
 function select(id: number, checked: boolean) {
+  const record = props.records.find((item) => item.id === id);
+  if (checked && (!record || props.canSelectRecord?.(record) === false)) return;
   const keys = new Set(props.selectedKeys);
   if (checked) keys.add(id);
   else keys.delete(id);
@@ -57,7 +62,7 @@ function select(id: number, checked: boolean) {
 </script>
 
 <template>
-  <section class="resource-cards" :style="{ '--resource-card-height': resource === 'dictionary' ? '430px' : resource === 'whitelist' ? '260px' : '340px' }" :class="{ 'resource-cards-whitelist': resource === 'whitelist' }" :aria-busy="loading" data-testid="management-cards">
+  <section class="resource-cards" :style="{ '--resource-card-height': resource === 'dictionary' ? '430px' : '340px' }" :aria-busy="loading" data-testid="management-cards">
     <Empty v-if="cards.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE" :description="$t('system-cards.empty')" />
     <div v-else v-skeleton="loading" class="resource-grid">
       <article
@@ -71,14 +76,14 @@ function select(id: number, checked: boolean) {
             <div class="resource-card-heading">
               <span class="resource-icon" aria-hidden="true"><IconifyIcon :icon="recordIcon(resource)" /></span>
               <div class="resource-identity">
-                <h3><Button type="text" @click="emit('detail', card.record)">{{ card.label }}</Button></h3>
-                <p v-if="resource === 'whitelist'"><Tag :color="card.category === 0 ? 'blue' : 'green'">{{ $t(card.category === 0 ? 'system.category.permission' : 'system.category.jwt') }}</Tag></p>
-                <p v-else>{{ card.identifier }}</p>
+                <h3><Button type="text" :disabled="!canDetail" @click="emit('detail', card.record)">{{ card.label }}</Button></h3>
+                <p>{{ card.identifier }}</p>
               </div>
               <Checkbox
                 v-if="selectable"
                 :aria-label="$t('system-cards.select', { name: card.label })"
                 :checked="selectedKeys.includes(card.record.id)"
+                :disabled="canSelectRecord?.(card.record) === false"
                 @change="select(card.record.id, $event.target.checked)"
               />
             </div>
@@ -88,17 +93,6 @@ function select(id: number, checked: boolean) {
               <p class="resource-description">{{ card.dictionary.description || $t('system-cards.noDescription') }}</p>
               <div class="resource-structure"><Tag>{{ jsonType(card.dictionary.value) }}</Tag><span>{{ jsonStructure(card.dictionary.value) }}</span></div>
               <pre class="resource-json" tabindex="0" :aria-label="$t('system.fields.dictionaryValue')">{{ jsonText(card.dictionary.value) }}</pre>
-            </template>
-
-            <template v-else-if="resource === 'whitelist'">
-              <p class="resource-section-label">{{ $t('system.fields.resourceRules') }}</p>
-              <div class="resource-rule-list" tabindex="0" :aria-label="$t('system.fields.resourceRules')">
-                <div v-for="(rule, index) in card.rules" :key="index" class="resource-rule">
-                  <Tag v-if="rule.method" :color="ruleColor(rule, card.category)">{{ rule.method }}</Tag>
-                  <code>{{ rule.path }}</code>
-                </div>
-                <span v-if="!card.rules.length" class="resource-muted">—</span>
-              </div>
             </template>
 
             <template v-else>
@@ -118,7 +112,7 @@ function select(id: number, checked: boolean) {
                 <span v-if="card.actions.length > 3" class="resource-muted">{{ $t('system-cards.moreCount', { count: card.actions.length - 3 }) }}</span>
                 <span v-if="card.permissions === 0" class="resource-muted">{{ $t('system-cards.noPermissions') }}</span>
               </div>
-              <p v-if="card.groups.length" class="resource-group-names">{{ $t('system-cards.permissionGroups') }}: {{ card.groups.join('、') }}</p>
+              <p v-if="card.groups.length" class="resource-group-names">{{ $t('system-cards.permissionGroups') }}: {{ card.groups.map((key) => catalogLabel('groups', key)).join('、') }}</p>
             </template>
           </div>
 
@@ -128,9 +122,9 @@ function select(id: number, checked: boolean) {
               <div><dt>{{ $t('system.fields.updatedAt') }}</dt><dd>{{ recordDate(card.record.updated_at) }}</dd></div>
             </dl>
             <div class="resource-card-actions">
-              <Button type="link" size="small" @click="emit('detail', card.record)">{{ $t('system-cards.details') }}</Button>
+              <Button v-if="canDetail" type="link" size="small" @click="emit('detail', card.record)">{{ $t('system-cards.details') }}</Button>
               <Button v-if="canUpdate" type="text" size="small" @click="emit('edit', card.record)">{{ $t('system.common.edit') }}</Button>
-              <Button v-if="canDelete" danger type="text" size="small" @click="emit('remove', card.record)">{{ $t('system.common.delete') }}</Button>
+              <Button v-if="canDelete && canRemoveRecord?.(card.record) !== false" danger type="text" size="small" @click="emit('remove', card.record)">{{ $t('system.common.delete') }}</Button>
             </div>
           </div>
         </Card>
@@ -178,13 +172,6 @@ function select(id: number, checked: boolean) {
 .resource-dates dd { margin: 0; margin-inline-start: auto; text-align: end; font-variant-numeric: tabular-nums; }
 .resource-card-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 16px; margin-top: 9px; }
 .resource-card-actions :deep(.ant-btn) { padding-inline: 0; border: 0; font-size: 12px; }
-.resource-cards-whitelist .resource-card-body { padding: 16px; }
-.resource-cards-whitelist .resource-card-heading { gap: 10px; margin-bottom: 12px; }
-.resource-cards-whitelist .resource-icon { width: 32px; height: 32px; font-size: 18px; }
-.resource-cards-whitelist .resource-identity p :deep(.ant-tag) { margin: 0; }
-.resource-cards-whitelist .resource-section-label { margin-bottom: 6px; }
-.resource-cards-whitelist .resource-card-footer { flex: none; padding: 8px 12px; }
-.resource-cards-whitelist .resource-card-actions { margin-top: 6px; }
 .resource-json:focus-visible, .resource-rule-list:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 @media (max-width: 1200px) { .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .resource-grid { grid-template-columns: minmax(0, 1fr); } }

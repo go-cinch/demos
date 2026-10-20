@@ -4,30 +4,31 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       authority: [
-        '*',
         '/system/user',
         '/system/user-group',
         '/system/role',
         '/system/action',
-        '/system/whitelist',
+
         '/system/dictionary',
+        '/system/developer',
         '/system/msg',
       ],
       icon: 'lucide:settings',
       order: 100,
-      title: 'system.menu.system',
+      title: 'menus.admin:menu:system',
     },
     name: 'SystemManagement',
     path: '/system',
     children: [
 
+
       {
         component: () => import('#/views/system/user/index.vue'),
         meta: {
-          authority: ['*', '/system/user'],
+          authority: ['/system/user'],
           fullPathKey: false,
           icon: 'lucide:users',
-          title: 'system.menu.users',
+          title: 'menus.admin:menu:system:user',
         },
         name: 'SystemUser',
         path: 'user',
@@ -35,10 +36,10 @@ const routes: RouteRecordRaw[] = [
       {
         component: () => import('#/views/system/role/index.vue'),
         meta: {
-          authority: ['*', '/system/role'],
+          authority: ['/system/role'],
           fullPathKey: false,
           icon: 'lucide:shield-check',
-          title: 'system.menu.roles',
+          title: 'menus.admin:menu:system:role',
         },
         name: 'SystemRole',
         path: 'role',
@@ -46,9 +47,9 @@ const routes: RouteRecordRaw[] = [
       {
         component: () => import('#/views/system/user-group/index.vue'),
         meta: {
-          authority: ['*', '/system/user-group'],
+          authority: ['/system/user-group'],
           icon: 'lucide:users-round',
-          title: 'system.menu.groups',
+          title: 'menus.admin:menu:system:user-group',
         },
         name: 'SystemUserGroup',
         path: 'user-group',
@@ -56,10 +57,10 @@ const routes: RouteRecordRaw[] = [
       {
         component: () => import('#/views/system/action/index.vue'),
         meta: {
-          authority: ['*', '/system/action'],
+          authority: ['/system/action'],
           fullPathKey: false,
           icon: 'lucide:key-round',
-          title: 'system.menu.actions',
+          title: 'menus.admin:menu:system:action',
         },
         name: 'SystemAction',
         path: 'action',
@@ -67,29 +68,25 @@ const routes: RouteRecordRaw[] = [
       {
         component: () => import('#/views/system/dictionary/index.vue'),
         meta: {
-          authority: ['*', '/system/dictionary'],
+          authority: ['/system/dictionary'],
           icon: 'lucide:book-key',
-          title: 'system.menu.dictionary',
+          title: 'menus.admin:menu:system:dictionary',
         },
         name: 'SystemDictionary',
         path: 'dictionary',
       },
-      {
-        component: () => import('#/views/system/whitelist/index.vue'),
-        meta: {
-          authority: ['*', '/system/whitelist'],
-          icon: 'lucide:list-checks',
-          title: 'system.menu.whitelist',
-        },
 
-        name: 'SystemWhitelist',
-        path: 'whitelist',
-      },
       {
         path: 'msg',
         name: 'SystemMsg',
         component: () => import('#/views/msg/index.vue'),
-        meta: { authority: ['*', '/system/msg'], icon: 'lucide:mail', title: 'msg.manage' },
+        meta: { authority: ['/system/msg'], icon: 'lucide:mail', title: 'menus.admin:menu:system:msg' },
+      },
+      {
+        component: () => import('#/views/system/developer/index.vue'),
+        meta: { authority: ['/system/developer'], icon: 'lucide:code-xml', title: 'developer.title' },
+        name: 'SystemDeveloper',
+        path: 'developer',
       },
     ],
   },

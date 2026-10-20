@@ -5,6 +5,7 @@ import type { MsgUser } from '#/api/msg';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
+import { $te } from '@vben/locales';
 
 import {
   Avatar,
@@ -25,6 +26,7 @@ import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
 import PermissionCard from './permission-card.vue';
+import { isHighRiskAction } from './assignment-policy';
 import { splitLines } from './system-record-format';
 
 type Key = number | string;
@@ -63,9 +65,10 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 const selected = computed(() => new Set(props.value));
 const label = computed(() => $t(`system-editor.associations.${props.kind}`));
 function key(item: Entry): Key {
-  return 'resource' in item ? item.code : item.id;
+  return 'word' in item ? item.code : item.id;
 }
 function name(item: Entry) {
+  if ('word' in item && $te(`actions.${item.word}`)) return $t(`actions.${item.word}`);
   return 'name' in item ? item.name : item.username;
 }
 function entryLabel(value: Key) {
@@ -74,7 +77,7 @@ function entryLabel(value: Key) {
 }
 function permission(value: Key) {
   const item = cache.value.get(value);
-  return item && 'resource' in item ? item : undefined;
+  return item && 'word' in item ? item : undefined;
 }
 function secondary(item: Entry) {
   return 'word' in item
@@ -84,10 +87,12 @@ function secondary(item: Entry) {
       : `#${item.id}`;
 }
 function permissionDetails(item: ActionOption) {
+  const label = (kind: string, key: string) => $te(`${kind}.${key}`) ? $t(`${kind}.${key}`) : key;
   return [
-    { key: 'resource', label: 'system.fields.resourceRules', color: 'cyan', values: splitLines(item.resource) },
-    { key: 'menu', label: 'system.fields.menuPaths', color: 'blue', values: splitLines(item.menu) },
-    { key: 'button', label: 'system.fields.buttonPermission', color: 'purple', values: splitLines(item.button) },
+    { key: 'scope', label: 'action-editor.scope', color: 'cyan', values: [label('scopes', item.scope ?? item.word.split(':')[0] ?? '')] },
+    { key: 'operation', label: 'action-editor.operation', color: 'cyan', values: [label('action-editor.operations', item.word.split(':')[1] ?? '')] },
+    { key: 'menu', label: 'action-editor.page', color: 'blue', values: item.config?.ui.map((entry) => label('menus', entry.menu_key)) ?? splitLines(item.menu) },
+    { key: 'button', label: 'system.fields.buttonPermission', color: 'purple', values: item.config?.ui.flatMap((entry) => (entry.button_keys ?? []).map((key) => label('buttons', key))) ?? splitLines(item.button) },
   ];
 }
 function remember(items: Entry[]) {
@@ -123,7 +128,7 @@ async function load(request: number, append = false) {
       const params = { p: page.value, q: text || undefined, s: 20 };
       const result =
         props.kind === 'action'
-          ? await listActions({ ...params, f: 'id,code,name,group,word,resource,menu,button' })
+          ? await listActions({ ...params, f: 'id,code,name,group,word,scope,config,resource,menu,button' })
           : await listUsers({ ...params, f: 'id,username,code', ...(props.groupId ? { exclude_user_group_id: props.groupId } : {}) });
       items = result.items;
       hasMore = result.p * result.s < result.t;
@@ -365,7 +370,7 @@ onBeforeUnmount(() => {
                     :class="{ matched: part.match }"
                     >{{ part.text }}</span></span>
                 <Tag
-                  v-if="'resource' in item && item.resource.includes('*')"
+                  v-if="'word' in item && (isHighRiskAction(item.word, item.config?.builtin, item.config?.permission_scope, item.config?.permission_scopes) || (item.resource ?? '').includes('*'))"
                   color="red"
                   class="result-risk"
                 >
@@ -373,7 +378,7 @@ onBeforeUnmount(() => {
                   {{ $t('system-editor.highRiskPermission') }}
                 </Tag>
               </strong>
-              <span v-if="'resource' in item" class="result-tags">
+              <span v-if="'word' in item" class="result-tags">
                 <Tag :title="$t('system.fields.word')">
                   <span
                     v-for="(part, index) in segments(item.word)"
@@ -394,7 +399,7 @@ onBeforeUnmount(() => {
                   :key="index"
                   :class="{ matched: part.match }"
                   >{{ part.text }}</span></span>
-              <span v-if="'resource' in item" class="result-rules">
+              <span v-if="'word' in item" class="result-rules">
                 <span
                   v-for="field in permissionDetails(item)"
                   :key="field.key"

@@ -17,6 +17,7 @@ import {
   verifyPasswordChangeCaptchaApi,
 } from '#/api';
 import { $t } from '#/locales';
+import { usePermissions } from '#/composables/use-permissions';
 import { useAuthStore } from '#/store';
 import { isValidUserPassword } from '#/user-validation';
 
@@ -29,6 +30,7 @@ interface PasswordSettingExpose {
 }
 
 const authStore = useAuthStore();
+const { hasButton } = usePermissions();
 const passwordSettingRef = ref<PasswordSettingExpose>();
 const submitting = ref(false);
 const passwordCaptcha = ref<AuthApi.PointCaptchaChallenge>();
@@ -157,7 +159,7 @@ async function handleSubmit(values: Recordable<any>) {
 }
 </script>
 <template>
-  <ProfilePasswordSetting
+  <ProfilePasswordSetting v-if="hasButton('admin:btn:account:profile:change-password')"
     ref="passwordSettingRef"
     class="w-full max-w-xl"
     :form-schema="formSchema"

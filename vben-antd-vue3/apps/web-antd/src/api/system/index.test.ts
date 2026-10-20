@@ -1,23 +1,47 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+  createAction,
   createDictionary,
+  createRole,
   createUser,
+  deleteActions,
   deleteDictionaries,
+  deleteRoles,
+  deleteUserGroups,
+  deleteUsers,
+  getAction,
+  getEffectivePermissionPaths,
+  getPermissionCatalog,
+  getSystemRecord,
   listActionGroups,
+  listActions,
   listDictionaries,
+  listRoles,
+  listUserGroups,
+  listUsers,
+  systemDetailFields,
+  updateAction,
   updateDictionary,
+  updateRole,
   updateUser,
 } from './index';
 
-const { createRegistrationPasswordCredentialApi, get, post, remove, request } =
-  vi.hoisted(() => ({
-    createRegistrationPasswordCredentialApi: vi.fn(),
-    get: vi.fn(),
-    post: vi.fn(),
-    remove: vi.fn(),
-    request: vi.fn(),
-  }));
+const {
+  createRegistrationPasswordCredentialApi,
+  get,
+  post,
+  refreshI18nCatalog,
+  remove,
+  request,
+} = vi.hoisted(() => ({
+  createRegistrationPasswordCredentialApi: vi.fn(),
+  get: vi.fn(),
+  post: vi.fn(),
+  refreshI18nCatalog: vi.fn(),
+  remove: vi.fn(),
+  request: vi.fn(),
+}));
 
 vi.mock('#/api/request', () => ({
   authRequestClient: {
@@ -31,6 +55,37 @@ vi.mock('#/api/request', () => ({
 vi.mock('../core/auth', () => ({
   createRegistrationPasswordCredentialApi,
 }));
+vi.mock('#/locales', () => ({ refreshI18nCatalog }));
+
+beforeEach(() => vi.resetAllMocks());
+
+describe('action detail API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sends the selected fields and returns only their declared types', async () => {
+    const response = { id: 7, names: { 'en-US': 'Read users' } };
+    get.mockResolvedValue(response);
+
+    const record = await getAction(7, { f: 'id,names' });
+
+    expect(get).toHaveBeenCalledWith('/action/7', {
+      params: { f: 'id,names' },
+    });
+    expect(record).toEqual(response);
+    expectTypeOf(record).toEqualTypeOf<{
+      id: number;
+      names?: Record<string, string>;
+    }>();
+  });
+
+  it('preserves the full response contract when f is omitted', async () => {
+    get.mockResolvedValue({ id: 7 });
+    await getAction(7);
+    expect(get).toHaveBeenCalledWith('/action/7', { params: {} });
+  });
+});
 
 describe('listActionGroups', () => {
   it('queries the dedicated action group endpoint', async () => {
@@ -178,18 +233,172 @@ describe('updateUser', () => {
   });
 });
 
-
 describe('bounded user group requests', () => {
   it('selects lightweight fields on list, create and update, and pages members separately', async () => {
-    const { listUserGroups, listUserGroupMembers, createUserGroup, updateUserGroup } = await import('./index');
+    const {
+      listUserGroups,
+      listUserGroupMembers,
+      createUserGroup,
+      updateUserGroup,
+    } = await import('./index');
     const f = 'actions,member_count,member_preview';
     await listUserGroups({ p: 1, s: 20 });
-    expect(get).toHaveBeenLastCalledWith('/user-group', { params: { p: 1, s: 20, f } });
+    expect(get).toHaveBeenLastCalledWith('/user-group', {
+      params: { p: 1, s: 20, f },
+    });
     await listUserGroupMembers(7, { p: 2, s: 20, q: 'reader' });
-    expect(get).toHaveBeenLastCalledWith('/user-group/7/member', { params: { p: 2, s: 20, q: 'reader' } });
-    await createUserGroup('create-group', { name: 'Group', word: 'group', user_ids: [] });
-    expect(post).toHaveBeenLastCalledWith('/user-group', { name: 'Group', word: 'group', user_ids: [] }, { headers: { 'x-idempotent': 'create-group' }, params: { f } });
+    expect(get).toHaveBeenLastCalledWith('/user-group/7/member', {
+      params: { p: 2, s: 20, q: 'reader' },
+    });
+    await createUserGroup('create-group', {
+      name: 'Group',
+      word: 'group',
+      user_ids: [],
+    });
+    expect(post).toHaveBeenLastCalledWith(
+      '/user-group',
+      { name: 'Group', word: 'group', user_ids: [] },
+      { headers: { 'x-idempotent': 'create-group' }, params: { f } },
+    );
     await updateUserGroup(7, { add_user_ids: [1001], remove_user_ids: [1] });
-    expect(request).toHaveBeenLastCalledWith('/user-group/7', { data: { add_user_ids: [1001], remove_user_ids: [1] }, method: 'PATCH', params: { f } });
+    expect(request).toHaveBeenLastCalledWith('/user-group/7', {
+      data: { add_user_ids: [1001], remove_user_ids: [1] },
+      method: 'PATCH',
+      params: { f },
+    });
+  });
+});
+
+describe('management resource contracts', () => {
+  it.each([
+    ['action', listActions],
+    ['role', listRoles],
+    ['user', listUsers],
+    ['dictionary', listDictionaries],
+    ['user-group', listUserGroups],
+  ] as const)(
+    'forwards sparse fields and exact filters for %s',
+    async (resource, load) => {
+      const params = { f: 'id,name', p: 2, s: 20, q: 'reader', enabled: false };
+      const response = { items: [{ id: 7 }], p: 2, s: 20, t: 1 };
+      get.mockResolvedValue(response);
+      await expect(load(params)).resolves.toBe(response);
+      expect(get).toHaveBeenCalledWith(`/${resource}`, { params });
+    },
+  );
+
+  it.each([
+    ['action', deleteActions],
+    ['role', deleteRoles],
+    ['user', deleteUsers],
+    ['dictionary', deleteDictionaries],
+    ['user-group', deleteUserGroups],
+  ] as const)(
+    'deletes selected %s records with service-internal paths',
+    async (resource, removeRecords) => {
+      await removeRecords([7, 9]);
+      expect(remove).toHaveBeenCalledExactlyOnceWith(`/${resource}/7,9`);
+    },
+  );
+
+  it('preserves explicit assignment clearing and bindings when saving roles', async () => {
+    const payload = {
+      name: 'Reader',
+      action_codes: [],
+      action_bindings: [
+        {
+          resource_key: 'admin:system:user',
+          operation: 'read',
+          feature_keys: [],
+        },
+      ],
+    };
+    await createRole('role-once', payload);
+    expect(post).toHaveBeenCalledWith('/role', payload, {
+      headers: { 'x-idempotent': 'role-once' },
+    });
+    await updateRole(7, payload);
+    expect(request).toHaveBeenCalledWith('/role/7', {
+      method: 'PATCH',
+      data: payload,
+    });
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
+  });
+
+  it('hydrates sparse rows through detail endpoints, with bounded group fields', async () => {
+    await getSystemRecord('user', 7);
+    expect(get).toHaveBeenLastCalledWith('/user/7', { params: { f: systemDetailFields.user } });
+    expect(systemDetailFields.user!.split(',')).toContain('role_summary');
+    expect(systemDetailFields.user!.split(',')).not.toContain('role');
+    await getSystemRecord('role', 9);
+    expect(get).toHaveBeenLastCalledWith('/role/9', { params: { f: systemDetailFields.role } });
+    await getSystemRecord('dictionary', 3);
+    expect(get).toHaveBeenLastCalledWith('/dictionary/3', { params: {} });
+    await getSystemRecord('user-group', 8);
+    expect(get).toHaveBeenLastCalledWith('/user-group/8', {
+      params: { f: 'actions,member_count,member_preview' },
+    });
+  });
+
+  it('keeps inspection scope in the query and allows compact catalog field selection', async () => {
+    await getPermissionCatalog();
+    expect(get).toHaveBeenLastCalledWith('/action/catalog', {
+      params: { f: 'scopes,operations,resource_catalog,defined_actions' },
+    });
+    await getPermissionCatalog('scopes,resource_catalog');
+    expect(get).toHaveBeenLastCalledWith('/action/catalog', {
+      params: { f: 'scopes,resource_catalog' },
+    });
+    await getEffectivePermissionPaths('mini');
+    expect(get).toHaveBeenLastCalledWith('/action/effective', {
+      params: { scope: 'mini', f: 'btn,http,grpc' },
+    });
+    await listActionGroups();
+    expect(get).toHaveBeenLastCalledWith('/action/group', { params: {} });
+  });
+
+  it('refreshes translated definitions only after successful writes', async () => {
+    const record = { id: 7, name: 'Read users' };
+    post.mockResolvedValue(record);
+    request.mockResolvedValue(record);
+    await expect(
+      createAction('action-once', { name: record.name }),
+    ).resolves.toBe(record);
+    await expect(
+      updateAction(7, { names: { 'en-US': 'Users' } }),
+    ).resolves.toBe(record);
+    expect(refreshI18nCatalog).toHaveBeenCalledTimes(2);
+    request.mockResolvedValue({ id: 3, key: 'I18N_CATALOG' });
+    const update = {
+      value: { locales: [] },
+      expected_value: { locales: ['en-US'] },
+      group_renames: { old: 'new' },
+      resource_renames: { a: 'b' },
+      feature_renames: { x: 'y' },
+    };
+    await updateDictionary(3, update);
+    expect(request).toHaveBeenLastCalledWith('/dictionary/3', {
+      method: 'PATCH',
+      data: update,
+    });
+    expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+    request.mockRejectedValue(new Error('conflict'));
+    await expect(updateDictionary(3, update)).rejects.toThrow('conflict');
+    await expect(updateAction(7, {})).rejects.toThrow('conflict');
+    expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not create or update a user if credential encryption fails', async () => {
+    createRegistrationPasswordCredentialApi.mockRejectedValue(
+      new Error('challenge failed'),
+    );
+    await expect(
+      createUser('once', { username: 'reader', password: 'secret' }),
+    ).rejects.toThrow('challenge failed');
+    await expect(updateUser(7, { password: 'secret' })).rejects.toThrow(
+      'challenge failed',
+    );
+    expect(post).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ const props = withDefaults(
     recordId?: number;
     busy?: boolean;
     wide?: boolean;
+    width?: string;
     mode?: string;
   }>(),
   { busy: false, wide: false, mode: 'detail', recordId: undefined },
@@ -36,7 +37,7 @@ watch([() => props.mode, () => props.open], async () => {
 <template>
   <Drawer
     :open="open"
-    :width="wide ? 'min(720px, 100vw)' : 'min(600px, 100vw)'"
+    :width="width ?? (wide ? 'min(720px, 100vw)' : 'min(600px, 100vw)')"
     placement="right"
     :closable="false"
     destroy-on-close
@@ -65,6 +66,9 @@ watch([() => props.mode, () => props.open], async () => {
             <div v-if="recordId !== undefined" class="drawer-record-id">
               #{{ recordId }}
             </div>
+          </div>
+          <div v-if="$slots.description" class="drawer-description">
+            <slot name="description"></slot>
           </div>
           <Button
             class="drawer-close"
@@ -147,6 +151,22 @@ watch([() => props.mode, () => props.open], async () => {
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   font-weight: 400;
+}
+.drawer-description {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 10px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.6;
+}
+.drawer-description :deep(code) {
+  min-width: 0;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
 }
 .drawer-close {
   position: absolute;

@@ -25,4 +25,4 @@ export interface SupportedLanguages {
 /**
  * 支持的语言类型
  */
-export type SupportedLanguagesType = keyof SupportedLanguages;
+export type SupportedLanguagesType = keyof SupportedLanguages | (string & {});

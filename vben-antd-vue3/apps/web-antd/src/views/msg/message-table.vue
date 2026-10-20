@@ -13,7 +13,7 @@ import {
   watch,
 } from 'vue';
 
-import { useAccess } from '@vben/access';
+import { usePermissions } from '#/composables/use-permissions';
 import { IconifyIcon } from '@vben/icons';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
 import { formatDateTime, getCurrentTimezone } from '@vben/utils';
@@ -63,10 +63,11 @@ const attentionUser = useUserStore();
 const timezone = useTimezoneStore();
 const active = ref(true);
 const sent = computed(() => props.sent);
-const { hasAccessByCodes } = useAccess();
-const canRead = computed(() => !sent.value || hasAccessByCodes(['system.msg.read']));
-const canSend = computed(() => sent.value && hasAccessByCodes(['system.msg.send']));
-const canDelete = computed(() => !sent.value || hasAccessByCodes(['system.msg.delete']));
+const { hasButton, hasPage } = usePermissions();
+const canControl = (control: string) => hasButton(`admin:btn:${sent.value ? 'system:msg' : 'msg:inbox'}:${control}`);
+const canRead = computed(() => hasPage(sent.value ? '/system/msg' : '/msg/inbox'));
+const canSend = computed(() => sent.value && canControl('send'));
+const canDelete = computed(() => canControl('delete'));
 const checkedKeys = ref<number[]>([]);
 const checkedVisible = computed(() =>
   checkedKeys.value.filter((id) => rows.value.some((row) => row.id === id)),
@@ -343,6 +344,7 @@ async function load() {
   }
 }
 async function openDetail(row: MsgPreview) {
+  if (!canControl('view-detail')) return;
   const current = ++detailGeneration;
   const inline = sent.value && sentView.value === 'split';
   if (!inline && sent.value) panelMessage.value = row;
@@ -387,6 +389,7 @@ function closeMessagePanel() {
   else detailOpen.value = false;
 }
 async function mark(row: MsgPreview) {
+  if (!canControl('mark-read')) return;
   busy.value = true;
   try {
     await msgApi.read(row.id);
@@ -401,7 +404,7 @@ function requestBulk(read = false) {
     busy.value ||
     loading.value ||
     !checkedVisible.value.length ||
-    (read ? sent.value : !canDelete.value)
+    (read ? sent.value || !canControl('mark-selected-read') : !canControl('delete-selected'))
   )
     return;
   const management = sent.value;
@@ -460,7 +463,7 @@ function remove(row: MsgPreview) {
   });
 }
 async function readAll() {
-  if (busy.value || sent.value) return;
+  if (busy.value || sent.value || !canControl('read-all')) return;
   busy.value = true;
   try {
     await msgApi.readAll();
@@ -474,6 +477,7 @@ async function readAll() {
 }
 
 function newMessage() {
+  if (!canSend.value) return;
   form.value = {
     title: '',
     content: '',
@@ -490,7 +494,7 @@ function newMessage() {
   compose.value = true;
 }
 async function send() {
-  if (busy.value) return;
+  if (busy.value || !canSend.value) return;
   attempted.value = true;
   if (Object.values(issues.value).some(Boolean)) return;
   busy.value = true;
@@ -703,8 +707,8 @@ onBeforeUnmount(() => {
           />
         </FormItem>
         <template #actions>
-          <Button @click="resetSearch">{{ $t('system.common.reset') }}</Button>
-          <Button html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
+          <Button v-if="canControl('reset-query')" @click="resetSearch">{{ $t('system.common.reset') }}</Button>
+          <Button v-if="canControl('query')" html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
             {{ $t('system.common.search') }}
           </Button>
         </template>
@@ -723,13 +727,13 @@ onBeforeUnmount(() => {
           <Button v-if="canSend" type="primary" @click="newMessage">
             <IconifyIcon icon="lucide:plus" />{{ $t('msg.send') }}
           </Button>
-          <Button v-if="!sent" :disabled="loading || busy" @click="readAll">
+          <Button v-if="!sent && canControl('read-all')" :disabled="loading || busy" @click="readAll">
             {{ $t('msg.readAll') }}
           </Button>
           <template v-if="canRead && checkedVisible.length">
             <Button
               data-testid="message-bulk-delete"
-              v-if="canDelete"
+              v-if="canControl('delete-selected')"
               danger
               :disabled="busy || loading"
               @click="requestBulk()"
@@ -738,7 +742,7 @@ onBeforeUnmount(() => {
 </Button>
             <Button
               data-testid="message-bulk-read"
-              v-if="!sent"
+              v-if="!sent && canControl('mark-selected-read')"
               :disabled="busy || loading"
               @click="requestBulk(true)"
               >
@@ -752,7 +756,7 @@ onBeforeUnmount(() => {
           v-model:striped="striped"
           v-model:sticky="sticky"
           :loading="loading"
-          :can-read="canRead"
+          :can-read="canControl('refresh')"
           :is-fullscreen="embedded || isFullscreen"
           @refresh="refresh"
           @fullscreen="embedded ? emit('close') : fullscreen()"
@@ -856,10 +860,10 @@ onBeforeUnmount(() => {
             {{ displayTime(record.published_at) }}
           </template>
           <Space v-else-if="column.key === 'actions'" class="whitespace-nowrap">
-            <Button size="small" type="link" @click="openDetail(record as MsgPreview)">
+            <Button size="small" type="link" :disabled="!canControl('view-detail')" @click="openDetail(record as MsgPreview)">
               {{ $t('msg.view') }}
 </Button><Button
-              v-if="!sent && !record.read_at"
+              v-if="!sent && !record.read_at && canControl('mark-read')"
               size="small"
               type="link"
               :disabled="busy"

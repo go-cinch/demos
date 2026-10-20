@@ -3,10 +3,10 @@ import type { RouteRecordRaw } from 'vue-router';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
-      authority: ['*', '/dashboard/overview'],
+      authority: ['/dashboard/overview', '/dashboard/workspace'],
       icon: 'lucide:layout-dashboard',
       order: -1,
-      title: 'page.dashboard.title',
+      title: 'menus.admin:menu:dashboard',
     },
     name: 'Dashboard',
     path: '/dashboard',
@@ -17,9 +17,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/dashboard/analytics/index.vue'),
         meta: {
           affixTab: true,
-          authority: ['*', '/dashboard/overview'],
+          authority: ['/dashboard/overview'],
           icon: 'lucide:area-chart',
-          title: 'page.dashboard.overview',
+          title: 'menus.admin:menu:dashboard:overview',
         },
       },
       {
@@ -27,9 +27,9 @@ const routes: RouteRecordRaw[] = [
         path: 'workspace',
         component: () => import('#/views/dashboard/workspace/index.vue'),
         meta: {
-          authority: ['*'],
+          authority: ['/dashboard/workspace'],
           icon: 'carbon:workspace',
-          title: 'page.dashboard.workspace',
+          title: 'menus.admin:menu:dashboard:workspace',
         },
       },
     ],
