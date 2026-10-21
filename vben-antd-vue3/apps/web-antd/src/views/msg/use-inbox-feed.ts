@@ -330,7 +330,7 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
   onMounted(() => {
     visitMessages(Number(user.userInfo?.userId));
     void refresh(true);
-    window.addEventListener('cinch-msg-changed', changed);
+    window.addEventListener('go-cinch-msg-changed', changed);
     document.addEventListener('visibilitychange', poll);
     timer = setInterval(poll, 30_000);
   });
@@ -342,7 +342,7 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     clearInterval(timer);
     clearTimeout(searchTimer);
     clearTimeout(suggestionTimer);
-    window.removeEventListener('cinch-msg-changed', changed);
+    window.removeEventListener('go-cinch-msg-changed', changed);
     document.removeEventListener('visibilitychange', poll);
   });
   return { rows, total, unread, filter, filters, draft, query, loading, loadingMore, error, moreError,

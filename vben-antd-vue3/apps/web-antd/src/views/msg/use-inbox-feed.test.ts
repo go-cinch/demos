@@ -20,7 +20,7 @@ const state = vi.hoisted(() => ({
 vi.mock('#/api/msg', () => ({
   msgApi: api,
   msgPreviewFields: 'id,title,summary,type,published_at,read_at',
-  msgChanged: () => window.dispatchEvent(new Event('cinch-msg-changed')),
+  msgChanged: () => window.dispatchEvent(new Event('go-cinch-msg-changed')),
 }));
 vi.mock('#/api/message-attention', () => ({ visitMessages: vi.fn() }));
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
@@ -308,7 +308,7 @@ describe('inbox actions and lifecycle', () => {
     wrapper.unmount();
     const calls = api.list.mock.calls.length;
     await vi.advanceTimersByTimeAsync(60_000);
-    window.dispatchEvent(new Event('cinch-msg-changed'));
+    window.dispatchEvent(new Event('go-cinch-msg-changed'));
     document.dispatchEvent(new Event('visibilitychange'));
     await flushPromises();
     expect(api.list).toHaveBeenCalledTimes(calls);

@@ -602,7 +602,7 @@ function refreshVisible() {
 onMounted(() => {
   if (!sent.value) visitMessages(Number(attentionUser.userInfo?.userId));
   timer = setInterval(refreshVisible, 30000);
-  window.addEventListener('cinch-msg-changed', refreshVisible);
+  window.addEventListener('go-cinch-msg-changed', refreshVisible);
 });
 onActivated(() => {
   if (!sent.value) visitMessages(Number(attentionUser.userInfo?.userId));
@@ -626,7 +626,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   active.value = false;
   clearInterval(timer);
-  window.removeEventListener('cinch-msg-changed', refreshVisible);
+  window.removeEventListener('go-cinch-msg-changed', refreshVisible);
   generation++;
   detailGeneration++;
   summaryGeneration++;

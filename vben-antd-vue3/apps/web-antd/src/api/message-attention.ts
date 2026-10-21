@@ -56,8 +56,8 @@ export class MessageAttention {
 export const messageAttention = new MessageAttention({
   read: key => JSON.parse(localStorage.getItem(key) || 'null'),
   write: (key, value) => localStorage.setItem(key, JSON.stringify(value)),
-}, `cinch-message-visit:${import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth'}`);
+}, `go-cinch-message-visit:${import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth'}`);
 export function visitMessages(user: number | undefined) {
   messageAttention.visit(user);
-  window.dispatchEvent(new Event('cinch-msg-seen'));
+  window.dispatchEvent(new Event('go-cinch-msg-seen'));
 }

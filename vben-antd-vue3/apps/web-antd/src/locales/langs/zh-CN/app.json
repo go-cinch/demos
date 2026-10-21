@@ -37,7 +37,7 @@
   },
   "journey": {
     "title": "欢迎归航",
-    "description": "进入 Go Cinch，继续今天的工作",
+    "description": "进入 Go Cinch Admin，继续今天的工作",
     "entering": "登录成功，正在进入…"
   }
 }
