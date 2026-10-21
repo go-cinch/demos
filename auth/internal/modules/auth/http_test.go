@@ -245,7 +245,7 @@ func TestAuthHTTP(t *testing.T) {
 		}
 		return string(body)
 	}
-	missingLoginProof, err := json.Marshal(encryptedLoginInput(t, m.credentials, "readonly", "cinch123"))
+	missingLoginProof, err := json.Marshal(encryptedLoginInput(t, m.credentials, "readonly", authTestPassword))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestAuthHTTP(t *testing.T) {
 		t.Fatalf("correct-order verification: %s %v", verifiedRecorder.Body.String(), err)
 	}
 	mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusActive, 5))
-	invalidCaptchaBody, err := json.Marshal(encryptedLoginInput(t, m.credentials, "readonly", "cinch123"))
+	invalidCaptchaBody, err := json.Marshal(encryptedLoginInput(t, m.credentials, "readonly", authTestPassword))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,17 +318,17 @@ func TestAuthHTTP(t *testing.T) {
 		t.Fatalf("invalid captcha failure: %s %v", invalidCaptchaRecorder.Body.String(), err)
 	}
 	mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusPending))
-	request(http.MethodPost, "/pub/login", loginBody("readonly", "cinch123"), "", http.StatusForbidden)
+	request(http.MethodPost, "/pub/login", loginBody("readonly", authTestPassword), "", http.StatusForbidden)
 	mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusLocked))
 	mock.ExpectExec("UPDATE t_user SET status").WithArgs(userStatusActive, sqlmock.AnyArg(), int64(3), userStatusLocked, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 0))
-	request(http.MethodPost, "/pub/login", loginBody("readonly", "cinch123"), "", http.StatusForbidden)
+	request(http.MethodPost, "/pub/login", loginBody("readonly", authTestPassword), "", http.StatusForbidden)
 	mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusActive))
 	mock.ExpectQuery("UPDATE t_user SET last_logged_in_at").WithArgs(sqlmock.AnyArg(), int64(3), int64(1), userStatusActive).WillReturnError(sqlmock.ErrCancelled)
-	request(http.MethodPost, "/pub/login", loginBody("readonly", "cinch123"), "", http.StatusInternalServerError)
+	request(http.MethodPost, "/pub/login", loginBody("readonly", authTestPassword), "", http.StatusInternalServerError)
 
 	mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusActive))
 	mock.ExpectQuery("UPDATE t_user SET last_logged_in_at").WithArgs(sqlmock.AnyArg(), int64(3), int64(1), userStatusActive).WillReturnRows(sqlmock.NewRows([]string{"login_count"}).AddRow(int64(2)))
-	recorder := request(http.MethodPost, "/pub/login", loginBody("readonly", "cinch123", true), "", http.StatusOK)
+	recorder := request(http.MethodPost, "/pub/login", loginBody("readonly", authTestPassword, true), "", http.StatusOK)
 	if recorder.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("login cache control = %q", recorder.Header().Get("Cache-Control"))
 	}
@@ -383,7 +383,7 @@ func TestAuthHTTP(t *testing.T) {
 	}
 	request(http.MethodPatch, "/change/pwd", `{`, login.AccessToken, http.StatusBadRequest)
 	request(http.MethodPatch, "/change/pwd", `{} {}`, login.AccessToken, http.StatusBadRequest)
-	request(http.MethodPatch, "/change/pwd", `{"old_password":"cinch123","new_password":"new-secret"}`, login.AccessToken, http.StatusBadRequest)
+	request(http.MethodPatch, "/change/pwd", `{"old_password":"`+authTestPassword+`","new_password":"new-secret"}`, login.AccessToken, http.StatusBadRequest)
 	request(http.MethodPatch, "/change/pwd", `{"challenge_id":"missing","credential":"invalid"}`, login.AccessToken, http.StatusBadRequest)
 	passwordChangeBody := func(oldPassword, newPassword string, captcha ...PasswordChangeInput) string {
 		t.Helper()
@@ -399,7 +399,7 @@ func TestAuthHTTP(t *testing.T) {
 		expectPasswordChangeLock(mock, false)
 		mock.ExpectBegin()
 		mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-			sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, "cinch123"), int64(1)),
+			sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
 		)
 		mock.ExpectRollback()
 		failureRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody("wrong-password", "new-secret"), login.AccessToken, http.StatusBadRequest)
@@ -419,7 +419,7 @@ func TestAuthHTTP(t *testing.T) {
 		t.Fatalf("refreshed password captcha: %s %v", refreshedPasswordCaptcha.Body.String(), err)
 	}
 	expectPasswordChangeLock(mock, false)
-	missingCaptchaRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody("cinch123", "new-secret"), login.AccessToken, http.StatusBadRequest)
+	missingCaptchaRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody(authTestPassword, "new-secret"), login.AccessToken, http.StatusBadRequest)
 	if err := json.Unmarshal(missingCaptchaRecorder.Body.Bytes(), &passwordFailure); err != nil || passwordFailure.Captcha == nil || passwordFailure.Msg != ErrPointCaptchaRequired.Error() {
 		t.Fatalf("missing password captcha: %s %v", missingCaptchaRecorder.Body.String(), err)
 	}
@@ -438,18 +438,18 @@ func TestAuthHTTP(t *testing.T) {
 	expectPasswordChangeLock(mock, false)
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, "cinch123"), int64(1)),
+		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
 	)
 	mock.ExpectExec("UPDATE t_user SET password").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), "EXP78RGH").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	passwordChangeRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody("cinch123", "new-secret", PasswordChangeInput{
+	passwordChangeRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody(authTestPassword, "new-secret", PasswordChangeInput{
 		CaptchaID: passwordFailure.Captcha.CaptchaID, CaptchaPoints: answer.Points,
 	}), login.AccessToken, http.StatusOK)
 	if passwordChangeRecorder.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("password change cache control = %q", passwordChangeRecorder.Header().Get("Cache-Control"))
 	}
 	expectPasswordChangeLock(mock, true)
-	lockedPasswordRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody("cinch123", "another-secret"), login.AccessToken, http.StatusForbidden)
+	lockedPasswordRecorder := request(http.MethodPatch, "/change/pwd", passwordChangeBody(authTestPassword, "another-secret"), login.AccessToken, http.StatusForbidden)
 	if err := json.Unmarshal(lockedPasswordRecorder.Body.Bytes(), &passwordFailure); err != nil || passwordFailure.Msg != ErrPasswordChangeLocked.Error() || passwordFailure.CaptchaRequired {
 		t.Fatalf("locked password change: %s %v", lockedPasswordRecorder.Body.String(), err)
 	}
@@ -504,7 +504,7 @@ func TestLocalizedAuthFailures(t *testing.T) {
 		{"en-US", "invalid captcha"}, {"zh-CN", "验证码无效，请重新验证"},
 	} {
 		mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusActive, 5))
-		body, err := json.Marshal(encryptedLoginInputWithProof(t, m.credentials, "readonly", "cinch123", validSliderProof(t, m.sliderCaptcha, sliderCaptchaPurposeLogin, "readonly")))
+		body, err := json.Marshal(encryptedLoginInputWithProof(t, m.credentials, "readonly", authTestPassword, validSliderProof(t, m.sliderCaptcha, sliderCaptchaPurposeLogin, "readonly")))
 		if err != nil {
 			t.Fatal(err)
 		}
