@@ -17,7 +17,7 @@ watch(
   isDark,
   (dark) => {
     document
-      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      .querySelector('link[rel="icon"]')
       ?.setAttribute(
         'href',
         `${import.meta.env.BASE_URL}${dark ? 'go-cinch-white.svg' : 'go-cinch.svg'}`,

@@ -89,7 +89,7 @@ const vbenDescriptionItems: DescriptionItem[] = [
     title: 'Github',
   },
   {
-    content: renderLink('https://github.com/go-cinch', 'go cinch'),
+    content: renderLink('https://github.com/go-cinch/demos', 'go cinch'),
     title: '作者',
   },
 ];

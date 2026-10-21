@@ -1,6 +1,6 @@
 # vben-antd-vue3
 
-Built with Vben Admin, Vue 3, and Ant Design Vue 4, integrated with Go-Cinch
+Built with Vben Admin, Vue 3, and Ant Design Vue 4, integrated with Go Cinch
 chi-auth-layout.
 
 Run these commands from the generated project root:
