@@ -62,6 +62,7 @@ type AuthPointCaptchaConfig struct {
 
 type AuthRefreshConfig struct {
 	RememberLifetime time.Duration `koanf:"rememberLifetime"`
+	RetryWindow      time.Duration `koanf:"retryWindow"`
 	SessionLifetime  time.Duration `koanf:"sessionLifetime"`
 }
 

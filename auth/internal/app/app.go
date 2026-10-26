@@ -122,12 +122,11 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 	var idempotencyKeys idempotency.Store = idempotency.NewMemoryStore()
 	idempotencyKeys = rds.NewIdempotencyStore(rdsClient)
 	var challengeStore authmodule.ChallengeStore = authmodule.NewMemoryChallengeStore()
-	var sessionStore authmodule.SessionStore = authmodule.NewMemorySessionStore()
+	var sessionStore authmodule.SessionStore = authmodule.NewRedisSessionStore(rdsClient)
 	var pointCaptchaStore authmodule.PointCaptchaStore = authmodule.NewMemoryPointCaptchaStore()
 	var passwordFailureStore authmodule.PasswordFailureStore = authmodule.NewMemoryPasswordFailureStore()
 	var dictionaryCache dictionarymodule.ValueCache = dictionarymodule.NewMemoryValueCache()
 	challengeStore = authmodule.NewRedisChallengeStore(rdsClient)
-	sessionStore = authmodule.NewRedisSessionStore(rdsClient)
 	pointCaptchaStore = authmodule.NewRedisPointCaptchaStore(rdsClient)
 	passwordFailureStore = authmodule.NewRedisPasswordFailureStore(rdsClient)
 	redisDictionaryCache, cleanupDictionaryCache, err := rds.NewRedisNamespaceCache(cfg.Redis.DSN, cfg.Redis.Prefix, "dictionary:cache")
@@ -188,8 +187,13 @@ func New(ctx context.Context, confPath string) (*Application, error) {
 	}
 	loginSessions, err := authmodule.NewSessions(
 		sessionStore,
-		cfg.Auth.Refresh.SessionLifetime,
-		cfg.Auth.Refresh.RememberLifetime,
+		authmodule.SessionConfig{
+			Issuer:           cfg.Auth.Jwt.Issuer,
+			Key:              cfg.Auth.Jwt.Key,
+			SessionLifetime:  cfg.Auth.Refresh.SessionLifetime,
+			RememberLifetime: cfg.Auth.Refresh.RememberLifetime,
+			RetryWindow:      cfg.Auth.Refresh.RetryWindow,
+		},
 	)
 	if err != nil {
 		cleanup()
