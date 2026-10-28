@@ -27,10 +27,13 @@ export interface PointCaptchaChallenge {
   width: number;
 }
 
+export interface PermissionNavigation { resource_key: string; menu_key?: string; menu_path?: string; children?: PermissionNavigation[] }
+
 export interface UserInfo {
   code: string;
   id: number;
-  permission: { btns: string[]; menus: string[] };
+  scope?: string;
+  permission: { btns: string[]; menus: string[]; permission_scope?: "*"; permission_scopes?: string[]; words?: string[]; navigation?: PermissionNavigation[] };
   role?: { id: number; name: string; word: string };
   username: string;
 }
@@ -39,17 +42,22 @@ async function encryptedCredential(
   purpose: "login" | "register" | "password_change" | "password_reset",
   payload: Record<string, unknown>,
 ) {
+  const normalized = { ...payload };
+  for (const key of ["username", "password", "old_password", "new_password"]) {
+    const value = normalized[key];
+    if (typeof value === "string") normalized[key] = value.trim();
+  }
   const authenticated =
     purpose === "password_change" || purpose === "password_reset";
   const challenge = await jsonRequest<CredentialChallenge>(
-    authenticated ? "/auth/challenge" : "/auth/pub/challenge",
+    authenticated ? "/challenge" : "/pub/challenge",
     "POST",
     { purpose },
     { auth: authenticated },
   );
   return {
     challenge_id: challenge.challenge_id,
-    credential: await compactEncrypt(challenge, purpose, payload),
+    credential: await compactEncrypt(challenge, purpose, normalized),
   };
 }
 
@@ -66,7 +74,7 @@ export async function login(data: {
     remember_me: false,
   });
   const result = await jsonRequest<LoginResult>(
-    "/auth/pub/login",
+    "/pub/login",
     "POST",
     credential,
     { auth: false },
@@ -87,24 +95,24 @@ export async function register(
     password,
     slider_proof: sliderProof,
   });
-  return jsonRequest("/auth/pub/register", "POST", credential, { auth: false });
+  return jsonRequest("/pub/register", "POST", credential, { auth: false });
 }
 
 export const usernameAvailability = (username: string) =>
   apiRequest<{ available: boolean }>(
-    `/auth/pub/register/username?username=${encodeURIComponent(username)}`,
+    `/pub/register/username?username=${encodeURIComponent(username)}`,
     { auth: false },
   );
 
 export const loginVerification = (username: string) =>
   apiRequest<{ captcha?: PointCaptchaChallenge; captcha_required: boolean }>(
-    `/auth/pub/login/verification?username=${encodeURIComponent(username)}`,
+    `/pub/login/verification?username=${encodeURIComponent(username)}`,
     { auth: false },
   );
 
 export const refreshLoginCaptcha = (captchaId: string) =>
   jsonRequest<PointCaptchaChallenge>(
-    "/auth/pub/captcha",
+    "/pub/captcha",
     "POST",
     { captcha_id: captchaId },
     { auth: false },
@@ -116,7 +124,7 @@ export const verifyLoginCaptcha = (
   points: CaptchaPoint[],
 ) =>
   jsonRequest<{ captcha?: PointCaptchaChallenge; verified: boolean }>(
-    "/auth/pub/captcha/verify",
+    "/pub/captcha/verify",
     "POST",
     { username, captcha_id: captchaId, captcha_points: points },
     { auth: false },
@@ -127,25 +135,41 @@ export const createSliderChallenge = (
   username: string,
 ) =>
   jsonRequest<{ captcha_id: string; expired_at: number }>(
-    "/auth/pub/slider/challenge",
+    "/pub/slider/challenge",
     "POST",
     { purpose, username },
     { auth: false },
   );
 
 export const verifySlider = (data: Record<string, unknown>) =>
-  jsonRequest<{ proof: string }>("/auth/pub/slider/verify", "POST", data, {
+  jsonRequest<{ proof: string }>("/pub/slider/verify", "POST", data, {
     auth: false,
   });
 
-export const getUserInfo = () => apiRequest<UserInfo>("/auth/info");
+export async function getUserInfo() {
+  interface Menu { menu_key: string; menu_path: string; btns: string[] }
+  const raw = await apiRequest<Omit<UserInfo, 'permission'> & { permission: Omit<UserInfo['permission'], 'menus'> & { menus: Menu[] } }>("/info?f=id,username,code,role,scope,permission");
+  if (raw.scope !== 'admin') throw new Error('Invalid permission scope');
+  const menus = (raw.permission?.menus ?? []).filter(menu => menu.menu_key?.startsWith('admin:menu:') && menu.menu_path?.startsWith('/') && !menu.menu_path.startsWith('//'));
+  const allowed = new Map(menus.map(menu => [menu.menu_key, menu.menu_path]));
+  const sanitize = (nodes: PermissionNavigation[]): PermissionNavigation[] => nodes.flatMap<PermissionNavigation>(node => {
+    if (!node?.resource_key?.startsWith("admin:")) return [];
+    if (node.menu_key || node.menu_path) return node.menu_key && allowed.get(node.menu_key) === node.menu_path ? [{ resource_key: node.resource_key, menu_key: node.menu_key, menu_path: node.menu_path }] : [];
+    const children = sanitize(Array.isArray(node.children) ? node.children : []);
+    return children.length ? [{resource_key:node.resource_key,children}] : [];
+  });
+  return { ...raw, permission: { ...raw.permission, navigation: sanitize(raw.permission.navigation ?? []),
+    menus: [...new Set(menus.map(menu => menu.menu_path).flatMap(path => path === '/system/group' ? [path, '/system/user-group'] : [path]))],
+    btns: [...new Set(menus.flatMap(menu => (menu.btns ?? []).filter(key => key.startsWith(`${menu.menu_key.replace(':menu:', ':btn:')}:`))))],
+  } } as UserInfo;
+}
 
 export async function logout() {
   const refreshToken = getRefreshToken();
   try {
     if (refreshToken) {
       await jsonRequest(
-        "/auth/pub/logout",
+        "/pub/logout",
         "POST",
         { refresh_token: refreshToken },
         { auth: false },
@@ -162,7 +186,7 @@ export async function resetPassword(newPassword: string) {
     new_password: newPassword,
   });
   const result = await jsonRequest<LoginResult>(
-    "/auth/reset/pwd",
+    "/reset/pwd",
     "PATCH",
     credential,
   );
@@ -181,11 +205,11 @@ export async function changePassword(
     captcha_id: captcha?.id,
     captcha_points: captcha?.points,
   });
-  return jsonRequest("/auth/change/pwd", "PATCH", credential);
+  return jsonRequest("/change/pwd", "PATCH", credential);
 }
 
 export const refreshPasswordCaptcha = (captchaId: string) =>
-  jsonRequest<PointCaptchaChallenge>("/auth/captcha", "POST", {
+  jsonRequest<PointCaptchaChallenge>("/captcha", "POST", {
     captcha_id: captchaId,
   });
 
@@ -194,7 +218,7 @@ export const verifyPasswordCaptcha = (
   points: CaptchaPoint[],
 ) =>
   jsonRequest<{ captcha?: PointCaptchaChallenge; verified: boolean }>(
-    "/auth/captcha/verify",
+    "/captcha/verify",
     "POST",
     { captcha_id: captchaId, captcha_points: points },
   );

@@ -34,6 +34,8 @@ i18n.use(initReactI18next).init({
   fallbackLng,
   defaultNS,
   ns: ["common"],
+  // Catalog identifiers contain colons; the app has one translation namespace.
+  nsSeparator: false,
   interpolation: {
     escapeValue: false, // React already escapes values
     prefix: "{",

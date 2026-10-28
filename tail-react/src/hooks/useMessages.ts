@@ -1,3 +1,10 @@
+"use client";
+import { messagePreviewFields } from "@/utils/admin/list-fields";
+import { canAutoMarkMessageRead, messagePermissions } from "@/utils/message-permissions";
+import { useAdminNow } from "@/utils/admin/clock";
+import { useDefaultPageSize } from "@/utils/admin/page-size";
+import { messageAttention, visitMessages } from "@/utils/message-attention";
+import { useAuth } from "@/context/AuthContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { msgApi, msgChanged, type Msg, type MsgInput } from "@/api/msg";
 const emptyDraft = (): MsgInput => ({
@@ -13,11 +20,31 @@ export function useMessages(
   readable: boolean,
   tr: (key: string) => string,
   parseExpiry: (value: string) => number,
+  listFields = messagePreviewFields,
 ) {
+  const now = useAdminNow();
+  const defaultSize = useDefaultPageSize();
+  const auth = useAuth();
+  const latestAccess = useRef(auth);
+  useEffect(() => { latestAccess.current = auth; }, [auth]);
+  const attentionUser = auth.user?.id;
+  const permissions = messagePermissions(auth, sent);
+  const allowed = (control: string) => permissions.canRead && permissions.canControl(control);
+  useEffect(() => {
+    if (!sent && readable) visitMessages(attentionUser);
+  }, [sent, readable, attentionUser]);
+
+  const [query, setQuery] = useState(""),
+    [scope, setScope] = useState("");
   const [rows, setRows] = useState<Msg[]>([]),
     [total, setTotal] = useState(0),
     [page, setPage] = useState(1),
-    [size, setSize] = useState(10);
+    [size, setSize] = useState(defaultSize);
+  useEffect(() => {
+    setSize(defaultSize);
+    setPage(1);
+  }, [defaultSize]);
+
   const [type, setType] = useState(""),
     [status, setStatus] = useState(""),
     [loading, setLoading] = useState(false),
@@ -52,9 +79,12 @@ export function useMessages(
     setError("");
     try {
       const result = await msgApi.list(sent, {
+        f: listFields,
         p: page,
         s: size,
         ...(type ? { type } : {}),
+        ...(query ? { q: query } : {}),
+        ...(scope ? { scope } : {}),
         ...(!sent && status ? { read: status === "read" } : {}),
       });
       if (current !== generation.current || !mounted.current) return;
@@ -72,7 +102,7 @@ export function useMessages(
     } finally {
       if (current === generation.current && mounted.current) setLoading(false);
     }
-  }, [sent, readable, page, size, type, status]);
+  }, [sent, readable, page, size, type, status, query, scope, listFields]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -113,12 +143,12 @@ export function useMessages(
         : "",
     expiry:
       expiry &&
-      (!Number.isFinite(parseExpiry(expiry)) ||
-        parseExpiry(expiry) <= Date.now())
+      (!Number.isFinite(parseExpiry(expiry)) || parseExpiry(expiry) <= now)
         ? tr("expiryError")
         : "",
   };
   async function openDetail(row: Msg) {
+    if (!allowed("view-detail")) return;
     const current = ++detailGeneration.current;
     setDetail(true);
     setSelected(null);
@@ -127,7 +157,7 @@ export function useMessages(
       const value = await msgApi.get(row.id, sent);
       if (current !== detailGeneration.current || !mounted.current) return;
       setSelected(value);
-      if (!sent && !value.read_at) {
+      if (canAutoMarkMessageRead(latestAccess.current, sent, value.read_at)) {
         await msgApi.read(value.id);
         setSelected({ ...value, read_at: Date.now() });
         msgChanged();
@@ -148,7 +178,7 @@ export function useMessages(
     setDetail(false);
   };
   async function mark(row: Msg) {
-    if (sending.current) return;
+    if (sent || !allowed("mark-read") || sending.current) return;
     sending.current = true;
     setBusy(true);
     setError("");
@@ -164,6 +194,7 @@ export function useMessages(
     }
   }
   function newMessage() {
+    if (!permissions.canRead || !permissions.canSend) return;
     setDraft(emptyDraft());
     setExpiry("");
     setAttempted(false);
@@ -173,7 +204,7 @@ export function useMessages(
     setCompose(true);
   }
   async function send() {
-    if (sending.current) return;
+    if (!permissions.canRead || !permissions.canSend || sending.current) return;
     setAttempted(true);
     if (Object.values(issues).some(Boolean)) return;
     sending.current = true;
@@ -203,7 +234,7 @@ export function useMessages(
     }
   }
   async function readAll() {
-    if (sending.current || sent) return;
+    if (sending.current || sent || !allowed("read-all")) return;
     sending.current = true;
     setBusy(true);
     setError("");
@@ -224,14 +255,15 @@ export function useMessages(
     ids: number[],
     action: "deleteSelected" | "readSelected",
   ) {
-    if (sending.current || !ids.length || (sent && action === "readSelected"))
+    if (sending.current || !ids.length || !allowed(action === "readSelected" ? "mark-selected-read" : "delete-selected") || (sent && action === "readSelected"))
       return;
     pendingSent.current = sent;
     setPendingIDs([...new Set(ids)]);
     setConfirmation(action);
   }
   async function confirm() {
-    if (sending.current) return false;
+    const control = confirmation === "readSelected" ? "mark-selected-read" : ["clear", "deleteSelected"].includes(confirmation) ? "delete-selected" : "delete";
+    if (sending.current || !allowed(control) || (sent && confirmation === "readSelected")) return false;
     sending.current = true;
     setBusy(true);
     setError("");
@@ -275,6 +307,16 @@ export function useMessages(
     return () => window.removeEventListener("beforeunload", protect);
   }, [dirty]);
   return {
+    query,
+    setQuery: (value: string) => {
+      setPage(1);
+      setQuery(value);
+    },
+    scope,
+    setScope: (value: string) => {
+      setPage(1);
+      setScope(value);
+    },
     rows,
     total,
     page,
@@ -315,6 +357,7 @@ export function useMessages(
     dirty,
     clearCount: clearIDs.length,
     clearPreview: () => {
+      if (!allowed("delete-selected")) return;
       setClearIDs(rows.map((row) => row.id));
       setConfirmation("clear");
     },
@@ -324,12 +367,15 @@ export function useMessages(
     setConfirmation,
     confirm,
     remove: (row: Msg) => {
+      if (!allowed("delete")) return;
       setSelected(row);
       setConfirmation("delete");
     },
   };
 }
 export function useUnreadCount() {
+  const auth = useAuth();
+  const attentionUser = auth.user?.id;
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     let disposed = false,
@@ -343,8 +389,11 @@ export function useUnreadCount() {
       }
       busy = true;
       try {
-        const result = await msgApi.count();
-        if (!disposed) setCount(result.count);
+        const result = await msgApi.count(attentionUser);
+        if (!disposed && result.user_id === attentionUser) {
+          messageAttention.update(result);
+          setCount(messageAttention.count(attentionUser));
+        }
       } catch {
         if (!disposed) setCount(null);
       } finally {
@@ -355,16 +404,21 @@ export function useUnreadCount() {
         }
       }
     }
+    const syncSeen = () => setCount(messageAttention.count(attentionUser));
+    window.addEventListener("cinch-msg-seen", syncSeen);
+    window.addEventListener("storage", syncSeen);
     void refresh();
     const timer = setInterval(refresh, 30000);
     window.addEventListener("cinch-msg-changed", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
+      window.removeEventListener("cinch-msg-seen", syncSeen);
+      window.removeEventListener("storage", syncSeen);
       clearInterval(timer);
       window.removeEventListener("cinch-msg-changed", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [attentionUser]);
   return count;
 }

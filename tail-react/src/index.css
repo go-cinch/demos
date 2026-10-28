@@ -243,7 +243,7 @@
   }
 
   body {
-    @apply relative z-1 bg-gray-50 font-outfit font-normal;
+    @apply relative z-1 bg-gray-50 font-outfit font-normal text-gray-800 dark:text-gray-200;
   }
 }
 

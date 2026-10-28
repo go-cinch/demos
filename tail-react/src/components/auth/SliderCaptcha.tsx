@@ -1,3 +1,4 @@
+import { isBadGatewayError } from "@/utils/admin/request-error";
 import { createSliderChallenge, verifySlider } from "@/api/auth";
 import { ArrowRightIcon, CheckLineIcon } from "@/icons";
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +21,7 @@ export default function SliderCaptcha({
 }: Props) {
   const { t } = useTranslation();
   const [value, setValue] = useState(0);
+  const [gatewayFailed, setGatewayFailed] = useState(false);
   const [status, setStatus] = useState<"idle" | "pending" | "passed" | "error">(
     "idle",
   );
@@ -42,6 +44,7 @@ export default function SliderCaptcha({
   }, [purpose, resetKey, username]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = () => {
+    setGatewayFailed(false);
     setStatus("idle");
     onVerified("");
     startedAt.current = performance.now();
@@ -114,7 +117,8 @@ export default function SliderCaptcha({
       });
       setStatus("passed");
       onVerified(result.proof);
-    } catch {
+    } catch (error) {
+      setGatewayFailed(isBadGatewayError(error));
       setStatus("error");
       setValue(0);
       onVerified("");
@@ -129,6 +133,7 @@ export default function SliderCaptcha({
         data-testid="slider-track"
         className={`auth-slider relative h-12 overflow-hidden rounded-lg border transition-colors ${status === "passed" ? "border-success-500 bg-success-50 dark:bg-success-500/10" : status === "error" ? "border-error-500 bg-error-50 dark:bg-error-500/10" : "border-gray-300 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"}`}
         ref={rootRef}
+        aria-busy={status === "pending"}
       >
         <span
           className={`absolute inset-y-0 start-0 transition-colors ${status === "passed" ? "bg-success-500/15" : "bg-brand-500/10"}`}
@@ -212,7 +217,7 @@ export default function SliderCaptcha({
       </div>
       {status === "error" && (
         <p className="mt-1 text-sm text-error-500" role="alert">
-          {t("auth.sliderFailed")}
+          {t(gatewayFailed ? "errors.serverLost" : "auth.sliderFailed")}
         </p>
       )}
     </div>

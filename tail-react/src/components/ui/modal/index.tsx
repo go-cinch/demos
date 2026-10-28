@@ -1,6 +1,9 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef } from "react";
 
+const modalStack: symbol[] = [];
+let originalBodyOverflow = "";
+
 interface ModalProps {
   ariaLabel?: string;
   isOpen: boolean;
@@ -24,31 +27,31 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
+  const modalToken = useRef(Symbol("modal"));
+  const closeRef = useRef(onClose);
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
+    closeRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const token = modalToken.current;
+    if (modalStack.length === 0)
+      originalBodyOverflow = document.body.style.overflow;
+    modalStack.push(token);
+    document.body.style.overflow = "hidden";
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && modalStack.at(-1) === token) {
+        event.stopPropagation();
+        closeRef.current();
       }
     };
-
-    if (isOpen) {
-      document.addEventListener("keydown", handleEscape);
-    }
-
+    document.addEventListener("keydown", escape);
     return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-
-    return () => {
-      document.body.style.overflow = "unset";
+      document.removeEventListener("keydown", escape);
+      const index = modalStack.indexOf(token);
+      if (index >= 0) modalStack.splice(index, 1);
+      if (modalStack.length === 0)
+        document.body.style.overflow = originalBodyOverflow;
     };
   }, [isOpen]);
 
@@ -78,7 +81,7 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             aria-label={closeLabel}
             onClick={onClose}
-            className="absolute inset-e-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 sm:inset-e-6 sm:top-6 sm:h-11 sm:w-11 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+            className="inset-e-3 sm:inset-e-6 absolute top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 sm:top-6 sm:h-11 sm:w-11 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
           >
             <svg
               width="24"
