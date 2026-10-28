@@ -1,6 +1,9 @@
+import { messageAttention } from '@/utils/message-attention'
+import { useUserStore } from '@/store/modules/user'
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { msgApi } from '@/api/msg'
 export function useMsgCount() {
+  const user = useUserStore()
   const count = ref<number | null>(null)
   let disposed = false,
     busy = false,
@@ -13,8 +16,11 @@ export function useMsgCount() {
     }
     busy = true
     try {
-      const result = await msgApi.count()
-      if (!disposed) count.value = result.count
+      const result = await msgApi.count(user.info.userId)
+      if (!disposed) {
+        messageAttention.update(result)
+        count.value = messageAttention.count(user.info.userId)
+      }
     } catch {
       if (!disposed) count.value = null
     } finally {
@@ -25,16 +31,23 @@ export function useMsgCount() {
       }
     }
   }
+  function syncSeen() {
+    count.value = messageAttention.count(user.info.userId)
+  }
   let timer: ReturnType<typeof setInterval>
   onMounted(() => {
     void refresh()
     timer = setInterval(refresh, 30000)
+    window.addEventListener('cinch-msg-seen', syncSeen)
+    window.addEventListener('storage', syncSeen)
     window.addEventListener('cinch-msg-changed', refresh)
     document.addEventListener('visibilitychange', refresh)
   })
   onBeforeUnmount(() => {
     disposed = true
     clearInterval(timer)
+    window.removeEventListener('cinch-msg-seen', syncSeen)
+    window.removeEventListener('storage', syncSeen)
     window.removeEventListener('cinch-msg-changed', refresh)
     document.removeEventListener('visibilitychange', refresh)
   })

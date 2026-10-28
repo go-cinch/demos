@@ -1,5 +1,9 @@
 <template>
-  <ElSubMenu v-if="hasChildren" :index="item.path || item.meta.title" class="!p-0">
+  <ElSubMenu
+    v-if="hasChildren"
+    :index="String(item.name || item.path || item.meta.title)"
+    class="!p-0"
+  >
     <template #title>
       <ArtSvgIcon :icon="item.meta.icon" :color="theme?.iconColor" class="mr-1 text-lg" />
       <span class="text-md">{{ formatMenuTitle(item.meta.title) }}</span>
@@ -12,7 +16,7 @@
     <!-- 递归调用自身处理子菜单 -->
     <HorizontalSubmenu
       v-for="child in filteredChildren"
-      :key="child.path"
+      :key="child.name || child.path"
       :item="child"
       :theme="theme"
       :is-mobile="isMobile"

@@ -1,6 +1,16 @@
 <template>
   <div>
     <SectionTitle :title="$t('setting.basics.title')" class="mt-10" />
+    <div class="mt-5 flex items-center justify-between gap-4"
+      ><span class="text-sm">{{ $t('setting.basics.defaultTableSize') }}</span
+      ><ElInputNumber
+        :model-value="defaultPageSize"
+        :min="10"
+        :max="200"
+        :step="10"
+        :aria-label="$t('setting.basics.defaultTableSize')"
+        @update:model-value="setDefaultPageSize"
+    /></div>
     <SettingItem
       v-for="config in basicSettingsConfig"
       :key="config.key"
@@ -12,6 +22,8 @@
 </template>
 
 <script setup lang="ts">
+  import { useDefaultPageSize, setDefaultPageSize } from '@/utils/admin/preferences'
+  const defaultPageSize = useDefaultPageSize()
   import SectionTitle from './SectionTitle.vue'
   import SettingItem from './SettingItem.vue'
   import { useSettingStore } from '@/store/modules/setting'

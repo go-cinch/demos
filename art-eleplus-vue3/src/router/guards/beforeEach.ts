@@ -35,7 +35,13 @@
  * @module router/guards/beforeEach
  * @author Art Design Pro Team
  */
-import type { Router, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
+import {
+  START_LOCATION,
+  type Router,
+  type RouteLocationNormalized,
+  type NavigationGuardNext
+} from 'vue-router'
+import type { AppRouteRecord } from '@/types/router'
 import { nextTick } from 'vue'
 import NProgress from 'nprogress'
 import { useSettingStore } from '@/store/modules/setting'
@@ -67,7 +73,9 @@ let pendingLoading = false
 let routeInitFailed = false
 
 // 路由初始化进行中标记，防止并发请求
-let routeInitInProgress = false
+let routeInitialization: Promise<AppRouteRecord[] | null> | null = null
+let routeInitVersion = 0
+let latestInitNavigation = 0
 
 /**
  * 获取 pendingLoading 状态
@@ -95,7 +103,47 @@ export function getRouteInitFailed(): boolean {
  */
 export function resetRouteInitState(): void {
   routeInitFailed = false
-  routeInitInProgress = false
+  routeInitialization = null
+  routeInitVersion++
+  latestInitNavigation++
+}
+
+/** Capture native address changes until Vue Router installs its own ready listener. */
+function preserveStartupHistory(router: Router) {
+  let pending: { path: string; version: number } | null = null
+  let startupOrigin: RouteLocationNormalized['redirectedFrom']
+  const stop = router.options.history.listen((path) => {
+    pending = { path, version: routeInitVersion }
+  })
+  void router
+    .isReady()
+    .then(async () => {
+      stop()
+      const target = pending
+      pending = null
+      const userStore = useUserStore()
+      if (
+        target &&
+        target.version === routeInitVersion &&
+        userStore.isLogin &&
+        !userStore.passwordResetRequired &&
+        target.path !== router.currentRoute.value.fullPath
+      ) {
+        // Replay through the normal guard and route records, including denial/redirects.
+        await router.replace(target.path)
+      }
+    })
+    .catch(() => {
+      stop()
+      pending = null
+    })
+  return (to: RouteLocationNormalized) => {
+    if (!startupOrigin) startupOrigin = to.redirectedFrom ?? to
+    else if (pending && to.redirectedFrom !== startupOrigin && to.fullPath !== pending.path) {
+      // A newer explicit router navigation supersedes an older native address change.
+      pending = null
+    }
+  }
 }
 
 /**
@@ -104,6 +152,7 @@ export function resetRouteInitState(): void {
 export function setupBeforeEachGuard(router: Router): void {
   // 初始化路由注册器
   routeRegistry = new RouteRegistry(router)
+  const observeStartupNavigation = preserveStartupHistory(router)
 
   router.beforeEach(
     async (
@@ -111,8 +160,9 @@ export function setupBeforeEachGuard(router: Router): void {
       from: RouteLocationNormalized,
       next: NavigationGuardNext
     ) => {
+      observeStartupNavigation(to)
       try {
-        await handleRouteGuard(to, from, next, router)
+        await handleRouteGuard(to, from, next, router, ++latestInitNavigation)
       } catch (error) {
         console.error('[RouteGuard] 路由守卫处理失败:', error)
         closeLoading()
@@ -141,7 +191,8 @@ async function handleRouteGuard(
   to: RouteLocationNormalized,
   from: RouteLocationNormalized,
   next: NavigationGuardNext,
-  router: Router
+  router: Router,
+  navigation: number
 ): Promise<void> {
   const settingStore = useSettingStore()
   const userStore = useUserStore()
@@ -188,13 +239,13 @@ async function handleRouteGuard(
 
   // 3. 处理动态路由注册
   if (!routeRegistry?.isRegistered() && userStore.isLogin) {
-    // 防止并发请求（快速连续导航场景）
-    if (routeInitInProgress) {
-      // 正在初始化中，等待完成后重新导航
-      next(false)
-      return
-    }
-    await handleDynamicRoutes(to, next, router)
+    await handleDynamicRoutes(to, next, router, navigation)
+    return
+  }
+
+  // A navigation may have resolved before a concurrent registration completed.
+  if (router.resolve(to.fullPath).name !== to.name) {
+    next({ path: to.path, query: to.query, hash: to.hash, replace: true })
     return
   }
 
@@ -274,48 +325,33 @@ function isStaticRoute(path: string): boolean {
 async function handleDynamicRoutes(
   to: RouteLocationNormalized,
   next: NavigationGuardNext,
-  router: Router
+  router: Router,
+  navigation: number
 ): Promise<void> {
-  // 标记初始化进行中
-  routeInitInProgress = true
-
-  // 显示 loading
-  pendingLoading = true
-  loadingService.showLoading()
+  // Share registration, but let only the latest navigation resume its own target.
+  const version = routeInitVersion
+  const followsInitialHistory =
+    router.currentRoute.value === START_LOCATION && router.options.history.location === to.fullPath
+  if (!routeInitialization) routeInitialization = initializeDynamicRoutes(router, version)
 
   try {
-    // 1. 获取用户信息
-    await fetchUserInfo()
-
-    // 2. 获取菜单数据
-    const menuList = await menuProcessor.getMenuList()
-
-    // 3. 验证菜单数据
-    if (!menuProcessor.validateMenuList(menuList)) {
-      throw new Error('获取菜单列表失败，请重新登录')
+    const menuList = await routeInitialization
+    if (!menuList || navigation !== latestInitNavigation || version !== routeInitVersion) {
+      next(false)
+      return
     }
 
-    // 4. 注册动态路由
-    routeRegistry?.register(menuList)
-
-    // 5. 保存菜单数据到 store
-    const menuStore = useMenuStore()
-    menuStore.setMenuList(menuList)
-    menuStore.addRemoveRouteFns(routeRegistry?.getRemoveRouteFns() || [])
-
-    // 6. 保存 iframe 路由
-    IframeRouteManager.getInstance().save()
-
-    // 7. 验证工作标签页
-    useWorktabStore().validateWorktabs(router)
+    // Before the first navigation finishes, Vue Router has not subscribed to
+    // native history events. Preserve an address-bar/hash change during /info.
+    const location = router.options.history.location
+    const target = followsInitialHistory && location.startsWith('/') ? router.resolve(location) : to
 
     // 8. 静态路由不依赖菜单权限，初始化后直接恢复目标地址。
-    if (isStaticRoute(to.path)) {
-      routeInitInProgress = false
+    if (isStaticRoute(target.path)) {
       next({
-        path: to.path,
-        query: to.query,
-        hash: to.hash,
+        path: target.path,
+        query: target.query,
+        hash: target.hash,
         replace: true
       })
       return
@@ -324,13 +360,10 @@ async function handleDynamicRoutes(
     // 8. 验证目标路径权限
     const { homePath } = useCommon()
     const { path: validatedPath, hasPermission } = RoutePermissionValidator.validatePath(
-      to.path,
+      target.path,
       menuList,
       homePath.value || '/'
     )
-
-    // 初始化成功，重置进行中标记
-    routeInitInProgress = false
 
     // 9. 重新导航到目标路由
     if (!hasPermission) {
@@ -338,7 +371,7 @@ async function handleDynamicRoutes(
       closeLoading()
 
       // 输出警告信息
-      console.warn(`[RouteGuard] 用户无权限访问路径: ${to.path}，已跳转到首页`)
+      console.warn(`[RouteGuard] 用户无权限访问路径: ${target.path}，已跳转到首页`)
 
       // 直接跳转到首页
       next({
@@ -348,13 +381,17 @@ async function handleDynamicRoutes(
     } else {
       // 有权限，正常导航
       next({
-        path: to.path,
-        query: to.query,
-        hash: to.hash,
+        path: target.path,
+        query: target.query,
+        hash: target.hash,
         replace: true
       })
     }
   } catch (error) {
+    if (navigation !== latestInitNavigation || version !== routeInitVersion) {
+      next(false)
+      return
+    }
     console.error('[RouteGuard] 动态路由注册失败:', error)
 
     // 关闭 loading
@@ -363,14 +400,14 @@ async function handleDynamicRoutes(
     // 401 错误：axios 拦截器已处理退出登录，取消当前导航
     if (isUnauthorizedError(error)) {
       // 重置状态，允许重新登录后再次初始化
-      routeInitInProgress = false
+      routeInitialization = null
       next(false)
       return
     }
 
     // 标记初始化失败，防止死循环
     routeInitFailed = true
-    routeInitInProgress = false
+    routeInitialization = null
 
     // 输出详细错误信息，便于排查
     if (isHttpError(error)) {
@@ -382,21 +419,40 @@ async function handleDynamicRoutes(
   }
 }
 
-/**
- * 获取用户信息
- */
-async function fetchUserInfo(): Promise<void> {
+/** Initialize once without allowing an expired session to register stale grants. */
+async function initializeDynamicRoutes(
+  router: Router,
+  version: number
+): Promise<AppRouteRecord[] | null> {
+  pendingLoading = true
+  loadingService.showLoading()
   const userStore = useUserStore()
+  const isCurrentSession = () =>
+    version === routeInitVersion && userStore.isLogin && !userStore.passwordResetRequired
   const data = await fetchGetUserInfo()
+  if (!isCurrentSession()) return null
   userStore.setUserInfo(data)
-  // 检查并清理工作台标签页（如果是不同用户登录）
   userStore.checkAndClearWorktabs()
+  const menuList = await menuProcessor.getMenuList()
+  if (!isCurrentSession()) return null
+  if (!menuProcessor.validateMenuList(menuList)) {
+    throw new Error('获取菜单列表失败，请重新登录')
+  }
+  routeRegistry?.register(menuList)
+  const menuStore = useMenuStore()
+  menuStore.setMenuList(menuList)
+  menuStore.addRemoveRouteFns(routeRegistry?.getRemoveRouteFns() || [])
+  IframeRouteManager.getInstance().save()
+  useWorktabStore().validateWorktabs(router)
+  return menuList
 }
 
 /**
  * 重置路由相关状态
  */
 export function resetRouterState(delay: number): void {
+  // Invalidate pending requests as soon as logout starts, before delayed route removal.
+  resetRouteInitState()
   setTimeout(() => {
     routeRegistry?.unregister()
     IframeRouteManager.getInstance().clear()
@@ -433,4 +489,19 @@ function handleRootPathRedirect(to: RouteLocationNormalized, next: NavigationGua
  */
 function isUnauthorizedError(error: unknown): boolean {
   return isHttpError(error) && error.code === ApiStatus.unauthorized
+}
+
+/** Rebuild local page components against the freshly fetched catalog hierarchy. */
+export async function refreshAuthorizationRoutes(router: Router): Promise<void> {
+  if (!routeRegistry?.isRegistered()) return
+  const menuList = await menuProcessor.getMenuList()
+  routeRegistry.unregister()
+  routeRegistry.register(menuList)
+  const store = useMenuStore()
+  store.setMenuList(menuList)
+  store.addRemoveRouteFns(routeRegistry.getRemoveRouteFns())
+  useWorktabStore().validateWorktabs(router)
+  const path = router.currentRoute.value.path
+  if (!router.getRoutes().some((route) => route.path === path))
+    await router.replace('/dashboard/overview')
 }

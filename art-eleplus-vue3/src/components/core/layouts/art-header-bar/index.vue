@@ -87,6 +87,13 @@
               </div>
             </template>
             <template #default>
+              <ElButton
+                text
+                size="small"
+                :aria-label="$t('topBar.guide.close')"
+                @click="settingStore.showSettingGuide = false"
+                ><ArtSvgIcon icon="ri:close-line"
+              /></ElButton>
               <p
                 >{{ $t('topBar.guide.title')
                 }}<span :style="{ color: systemThemeColor }"> {{ $t('topBar.guide.theme') }} </span
@@ -198,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+  import { visitMessages } from '@/utils/message-attention'
   import { useMsgCount } from '@/composables/useMsgCount'
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
@@ -381,6 +389,7 @@
    * 切换通知面板显示状态
    */
   const visibleNotice = (): void => {
+    if (!showNotice.value) visitMessages(userStore.info.userId)
     showNotice.value = !showNotice.value
   }
 

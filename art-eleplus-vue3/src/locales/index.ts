@@ -122,3 +122,16 @@ interface Translation {
 export const $t = i18n.global.t as Translation
 
 export default i18n
+
+export { refreshI18nCatalog } from './catalog'
+export { i18n }
+export const $te = (key: string) => i18n.global.te(key)
+export function catalogLabel(kind: string, key: string) {
+  if ($te(`${kind}.${key}`)) return $t(`${kind}.${key}`)
+  if (kind === 'actions') {
+    const [scope, operation, ...resource] = key.split(':')
+    if ($te(`resources.${scope}:${resource.join(':')}`) && $te(`operations.${operation}`))
+      return `${$t(`operations.${operation}`)}${String((i18n.global.locale as any).value ?? i18n.global.locale).startsWith('zh') ? '' : ' '}${$t(`resources.${scope}:${resource.join(':')}`)}`
+  }
+  return key
+}

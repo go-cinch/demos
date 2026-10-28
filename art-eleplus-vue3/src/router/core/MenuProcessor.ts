@@ -14,6 +14,7 @@ import { fetchGetMenuList } from '@/api/system-manage'
 import { asyncRoutes } from '../routes/asyncRoutes'
 import { RoutesAlias } from '../routesAlias'
 import { formatMenuTitle } from '@/utils'
+import { buildCatalogNavigation } from './catalog-navigation'
 
 export class MenuProcessor {
   /**
@@ -50,7 +51,7 @@ export class MenuProcessor {
       menuList = this.filterMenuByRoles(menuList, roles)
     }
 
-    return this.filterEmptyMenus(menuList)
+    return buildCatalogNavigation(this.filterEmptyMenus(menuList), userStore.info.permission)
   }
 
   /**
@@ -254,7 +255,7 @@ export class MenuProcessor {
    * 构建完整路径
    */
   private buildFullPath(path: string, parentPath: string): string {
-    if (!path) return ''
+    if (!path) return parentPath
 
     // 外部链接直接返回
     if (path.startsWith('http://') || path.startsWith('https://')) {

@@ -46,7 +46,7 @@ export const setPageTitle = (to: RouteLocationNormalized): void => {
  */
 export const formatMenuTitle = (title: string): string => {
   if (title) {
-    if (title.startsWith('menus.')) {
+    if (title.startsWith('menus.') || title.startsWith('resources.')) {
       // 使用 te() 方法检查翻译键值是否存在，避免控制台警告
       if (i18n.global.te(title)) {
         return $t(title)

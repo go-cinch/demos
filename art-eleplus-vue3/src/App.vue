@@ -12,6 +12,9 @@
 </template>
 
 <script setup lang="ts">
+  import { useAuthStore } from './components/catalog/runtime'
+  import { usePermissions } from './composables/use-permissions'
+  import { router } from './router'
   import { useUserStore } from './store/modules/user'
   import zh from 'element-plus/es/locale/lang/zh-cn'
   import en from 'element-plus/es/locale/lang/en'
@@ -22,6 +25,36 @@
   import { useSettingStore } from './store/modules/setting'
 
   const userStore = useUserStore()
+  const { hasPage } = usePermissions()
+  let refreshingPermissions = false
+  async function refreshPermissions() {
+    if (
+      refreshingPermissions ||
+      !userStore.accessToken ||
+      userStore.passwordResetRequired ||
+      document.hidden
+    )
+      return
+    refreshingPermissions = true
+    try {
+      await useAuthStore().fetchUserInfo({ fresh: true })
+      const path = router.currentRoute.value.path
+      if (!hasPage(path) && path !== '/dashboard/overview' && !path.startsWith('/auth/'))
+        await router.replace('/exception/403')
+    } catch {
+      /* The Auth client owns session failures. */
+    } finally {
+      refreshingPermissions = false
+    }
+  }
+  onMounted(() => {
+    window.addEventListener('focus', refreshPermissions)
+    window.addEventListener('auth-permissions-changed', refreshPermissions)
+  })
+  onBeforeUnmount(() => {
+    window.removeEventListener('focus', refreshPermissions)
+    window.removeEventListener('auth-permissions-changed', refreshPermissions)
+  })
   const { language } = storeToRefs(userStore)
   const settingStore = useSettingStore()
 

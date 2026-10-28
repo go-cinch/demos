@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import type { CaptchaPoint, PointCaptchaChallenge } from '@/api/auth-service'
+  import { isBadGatewayError } from '@/utils/admin/request-error'
   import { $t } from '@/locales'
 
   const props = defineProps<{
@@ -13,6 +14,7 @@
   const emit = defineEmits<{ update: [captcha: PointCaptchaChallenge] }>()
   const model = defineModel<CaptchaPoint[]>({ default: () => [] })
   const image = ref<HTMLImageElement>()
+  const gatewayFailed = ref(false)
   const busy = ref(false)
   const verified = ref(false)
   const selectedPoints = ref<CaptchaPoint[]>([])
@@ -20,6 +22,7 @@
   const POINT_TOGGLE_RADIUS = 14
 
   function resetSelection() {
+    gatewayFailed.value = false
     selectedPoints.value = []
     model.value = []
     verified.value = false
@@ -54,8 +57,12 @@
       resetSelection()
       if (result.captcha) emit('update', result.captcha)
       ElMessage.error($t('auth.captchaWrong'))
-    } catch {
+    } catch (error) {
       resetSelection()
+      if (isBadGatewayError(error)) {
+        gatewayFailed.value = true
+        return
+      }
       try {
         emit('update', await props.refresh(props.captcha.captcha_id))
       } catch {
@@ -72,6 +79,8 @@
       const refreshed = await props.refresh(props.captcha.captcha_id)
       resetSelection()
       emit('update', refreshed)
+    } catch (error) {
+      gatewayFailed.value = isBadGatewayError(error)
     } finally {
       busy.value = false
     }
@@ -81,7 +90,10 @@
 </script>
 
 <template>
-  <div class="captcha-wrap" v-loading="busy">
+  <div class="captcha-wrap" v-loading="busy"
+    ><p v-if="gatewayFailed" role="alert" style="color: var(--el-color-danger)">{{
+      $t('auth.serverLost')
+    }}</p>
     <div class="captcha-head">
       <span>{{ captcha.hint_text }}</span>
       <ElButton text type="primary" @click="reload">{{ $t('auth.refresh') }}</ElButton>

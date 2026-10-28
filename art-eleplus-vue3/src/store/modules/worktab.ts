@@ -1,3 +1,4 @@
+import { canCloseCatalogTab } from '@/components/catalog/runtime'
 /**
  * 工作标签页状态管理模块
  *
@@ -181,7 +182,8 @@ export const useWorktabStore = defineStore(
     /**
      * 关闭指定的选项卡
      */
-    const removeTab = (path: string): void => {
+    const removeTab = async (path: string): Promise<void> => {
+      if (!(await canCloseCatalogTab(path))) return
       const targetTab = getTab(path)
       const targetIndex = findTabIndex(path)
 
@@ -225,7 +227,7 @@ export const useWorktabStore = defineStore(
     /**
      * 关闭左侧选项卡
      */
-    const removeLeft = (path: string): void => {
+    const removeLeft = async (path: string): Promise<void> => {
       const targetIndex = findTabIndex(path)
 
       if (targetIndex === -1) {
@@ -242,6 +244,7 @@ export const useWorktabStore = defineStore(
         return
       }
 
+      for (const tab of closableLeftTabs) if (!(await canCloseCatalogTab(tab.path ?? ''))) return
       // 标记为缓存排除
       markTabsToRemove(closableLeftTabs)
 
@@ -260,7 +263,7 @@ export const useWorktabStore = defineStore(
     /**
      * 关闭右侧选项卡
      */
-    const removeRight = (path: string): void => {
+    const removeRight = async (path: string): Promise<void> => {
       const targetIndex = findTabIndex(path)
 
       if (targetIndex === -1) {
@@ -277,6 +280,7 @@ export const useWorktabStore = defineStore(
         return
       }
 
+      for (const tab of closableRightTabs) if (!(await canCloseCatalogTab(tab.path ?? ''))) return
       // 标记为缓存排除
       markTabsToRemove(closableRightTabs)
 
@@ -295,7 +299,7 @@ export const useWorktabStore = defineStore(
     /**
      * 关闭其他选项卡
      */
-    const removeOthers = (path: string): void => {
+    const removeOthers = async (path: string): Promise<void> => {
       const targetTab = getTab(path)
 
       if (!targetTab) {
@@ -312,6 +316,7 @@ export const useWorktabStore = defineStore(
         return
       }
 
+      for (const tab of closableTabs) if (!(await canCloseCatalogTab(tab.path ?? ''))) return
       // 标记为缓存排除
       markTabsToRemove(closableTabs)
 
@@ -325,7 +330,7 @@ export const useWorktabStore = defineStore(
     /**
      * 关闭所有可关闭的标签页
      */
-    const removeAll = (): void => {
+    const removeAll = async (): Promise<void> => {
       const { homePath } = useCommon()
       const hasFixedTabs = opened.value.some((tab) => tab.fixedTab)
 
@@ -341,6 +346,7 @@ export const useWorktabStore = defineStore(
         return
       }
 
+      for (const tab of closableTabs) if (!(await canCloseCatalogTab(tab.path ?? ''))) return
       // 标记为缓存排除
       markTabsToRemove(closableTabs)
 

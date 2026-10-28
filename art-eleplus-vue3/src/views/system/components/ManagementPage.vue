@@ -1,5 +1,33 @@
 <script setup lang="ts">
   import ResultToolbar from './ResultToolbar.vue'
+  import ActiveFilters from './ActiveFilters.vue'
+  import ManagementOverview from './ManagementOverview.vue'
+  import ResourceCards from './ResourceCards.vue'
+  import RecordDetail from './RecordDetail.vue'
+  import AssociationEditor from './AssociationEditor.vue'
+  import GroupMembers from './GroupMembers.vue'
+  import ActionGroupNav from './action-group-nav.vue'
+  import ActionGroupDialog from './action-group-dialog.vue'
+  import { applyGroupOrder, deletePermissionGroup } from './action-groups'
+  import { managementListFields } from './management-projection'
+  import {
+    hasManagementControl,
+    canManageResourceRecord,
+    canRemoveManagementRecord
+  } from './management-access'
+  import { catalogGroupWords, catalogGroupOrder } from '@/locales/catalog'
+  import { refreshI18nCatalog } from '@/locales'
+  import { getAdminSummary } from '@/utils/admin/service'
+  import ActionEditor from './action-editor.vue'
+  import PermissionAssignment from './permission-assignment.vue'
+  import PermissionResultCell from './permission-result-cell.vue'
+  import { usePermissions } from '@/composables/use-permissions'
+  import { authorizedEditorPayload } from './assignment-policy'
+  import { catalogLabel } from '@/locales'
+  import RuleListEditor from './RuleListEditor.vue'
+  import { getAdminRecord, associationOptions } from '@/utils/admin/service'
+  import { adminDate, changedFields, type AdminQuery, type AdminRecord } from '@/utils/admin/model'
+  import { useDefaultPageSize, useAdminTimezone } from '@/utils/admin/preferences'
   import type { FormInstance } from 'element-plus'
   import { ElMessageBox } from 'element-plus'
   import type { ResourceKind, SystemRecord, UserRecord } from '@/api/system-service'
@@ -10,7 +38,6 @@
     createResource,
     updateResource
   } from '@/api/system-service'
-  import { useUserStore } from '@/store/modules/user'
   import { $t } from '@/locales'
   import { isValidUsername, isValidUserPassword } from '@/utils/auth-validation'
 
@@ -71,12 +98,128 @@
   }
 
   const props = defineProps<{ resource: ResourceKind }>()
-  const userStore = useUserStore()
+  const permissions = usePermissions()
+  const editorProblem = ref('')
+  const canAssign = computed(() =>
+    permissions.canManagePermission(props.resource, dialog.record ? 'update' : 'create')
+  )
+  const editorFields = computed(() =>
+    config.value.fields.filter(
+      (field) =>
+        (canAssign.value || !['actions', 'role', 'users'].includes(field.type)) &&
+        (!dialog.record ||
+          props.resource !== 'user' ||
+          canAssign.value ||
+          !['username', 'password'].includes(field.key))
+    )
+  )
+  const editorGroups = ref<string[]>([])
+  const groupDialogOpen = ref(false)
+  const permissionGroupCounts = ref<Array<{ name: string; count: number }>>([])
+  const groupsLoading = ref(false)
+  const permissionGroups = computed(() => {
+    const used = new Set(permissionGroupCounts.value.map((group) => group.name))
+    return applyGroupOrder(
+      [
+        ...permissionGroupCounts.value,
+        ...catalogGroupWords()
+          .filter((name) => !used.has(name))
+          .map((name) => ({ name, count: 0 }))
+      ],
+      catalogGroupOrder()
+    )
+  })
+  const access = {
+    hasButton: permissions.hasButton,
+    canManagePermission: permissions.canManagePermission,
+    get hasAllPermissions() {
+      return permissions.hasAllPermissions.value
+    },
+    get canPublishCatalog() {
+      return permissions.canManageDeveloper.value
+    }
+  }
+  const canControl = (control: string) => hasManagementControl(props.resource, control, access)
+  const canDetail = computed(() => canControl('view-detail'))
+  const canRemoveRecord = (record: AdminRecord, control: 'delete' | 'delete-selected' = 'delete') =>
+    canRemoveManagementRecord(props.resource, record, control, access)
+  const canSelectRecord = (record: AdminRecord) => canRemoveRecord(record, 'delete-selected')
+
+  async function refreshPermissionGroups() {
+    if (props.resource !== 'action' || !allowed('read')) return
+    groupsLoading.value = true
+    try {
+      await refreshI18nCatalog()
+      permissionGroupCounts.value = (await getAdminSummary('action')).groups.map((group) => ({
+        name: group.name,
+        count: group.count
+      }))
+    } finally {
+      groupsLoading.value = false
+    }
+  }
+  function createPermissionGroup() {
+    if (canControl('create-group') && permissions.canManagePermission('action', 'update'))
+      groupDialogOpen.value = true
+  }
+  function selectPermissionGroup(word?: string) {
+    if (!canControl('query')) return
+    if (word === undefined) delete filters.groups_exact
+    else filters.groups_exact = word
+    search()
+  }
+  async function removePermissionGroup(word: string) {
+    if (
+      !permissions.canManagePermission('action', 'update') ||
+      !canControl('delete-group') ||
+      permissionGroups.value.find((group) => group.name === word)?.count !== 0
+    )
+      return
+    try {
+      await ElMessageBox.confirm(
+        $t('action-editor.deleteGroupConfirm', { name: catalogLabel('groups', word) }),
+        $t('action-editor.deleteGroup'),
+        {
+          confirmButtonText: $t('system.common.delete'),
+          cancelButtonText: $t('system.common.cancel'),
+          type: 'warning'
+        }
+      )
+    } catch {
+      return
+    }
+    if (!canControl('delete-group') || !permissions.canManagePermission('action', 'update')) return
+    await deletePermissionGroup(word)
+    if (filters.groups_exact === word) delete filters.groups_exact
+    await refreshPermissionGroups()
+    await load()
+  }
+  function manageable(record?: any) {
+    return !record || canManageResourceRecord(props.resource, record, access)
+  }
+
+  const timezone = useAdminTimezone()
+  const view = ref<'cards' | 'matrix' | 'table'>(
+    props.resource === 'user' ? 'table' : props.resource === 'action' ? 'matrix' : 'cards'
+  )
+  const summaryRevision = ref(0)
+  const detailRecord = ref<AdminRecord>()
+  const memberAdded = ref<number[]>([]),
+    memberRemoved = ref<number[]>([])
+  let initialForm: Record<string, unknown> = {}
+  const loadError = ref(false)
+  let listRun = 0
   const loading = ref(false)
   const saving = ref(false)
   const rows = ref<SystemRecord[]>([])
   const selected = ref<SystemRecord[]>([])
-  const page = reactive({ current: 1, size: 10, total: 0 })
+  const defaultPageSize = useDefaultPageSize()
+  const page = reactive({ current: 1, size: defaultPageSize.value, total: 0 })
+  watch(defaultPageSize, (value) => {
+    page.size = value
+    page.current = 1
+    void load()
+  })
   const filters = reactive<Record<string, unknown>>({})
   const dialog = reactive({ open: false, record: null as SystemRecord | null })
   const form = reactive<Record<string, any>>({})
@@ -104,14 +247,7 @@
   const configs: Record<ResourceKind, Config> = {
     action: {
       title: 'system.action.title',
-      fields: [
-        { key: 'name', label: 'system.fields.name', type: 'input', required: true },
-        { key: 'group', label: 'system.fields.group', type: 'input', required: true },
-        { key: 'word', label: 'system.fields.word', type: 'input', required: true },
-        { key: 'resource', label: 'system.fields.resourceRules', type: 'textarea' },
-        { key: 'menu', label: 'system.fields.menuPaths', type: 'textarea' },
-        { key: 'button', label: 'system.fields.buttonPermission', type: 'textarea' }
-      ],
+      fields: [],
       columns: [
         { key: 'id', label: 'system.fields.id', width: 80 },
         { key: 'name', label: 'system.fields.name', width: 150 },
@@ -119,8 +255,8 @@
         { key: 'word', label: 'system.fields.word', width: 150 },
         { key: 'code', label: 'system.fields.code', width: 150 },
         { key: 'resource', label: 'system.fields.resourceRules', width: 260, format: 'rules' },
-        { key: 'menu', label: 'system.fields.menuPaths', width: 200 },
-        { key: 'button', label: 'system.fields.buttonPermission', width: 200 },
+        { key: 'menu', label: 'system.fields.menuPaths', width: 200, format: 'tags' },
+        { key: 'button', label: 'system.fields.buttonPermission', width: 200, format: 'tags' },
         ...commonDates
       ],
       filters: [
@@ -176,9 +312,11 @@
         { key: 'code', label: 'system.fields.userCode', width: 140 },
         { key: 'role', label: 'system.fields.role', width: 140, format: 'role' },
         { key: 'status', label: 'system.fields.status', width: 110, format: 'status' },
-        { key: 'metadata', label: 'system.fields.metadata', width: 300, format: 'json' },
+        { key: 'login_count', label: 'system.fields.loginCount', width: 110 },
+        { key: 'last_logged_in_at', label: 'system.fields.lastLogin', width: 180, format: 'date' },
         { key: 'action_codes', label: 'system.fields.permissions', width: 320, format: 'actions' },
-        ...commonDates
+        ...commonDates,
+        { key: 'metadata', label: 'system.fields.metadata', width: 300, format: 'json' }
       ],
       filters: [
         { key: 'username', label: 'system.fields.username' },
@@ -268,32 +406,146 @@
   const columns = computed(() =>
     config.value.columns
       .filter((item) => visibleColumns.value.includes(item.key))
-      .map((item) => ({ ...item, width: adaptiveColumnWidth(item), minWidth: undefined }))
-  )
-  const prefix = computed(
-    () => `system.${props.resource === 'user-group' ? 'user.group' : props.resource}`
+      .map((item) => ({
+        ...item,
+        label:
+          props.resource === 'action' && view.value === 'matrix'
+            ? ((
+                {
+                  menu: 'permission-display.relatedMenus',
+                  resource: 'action-editor.operation',
+                  button: 'action-editor.features'
+                } as Record<string, string>
+              )[item.key] ?? item.label)
+            : item.label,
+        width: adaptiveColumnWidth(item),
+        minWidth: undefined
+      }))
   )
   function allowed(operation: 'create' | 'read' | 'update' | 'delete') {
-    const codes = userStore.info.buttons || []
-    return codes.includes('*') || codes.includes(`${prefix.value}.${operation}`)
+    if (operation === 'read') return permissions.hasPage(`/system/${props.resource}`)
+    return canControl(operation === 'update' ? 'edit' : operation)
   }
+
+  const listFields = computed(() =>
+    managementListFields({
+      resource: props.resource,
+      view: view.value,
+      columns: config.value.columns,
+      visible: visibleColumns.value,
+      canAssignPermissions: permissions.canAssignPermissions.value,
+      canDelete: allowed('delete'),
+      canDeleteSelected: canControl('delete-selected')
+    })
+  )
+  watch(listFields, () => void load())
 
   async function load() {
     if (!allowed('read')) return
+    const run = ++listRun
     loading.value = true
+    loadError.value = false
     try {
       const params: Record<string, unknown> = { p: page.current, s: page.size }
       Object.entries(filters).forEach(([key, value]) => {
-        if (value !== '' && value !== undefined && value !== null)
+        if ((value !== '' || key.endsWith('_exact')) && value !== undefined && value !== null)
           params[key] = Array.isArray(value) ? value.join(',') : value
       })
-      const result = await listResource(props.resource, params)
-      rows.value = result.items
+      const result = await listResource(props.resource, {
+        ...params,
+        f: listFields.value
+      })
+      if (run !== listRun) return
+      rows.value = result.items.map((record) =>
+        props.resource === 'user-group'
+          ? { ...record, users: (record as any).member_preview ?? (record as any).users ?? [] }
+          : props.resource === 'user'
+            ? { ...record, role: (record as any).role_summary ?? (record as any).role }
+            : record
+      )
       page.total = result.t
       selected.value = []
+      if (props.resource === 'action') void refreshPermissionGroups()
+    } catch {
+      if (run === listRun) {
+        loadError.value = true
+        rows.value = []
+        page.total = 0
+      }
     } finally {
-      loading.value = false
+      if (run === listRun) loading.value = false
     }
+  }
+  function applyInsight(updates: AdminQuery) {
+    if (!canControl('query')) return
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined) delete filters[key]
+      else filters[key] = value
+    }
+    search()
+  }
+  function openDetail(record: AdminRecord) {
+    if (!canDetail.value || loading.value) return
+    detailRecord.value = record
+  }
+  async function openGroupDetail(id: number) {
+    if (!canDetail.value) return
+    const record = await getAdminRecord('user-group', id)
+    openDetail(record)
+  }
+  function refreshFromToolbar() {
+    if (!canControl('refresh') || !allowed('read')) return
+    summaryRevision.value++
+    void load()
+  }
+  function selectRows(records: SystemRecord[]) {
+    selected.value = canControl('delete-selected')
+      ? records.filter((record) => canSelectRecord(record as unknown as AdminRecord))
+      : []
+  }
+  function toggleSelection(id: number) {
+    const row = rows.value.find((item) => item.id === id)
+    if (!row || !canSelectRecord(row as unknown as AdminRecord)) return
+    selectRows(
+      selected.value.some((item) => item.id === id)
+        ? selected.value.filter((item) => item.id !== id)
+        : [...selected.value, row]
+    )
+  }
+  watch(canDetail, (value) => {
+    if (!value) detailRecord.value = undefined
+  })
+  watch(
+    () =>
+      rows.value
+        .filter((record) => canSelectRecord(record as unknown as AdminRecord))
+        .map((record) => record.id)
+        .join(','),
+    () => selectRows(selected.value)
+  )
+
+  async function beforeCloseEditor(done: () => void) {
+    if (saving.value) return
+    const dirty =
+      JSON.stringify(form) !== JSON.stringify(initialForm) ||
+      memberAdded.value.length ||
+      memberRemoved.value.length
+    if (dirty) {
+      try {
+        await ElMessageBox.confirm(
+          $t('pc.system-editor.unsaved'),
+          $t('pc.system-editor.discardTitle'),
+          {
+            confirmButtonText: $t('pc.system-editor.discard'),
+            cancelButtonText: $t('pc.system-editor.continue'),
+            type: 'warning'
+          }
+        )
+      } catch {
+        return
+      }
+    }
+    done()
   }
 
   function loadFilterHistory() {
@@ -364,17 +616,23 @@
   }
 
   function search() {
+    if (!canControl('query') || !allowed('read')) return
     clearTimeout(autoSearchTimer)
     filtersDirty = false
     saveFilterHistory()
     page.current = 1
     load()
   }
-  function reset() {
+  function resetFilters() {
     clearTimeout(autoSearchTimer)
     filtersDirty = false
     Object.keys(filters).forEach((key) => delete filters[key])
-    search()
+    page.current = 1
+    void load()
+  }
+
+  function reset() {
+    if (canControl('reset-query')) resetFilters()
   }
 
   function markFilterChanged(autoSchedule = false) {
@@ -387,6 +645,7 @@
   }
 
   function scheduleFilterSearch() {
+    if (!canControl('query')) return
     clearTimeout(autoSearchTimer)
     autoSearchTimer = setTimeout(() => {
       if (filtersDirty) search()
@@ -398,6 +657,10 @@
     query: string,
     callback: (items: FilterSuggestion[]) => void
   ) {
+    if (!canControl('query') || !allowed('read')) {
+      callback([])
+      return
+    }
     const key = filterHistoryKey(field.key)
     const normalizedQuery = query.trim().toLowerCase()
     filterSuggestionQueries[key] = query.trim()
@@ -410,12 +673,16 @@
     suggestionTimers.set(
       key,
       setTimeout(async () => {
+        if (!canControl('query') || !allowed('read')) {
+          callback([])
+          return
+        }
         const suggestion = field.suggestion || { resource: props.resource, fieldKey: field.key }
         try {
-          const params: Record<string, unknown> = { p: 1, s: 10 }
+          const params: Record<string, unknown> = { p: 1, s: 10, f: suggestion.fieldKey }
           if (query.trim()) params[suggestion.fieldKey] = query.trim()
           const result = await listResource(suggestion.resource, params)
-          if (suggestionRequestIds.get(key) !== requestId) return
+          if (suggestionRequestIds.get(key) !== requestId || !canControl('query')) return
           const backend = result.items
             .map((record) => (record as unknown as Record<string, unknown>)[suggestion.fieldKey])
             .filter((value): value is number | string =>
@@ -452,53 +719,76 @@
     )
   }
 
-  async function loadRelations() {
-    const wanted = config.value.fields.map((field) => field.type)
-    const tasks: Promise<void>[] = []
-    if (wanted.includes('actions'))
-      tasks.push(
-        listResource('action', { p: 1, s: 1000 }).then((r) => {
-          relation.actions = r.items
-        })
-      )
-    if (wanted.includes('role'))
-      tasks.push(
-        listResource('role', { p: 1, s: 1000 }).then((r) => {
-          relation.roles = r.items
-        })
-      )
-    if (wanted.includes('users'))
-      tasks.push(
-        listResource('user', { p: 1, s: 1000 }).then((r) => {
-          relation.users = r.items
-        })
-      )
-    await Promise.all(tasks)
+  async function searchRoles(query = '') {
+    if (!permissions.hasPage('/system/role')) return
+    const result = await associationOptions('role', { q: query, p: 1, s: 20 })
+    relation.roles = result.items
   }
-
   async function openEditor(record?: SystemRecord) {
+    if (!allowed(record ? 'update' : 'create')) return
+    detailRecord.value = undefined
+    memberAdded.value = []
+    memberRemoved.value = []
     dialog.record = record || null
     Object.keys(form).forEach((key) => delete form[key])
-    if (record) Object.assign(form, structuredClone(toRaw(record)))
+    if (record) {
+      const full = await getAdminRecord(props.resource, record.id)
+      if (!manageable(full)) return
+      dialog.record = full as unknown as SystemRecord
+      record = full as unknown as SystemRecord
+      Object.assign(form, structuredClone(toRaw(full)))
+    }
+    editorProblem.value = ''
+    if (props.resource === 'action') {
+      form.names = (record as any)?.names ?? {}
+      form.word = (record as any)?.word ?? ''
+      form.group = (record as any)?.group ?? ''
+      form.config = (record as any)?.config ?? { bindings: [], ui: [], endpoints: [] }
+      try {
+        editorGroups.value = await (await import('@/api/system-service')).actionGroups()
+      } catch {
+        editorGroups.value = []
+      }
+    }
     if (props.resource === 'dictionary')
       form.value = JSON.stringify(record ? (record as any).value : [], null, 2)
     if (props.resource === 'dictionary' && !record) form.enabled = true
     if (props.resource === 'whitelist' && !record) form.category = 0
     if (props.resource === 'user') form.password = ''
-    if (props.resource === 'user-group' && record)
-      form.user_ids = (record as any).users.map((item: any) => item.id)
-    await loadRelations()
+    if (props.resource === 'user-group' && record) form.user_ids = []
+    for (const field of config.value.fields) {
+      if (['actions', 'users'].includes(field.type) && !Array.isArray(form[field.key]))
+        form[field.key] = []
+    }
+    relation.roles = (record as any)?.role ? [(record as any).role] : []
+    initialForm = structuredClone(toRaw(form))
+    if (!allowed(record ? 'update' : 'create') || !manageable(record)) return
     dialog.open = true
     await nextTick()
     formRef.value?.clearValidate()
   }
 
   async function save() {
-    if (!(await formRef.value?.validate())) return
+    if (saving.value || !allowed(dialog.record ? 'update' : 'create') || !manageable(dialog.record))
+      return
+    if (editorProblem.value) return
+    if (!(await formRef.value?.validate().catch(() => false))) return
+    if (!allowed(dialog.record ? 'update' : 'create') || !manageable(dialog.record)) return
     const payload: Record<string, unknown> = {}
-    for (const field of config.value.fields) {
+    for (const field of editorFields.value) {
       if (form[field.key] !== undefined) payload[field.key] = form[field.key]
     }
+    if (canAssign.value && form.action_bindings !== undefined) {
+      payload.action_bindings = form.action_bindings
+      delete payload.action_codes
+    }
+    if (props.resource === 'action')
+      Object.assign(payload, {
+        names: form.names,
+        word: form.word.trim(),
+        group: form.group,
+        config: form.config
+      })
     if (props.resource === 'dictionary') {
       try {
         payload.value = JSON.parse(String(payload.value))
@@ -507,8 +797,47 @@
       }
     }
     if (props.resource === 'user' && dialog.record && !payload.password) delete payload.password
-    if (props.resource === 'user' && !dialog.record && !payload.password)
+    if (props.resource === 'user' && !dialog.record && !String(payload.password ?? '').trim())
       return ElMessage.warning($t('auth.passwordRequired'))
+    // JSON string values retain their contents, including significant whitespace.
+    const jsonFields = new Set(
+      config.value.fields.filter((field) => field.type === 'json').map((field) => field.key)
+    )
+    for (const [key, value] of Object.entries(payload))
+      if (typeof value === 'string' && !jsonFields.has(key)) payload[key] = value.trim()
+    if (dialog.record) {
+      const original: Record<string, unknown> = {}
+      for (const field of config.value.fields) {
+        if (initialForm[field.key] !== undefined)
+          original[field.key] =
+            field.type === 'json'
+              ? JSON.parse(String(initialForm[field.key]))
+              : initialForm[field.key]
+      }
+      if (props.resource === 'action')
+        for (const key of ['names', 'word', 'group', 'config']) original[key] = initialForm[key]
+      const delta = changedFields(payload, original)
+      Object.keys(payload).forEach((key) => delete payload[key])
+      Object.assign(payload, delta)
+      if (props.resource === 'user-group') {
+        delete payload.user_ids
+        if (memberAdded.value.length) payload.add_user_ids = memberAdded.value
+        if (memberRemoved.value.length) payload.remove_user_ids = memberRemoved.value
+      }
+      if (!Object.keys(payload).length) {
+        ElMessage.info($t('system.messages.noChanges'))
+        return
+      }
+    }
+    const authorized = authorizedEditorPayload(
+      props.resource,
+      payload,
+      canAssign.value,
+      canAssign.value,
+      !!dialog.record
+    )
+    Object.keys(payload).forEach((key) => delete payload[key])
+    Object.assign(payload, authorized)
     saving.value = true
     try {
       if (dialog.record) await updateResource(props.resource, (dialog.record as any).id, payload)
@@ -517,6 +846,7 @@
         dialog.record ? $t('system.messages.updated') : $t('system.messages.created')
       )
       dialog.open = false
+      summaryRevision.value++
       await load()
     } finally {
       saving.value = false
@@ -526,7 +856,24 @@
   function fieldRules(field: Field) {
     const rules: any[] = []
     if (field.required) {
-      rules.push({ required: true, message: $t('system.messages.required'), trigger: 'blur' })
+      rules.push({
+        required: true,
+        type:
+          field.type === 'category'
+            ? 'number'
+            : field.type === 'switch'
+              ? 'boolean'
+              : ['actions', 'users'].includes(field.type)
+                ? 'array'
+                : 'string',
+        ...(field.type === 'category' ||
+        field.type === 'switch' ||
+        ['actions', 'users'].includes(field.type)
+          ? {}
+          : { whitespace: true }),
+        message: $t('system.messages.required'),
+        trigger: 'blur'
+      })
     }
     if (props.resource === 'user' && field.key === 'username') {
       rules.push({
@@ -546,30 +893,66 @@
               : callback(new Error($t('auth.passwordLength')))
       })
     }
+    if (props.resource === 'dictionary' && field.key === 'key')
+      rules.push({
+        trigger: 'blur',
+        validator: (_rule: unknown, value: unknown, callback: (error?: Error) => void) =>
+          typeof value === 'string' && /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/.test(value)
+            ? callback()
+            : callback(new Error($t('pc.system.validation.dictionaryKey')))
+      })
+    if (field.type === 'json')
+      rules.push({
+        trigger: 'blur',
+        validator: (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
+          try {
+            JSON.parse(String(value))
+            callback()
+          } catch {
+            callback(new Error($t('pc.system.validation.json')))
+          }
+        }
+      })
     return rules
   }
 
-  async function remove(ids: number[]) {
+  function removableIds(ids: number[], control: 'delete' | 'delete-selected') {
+    return (
+      ids.length > 0 &&
+      canControl(control) &&
+      ids.every((id) => {
+        const record = rows.value.find((item) => item.id === id)
+        return record && canRemoveRecord(record as unknown as AdminRecord, control)
+      })
+    )
+  }
+  async function remove(ids: number[], control: 'delete' | 'delete-selected') {
+    if (!removableIds(ids, control)) return
     await deleteResources(props.resource, ids)
     ElMessage.success($t('system.messages.deleted'))
     if (rows.value.length === ids.length && page.current > 1) page.current--
     await load()
   }
-
-  async function confirmRemove(ids: number[]) {
-    await ElMessageBox.confirm(
-      $t('system.confirm.deleteDescription').replace('{count}', String(ids.length)),
-      $t('system.common.confirm'),
-      {
-        type: 'warning',
-        confirmButtonText: $t('system.common.confirm'),
-        cancelButtonText: $t('system.common.cancel')
-      }
-    )
-    await remove(ids)
+  async function confirmRemove(ids: number[], control: 'delete' | 'delete-selected' = 'delete') {
+    if (loading.value || !removableIds(ids, control)) return
+    try {
+      await ElMessageBox.confirm(
+        $t('system.confirm.deleteDescription').replace('{count}', String(ids.length)),
+        $t('system.common.confirm'),
+        {
+          type: 'warning',
+          confirmButtonText: $t('system.common.confirm'),
+          cancelButtonText: $t('system.common.cancel')
+        }
+      )
+    } catch {
+      return
+    }
+    await remove(ids, control)
   }
 
   async function approve(user: UserRecord, approved: boolean) {
+    if (props.resource !== 'user' || !canControl('approve')) return
     const metadata = { ...(user.metadata || {}) }
     if (approved) delete metadata.reject_register_reason
     else {
@@ -578,6 +961,7 @@
         $t('system.user.reject'),
         { inputValidator: (value: string) => Boolean(value?.trim()) }
       )
+      if (!canControl('approve')) return
       metadata.reject_register_reason = result.value.trim()
     }
     await updateResource('user', user.id, { metadata, status: approved ? 1 : 0 })
@@ -586,12 +970,14 @@
   }
 
   async function lock(user: UserRecord) {
+    if (props.resource !== 'user' || !canControl('lock')) return
     const result = await ElMessageBox.prompt($t('system.user.lockTip'), $t('system.user.lock'), {
       inputPlaceholder: '24',
       inputValue: '24',
       inputPattern: /^\d+$/,
       inputErrorMessage: $t('system.messages.futureLock')
     })
+    if (!canControl('lock')) return
     const hours = Number(result.value)
     const metadata = {
       ...(user.metadata || {}),
@@ -603,6 +989,7 @@
   }
 
   async function unlock(user: UserRecord) {
+    if (props.resource !== 'user' || !canControl('unlock')) return
     const metadata = { ...(user.metadata || {}) }
     delete metadata.lock_expired_at
     await updateResource('user', user.id, { metadata, status: 1 })
@@ -611,6 +998,7 @@
   }
 
   async function unlockPassword(user: UserRecord) {
+    if (props.resource !== 'user' || !canControl('unlock-password')) return
     const metadata = { ...(user.metadata || {}) }
     delete metadata.password_change_failures
     await updateResource('user', user.id, { metadata })
@@ -619,15 +1007,11 @@
   }
 
   function formatDate(value: unknown) {
-    if (!value) return '-'
-    const date = new Date(Number(value))
-    const part = (number: number) => String(number).padStart(2, '0')
-    return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}`
+    return adminDate(value, timezone.value)
   }
   function listValues(value: unknown) {
-    return String(value || '')
-      .split(/[,\n]/)
-      .map((item) => item.trim())
+    return (Array.isArray(value) ? value.map(String) : String(value ?? '').split(/\r?\n/))
+      .map((value) => value.trim())
       .filter(Boolean)
   }
   function formatJson(value: unknown, pretty = true) {
@@ -694,13 +1078,17 @@
   watch(
     () => props.resource,
     () => {
-      visibleColumns.value = config.value.columns.map((item) => item.key)
-      reset()
+      visibleColumns.value =
+        props.resource === 'user'
+          ? ['username', 'role', 'status', 'login_count', 'last_logged_in_at', 'metadata']
+          : config.value.columns.map((item) => item.key)
+      resetFilters()
     },
     { immediate: true }
   )
 
   onBeforeUnmount(() => {
+    listRun++
     clearTimeout(autoSearchTimer)
     suggestionTimers.forEach((timer) => clearTimeout(timer))
     document.removeEventListener('fullscreenchange', syncFullscreenState)
@@ -712,9 +1100,26 @@
 <template>
   <div
     ref="tableWrap"
+    :data-testid="`management-page-${resource}`"
     class="page-content system-management"
     :class="{ 'fullscreen-card': fullscreen }"
   >
+    <ManagementOverview
+      :resource="resource"
+      :allowed="allowed('read')"
+      :can-query="canControl('query')"
+      :can-detail="canDetail"
+      :revision="summaryRevision"
+      :filters="filters as AdminQuery"
+      class="mb-4"
+      @filter="applyInsight"
+      @group="openGroupDetail"
+    />
+    <ActiveFilters
+      :filters="filters as AdminQuery"
+      :editable="canControl('query')"
+      @change="applyInsight"
+    />
     <ElCard shadow="never" class="mb-4">
       <template #header
         ><div class="flex-cb"
@@ -724,6 +1129,7 @@
       <ElForm inline @submit.prevent="search">
         <ElFormItem v-for="field in visibleFilters" :key="field.key" :label="$t(field.label)">
           <ElSelect
+            :disabled="!canControl('query')"
             v-if="field.type === 'status'"
             v-model="filters[field.key] as any"
             clearable
@@ -742,6 +1148,7 @@
             />
           </ElSelect>
           <ElSelect
+            :disabled="!canControl('query')"
             v-else-if="field.type === 'category'"
             v-model="filters[field.key] as any"
             clearable
@@ -756,6 +1163,7 @@
             />
           </ElSelect>
           <ElSelect
+            :disabled="!canControl('query')"
             v-else-if="field.type === 'enabled'"
             v-model="filters[field.key] as any"
             clearable
@@ -770,6 +1178,7 @@
             />
           </ElSelect>
           <ElAutocomplete
+            :disabled="!canControl('query')"
             v-else
             v-model="filters[field.key] as string"
             clearable
@@ -812,8 +1221,12 @@
           </ElAutocomplete>
         </ElFormItem>
         <ElFormItem
-          ><ElButton type="primary" @click="search">{{ $t('system.common.search') }}</ElButton
-          ><ElButton @click="reset">{{ $t('system.common.reset') }}</ElButton
+          ><ElButton v-if="canControl('query')" type="primary" @click="search">{{
+            $t('system.common.search')
+          }}</ElButton
+          ><ElButton v-if="canControl('reset-query')" @click="reset">{{
+            $t('system.common.reset')
+          }}</ElButton
           ><ElButton
             v-if="config.filters.length > 3"
             text
@@ -827,6 +1240,27 @@
       </ElForm>
     </ElCard>
 
+    <ActionGroupNav
+      v-if="resource === 'action'"
+      :groups="permissionGroups"
+      :selected="filters.groups_exact ? [String(filters.groups_exact)] : []"
+      :total="permissionGroups.reduce((n, g) => n + g.count, 0)"
+      :editable="permissions.canManagePermission('action', 'update')"
+      :show-create="canControl('create-group')"
+      :show-delete="canControl('delete-group')"
+      :allow-reorder="canControl('reorder-groups')"
+      :loading="groupsLoading"
+      :query-enabled="canControl('query')"
+      @select="selectPermissionGroup"
+      @create="createPermissionGroup"
+      @remove="removePermissionGroup"
+    />
+    <ActionGroupDialog
+      v-model:open="groupDialogOpen"
+      scope="admin"
+      :existing-words="permissionGroups.map((group) => group.name)"
+      @saved="refreshPermissionGroups"
+    />
     <div class="table-container">
       <ElCard shadow="never">
         <div class="toolbar">
@@ -837,12 +1271,25 @@
               }}</ElButton
             >
             <ElButton
-              v-if="allowed('delete') && selected.length"
+              v-if="canControl('delete-selected') && selected.length"
               type="danger"
               plain
-              @click="confirmRemove(selected.map((item: any) => item.id))"
+              @click="
+                confirmRemove(
+                  selected.map((item: any) => item.id),
+                  'delete-selected'
+                )
+              "
               >{{ $t('system.common.deleteSelected') }}</ElButton
             ></div
+          >
+          <ElRadioGroup v-model="view" size="small"
+            ><ElRadioButton :value="resource === 'action' ? 'matrix' : 'cards'">{{
+              $t(`pc.system-insights.${resource === 'action' ? 'matrix' : 'cards'}`)
+            }}</ElRadioButton
+            ><ElRadioButton value="table">{{
+              $t('pc.system-insights.table')
+            }}</ElRadioButton></ElRadioGroup
           >
           <ResultToolbar
             v-model:size="tableSize"
@@ -851,11 +1298,39 @@
             v-model:striped="tableStriped"
             :fullscreen="fullscreen"
             :columns="config.columns.map((c) => ({ key: c.key, title: $t(c.label) }))"
-            @refresh="load"
+            :can-refresh="canControl('refresh')"
+            @refresh="refreshFromToolbar"
             @fullscreen="toggleFullscreen"
           />
         </div>
+        <ElAlert
+          v-if="loadError"
+          :title="$t('pc.system-insights.loadError')"
+          type="error"
+          :closable="false"
+          ><ElButton @click="load">{{ $t('pc.system-insights.retry') }}</ElButton></ElAlert
+        >
+        <ResourceCards
+          v-if="view === 'cards'"
+          :resource="resource"
+          :records="rows as unknown as AdminRecord[]"
+          :loading="loading"
+          :selected="selected.map((row) => row.id)"
+          :can-edit="allowed('update')"
+          :can-delete="allowed('delete')"
+          :can-detail="canDetail"
+          :can-select="canControl('delete-selected')"
+          :can-edit-record="manageable"
+          :can-delete-record="canRemoveRecord"
+          :can-select-record="canSelectRecord"
+          @select="toggleSelection"
+          @detail="openDetail"
+          @edit="(record) => openEditor(record as unknown as SystemRecord)"
+          @delete="confirmRemove([$event])"
+        />
         <ElTable
+          data-testid="management-table"
+          v-else
           v-loading="loading"
           :data="rows"
           :border="tableBordered"
@@ -863,11 +1338,20 @@
           :size="tableSize"
           style="width: 100%"
           :height="fullscreen ? 'calc(100vh - 170px)' : 'calc(100vh - 345px)'"
-          @selection-change="selected = $event"
+          @selection-change="selectRows"
         >
-          <ElTableColumn type="selection" width="48" fixed="left" />
           <ElTableColumn
-            v-for="column in columns"
+            v-if="canControl('delete-selected')"
+            type="selection"
+            width="48"
+            fixed="left"
+            :selectable="canSelectRecord"
+          />
+          <ElTableColumn
+            v-for="column in columns.filter(
+              (column) =>
+                view !== 'matrix' || ['name', 'resource', 'menu', 'button'].includes(column.key)
+            )"
             :key="column.key"
             :prop="column.key"
             :label="$t(column.label)"
@@ -876,7 +1360,25 @@
             :show-overflow-tooltip="false"
           >
             <template #default="{ row }">
-              <span v-if="column.format === 'date'">{{ formatDate(cell(row, column)) }}</span>
+              <PermissionResultCell
+                v-if="resource === 'action' && ['resource', 'menu', 'button'].includes(column.key)"
+                :config="row.config"
+                :field="column.key"
+                :can-detail="canDetail"
+                @detail="openDetail(row)"
+              />
+              <span v-else-if="view === 'matrix' && ['menu', 'button'].includes(column.key)"
+                ><ElTag v-if="String(row[column.key] ?? '').trim()" type="success"
+                  >{{ $t('pc.system-insights.configured') }} ({{
+                    String(row[column.key]).split(/\r?\n/).filter(Boolean).length
+                  }})</ElTag
+                ><span v-else>{{ $t('pc.system-insights.notConfigured') }}</span></span
+              >
+              <span v-else-if="column.format === 'date'">{{
+                column.key === 'last_logged_in_at' && !cell(row, column)
+                  ? $t('pc.system-insights.neverLoggedIn')
+                  : formatDate(cell(row, column))
+              }}</span>
               <ElTag v-else-if="column.format === 'status'" :type="statusType(row.status)">{{
                 statusLabel(row.status)
               }}</ElTag>
@@ -900,6 +1402,11 @@
               >
               <span v-else-if="column.format === 'role'">-</span>
               <div v-else-if="column.format === 'users'" class="tag-list"
+                ><span>{{
+                  $t('pc.system-members.count', {
+                    count: row.member_count ?? row.users?.length ?? 0
+                  })
+                }}</span
                 ><RouterLink
                   v-for="user in row.users"
                   :key="user.id"
@@ -920,7 +1427,7 @@
                     query: { code: listValues(cell(row, column)).join(',') }
                   }"
                 >
-                  <ElTag size="small" type="primary">{{ item }}</ElTag>
+                  <ElTag size="small" type="primary">{{ catalogLabel('actions', item) }}</ElTag>
                 </RouterLink>
                 <span v-if="!listValues(cell(row, column)).length">-</span>
               </div>
@@ -942,32 +1449,39 @@
           <ElTableColumn :label="$t('system.common.operations')" fixed="right" min-width="300">
             <template #default="{ row }"
               ><div class="row-actions">
+                <ElButton v-if="canDetail" link type="primary" @click="openDetail(row)">{{
+                  $t('pc.system-insights.details')
+                }}</ElButton>
                 <ElButton
-                  v-if="props.resource === 'user' && row.status === 0 && allowed('update')"
+                  v-if="props.resource === 'user' && row.status === 0 && canControl('approve')"
                   link
                   type="success"
                   @click="approve(row, true)"
                   >{{ $t('system.user.approve') }}</ElButton
                 >
                 <ElButton
-                  v-if="props.resource === 'user' && row.status === 0 && allowed('update')"
+                  v-if="props.resource === 'user' && row.status === 0 && canControl('approve')"
                   link
                   type="warning"
                   @click="approve(row, false)"
                   >{{ $t('system.user.reject') }}</ElButton
                 >
-                <ElButton v-if="allowed('update')" link type="primary" @click="openEditor(row)">{{
-                  $t('system.common.edit')
-                }}</ElButton>
                 <ElButton
-                  v-if="props.resource === 'user' && row.status === 1 && allowed('update')"
+                  v-if="allowed('update') && manageable(row)"
+                  link
+                  type="primary"
+                  @click="openEditor(row)"
+                  >{{ $t('system.common.edit') }}</ElButton
+                >
+                <ElButton
+                  v-if="props.resource === 'user' && row.status === 1 && canControl('lock')"
                   link
                   type="warning"
                   @click="lock(row)"
                   >{{ $t('system.user.lock') }}</ElButton
                 >
                 <ElButton
-                  v-if="props.resource === 'user' && row.status === 2 && allowed('update')"
+                  v-if="props.resource === 'user' && row.status === 2 && canControl('unlock')"
                   link
                   @click="unlock(row)"
                   >{{ $t('system.user.unlock') }}</ElButton
@@ -976,14 +1490,14 @@
                   v-if="
                     props.resource === 'user' &&
                     Number(row.metadata?.password_change_failures) > 0 &&
-                    allowed('update')
+                    canControl('unlock-password')
                   "
                   link
                   @click="unlockPassword(row)"
                   >{{ $t('system.user.unlockPassword') }}</ElButton
                 >
                 <ElButton
-                  v-if="allowed('delete')"
+                  v-if="canRemoveRecord(row)"
                   link
                   type="danger"
                   @click="confirmRemove([row.id])"
@@ -1005,17 +1519,45 @@
       </ElCard>
     </div>
 
-    <ElDialog
+    <RecordDetail
+      :resource="resource"
+      :record="detailRecord"
+      :can-edit="allowed('update') && manageable(detailRecord)"
+      @close="detailRecord = undefined"
+      @edit="(record) => openEditor(record as unknown as SystemRecord)"
+    />
+    <ElDrawer
       v-model="dialog.open"
+      data-testid="management-drawer"
+      :before-close="beforeCloseEditor"
+      :close-on-press-escape="!saving"
+      :close-on-click-modal="!saving"
       :title="
         $t(dialog.record ? 'system.common.edit' : 'system.common.create') + ' · ' + $t(config.title)
       "
-      width="680px"
+      size="min(720px,100vw)"
       destroy-on-close
     >
       <ElForm ref="formRef" :model="form" label-position="top">
+        <ActionEditor
+          v-if="resource === 'action'"
+          v-model:word="form.word"
+          v-model:names="form.names"
+          v-model:group="form.group"
+          v-model:config="form.config"
+          :record-id="dialog.record?.id"
+          :record-scope="(dialog.record as any)?.scope"
+          :groups="editorGroups"
+          :disabled="saving"
+          @validity="editorProblem = $event"
+          @edit-existing="
+            (id) =>
+              getAdminRecord('action', id).then((row) => openEditor(row as unknown as SystemRecord))
+          "
+        />
+        <ElAlert v-if="editorProblem" type="error" :title="$t(editorProblem)" :closable="false" />
         <ElFormItem
-          v-for="field in config.fields"
+          v-for="field in editorFields"
           :key="field.key"
           :label="$t(field.label)"
           :prop="field.key"
@@ -1028,6 +1570,11 @@
             type="password"
             show-password
             :placeholder="dialog.record ? $t('system.user.keepPassword') : ''"
+          />
+          <RuleListEditor
+            v-else-if="['resource', 'menu', 'button'].includes(field.key)"
+            v-model="form[field.key]"
+            :label="$t(field.label)"
           />
           <ElInput
             v-else-if="field.type === 'textarea' || field.type === 'json'"
@@ -1046,6 +1593,9 @@
             v-model="form[field.key]"
             clearable
             filterable
+            remote
+            :remote-method="searchRoles"
+            @visible-change="$event && searchRoles()"
             class="w-full"
             ><ElOption
               v-for="role in relation.roles"
@@ -1053,53 +1603,76 @@
               :value="role.id"
               :label="`${role.name} · ${role.word}`"
           /></ElSelect>
-          <ElSelect
+          <PermissionAssignment
             v-else-if="field.type === 'actions'"
-            v-model="form[field.key]"
-            multiple
-            filterable
-            collapse-tags
-            collapse-tags-tooltip
+            :value="form.action_codes ?? []"
+            v-model:bindings="form.action_bindings"
+            :disabled="saving"
+            @validity="editorProblem = $event"
+          />
+          <div
+            v-else-if="field.type === 'users' && dialog.record"
+            data-testid="group-member-editor"
             class="w-full"
-            ><ElOption
-              v-for="action in relation.actions"
-              :key="action.code"
-              :value="action.code"
-              :label="`${action.name} · ${action.word} (${action.code})`"
-          /></ElSelect>
-          <ElSelect
+            ><p>{{
+              $t('pc.system-members.changes', {
+                added: memberAdded.length,
+                removed: memberRemoved.length
+              })
+            }}</p
+            ><GroupMembers
+              :id="dialog.record.id"
+              :removed="memberRemoved"
+              editable
+              @remove="
+                (member) =>
+                  (memberRemoved = memberRemoved.includes(member.id)
+                    ? memberRemoved.filter((id) => id !== member.id)
+                    : [...memberRemoved, member.id])
+              " /><AssociationEditor
+              :model-value="memberAdded"
+              resource="user"
+              :exclude-group="dialog.record.id"
+              @update:model-value="memberAdded = $event.map(Number)"
+          /></div>
+          <AssociationEditor
             v-else-if="field.type === 'users'"
             v-model="form[field.key]"
-            multiple
-            filterable
-            collapse-tags
-            collapse-tags-tooltip
-            class="w-full"
-            ><ElOption
-              v-for="user in relation.users"
-              :key="user.id"
-              :value="user.id"
-              :label="`${user.username} · ${user.code}`"
-          /></ElSelect>
+            resource="user"
+          />
         </ElFormItem>
       </ElForm>
       <template #footer
-        ><ElButton @click="dialog.open = false">{{ $t('system.common.cancel') }}</ElButton
+        ><ElButton :disabled="saving" @click="beforeCloseEditor(() => (dialog.open = false))">{{
+          $t('system.common.cancel')
+        }}</ElButton
         ><ElButton type="primary" :loading="saving" @click="save">{{
           $t('system.common.save')
         }}</ElButton></template
       >
-    </ElDialog>
+    </ElDrawer>
   </div>
 </template>
 
 <style scoped>
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
   .toolbar {
     display: flex;
     gap: 16px;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 16px;
+  }
+
+  .toolbar :deep(.el-radio-button__inner) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--el-component-custom-height);
   }
 
   .table-container {

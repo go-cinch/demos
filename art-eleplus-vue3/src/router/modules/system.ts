@@ -10,15 +10,26 @@ export const systemRoutes: AppRouteRecord = {
     roles: [
       '*',
       '/system/user',
-      '/system/group',
+      '/system/user-group',
       '/system/role',
       '/system/action',
-      '/system/whitelist',
       '/system/dictionary',
-      '/system/msg'
+      '/system/msg',
+      '/system/developer'
     ]
   },
   children: [
+    {
+      path: 'developer',
+      name: 'SystemDeveloper',
+      component: '/system/developer',
+      meta: {
+        title: 'menus.system.developer',
+        icon: 'ri:code-s-slash-line',
+        roles: ['*', '/system/developer'],
+        keepAlive: true
+      }
+    },
     {
       path: 'user',
       name: 'SystemUser',
@@ -48,7 +59,7 @@ export const systemRoutes: AppRouteRecord = {
       meta: {
         title: 'menus.system.userGroup',
         icon: 'ri:group-line',
-        roles: ['*', '/system/group'],
+        roles: ['*', '/system/user-group'],
         keepAlive: true
       }
     },
@@ -74,17 +85,7 @@ export const systemRoutes: AppRouteRecord = {
         keepAlive: true
       }
     },
-    {
-      path: 'whitelist',
-      name: 'SystemWhitelist',
-      component: '/system/whitelist',
-      meta: {
-        title: 'menus.system.whitelist',
-        icon: 'ri:list-check-3',
-        roles: ['*', '/system/whitelist'],
-        keepAlive: true
-      }
-    },
+
     {
       path: 'msg',
       name: 'SystemMsg',

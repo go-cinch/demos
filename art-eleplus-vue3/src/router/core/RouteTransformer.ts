@@ -75,11 +75,12 @@ export class RouteTransformer {
       // 顶级 iframe：用 Layout 包裹
       targetRoute.component = this.componentLoader.loadLayout()
       targetRoute.path = this.extractFirstSegment(sourceRoute.path || '')
-      targetRoute.name = ''
+      delete targetRoute.name
 
       targetRoute.children = [
         {
           ...sourceRoute,
+          path: this.relativeChildPath(sourceRoute.path || '', targetRoute.path),
           component: this.componentLoader.loadIframe()
         } as ConvertedRoute
       ]
@@ -102,12 +103,13 @@ export class RouteTransformer {
   ): void {
     converted.component = this.componentLoader.loadLayout()
     converted.path = this.extractFirstSegment(route.path || '')
-    converted.name = ''
+    delete converted.name
     route.meta.isFirstLevel = true
 
     converted.children = [
       {
         ...route,
+        path: this.relativeChildPath(route.path || '', converted.path),
         component: component ? this.componentLoader.load(component) : undefined
       } as ConvertedRoute
     ]
@@ -125,6 +127,12 @@ export class RouteTransformer {
   /**
    * 提取路径的第一段
    */
+  private relativeChildPath(path: string, parent: string): string {
+    if (path === parent) return ''
+    const prefix = parent.replace(/\/$/, '') + '/'
+    return path.startsWith(prefix) ? path.slice(prefix.length) : path
+  }
+
   private extractFirstSegment(path: string): string {
     const segments = path.split('/').filter(Boolean)
     return segments.length > 0 ? `/${segments[0]}` : '/'

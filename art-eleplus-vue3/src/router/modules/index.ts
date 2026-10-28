@@ -1,5 +1,6 @@
 import { AppRouteRecord } from '@/types/router'
 import { dashboardRoutes } from './dashboard'
+import { auditRoutes } from './audit'
 import { systemRoutes } from './system'
 import { profileRoutes } from './profile'
 
@@ -9,6 +10,7 @@ import { profileRoutes } from './profile'
 export const routeModules: AppRouteRecord[] = [
   dashboardRoutes,
   systemRoutes,
+  auditRoutes,
   profileRoutes,
   {
     path: '/msg',

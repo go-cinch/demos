@@ -1,0 +1,85 @@
+/* Skeletons decorate the real layout; they never contribute width or height. */
+.layout-skeleton-static {
+  position: relative;
+}
+
+.layout-skeleton-shape {
+  color: transparent !important;
+  text-shadow: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.layout-skeleton-shape > * {
+  visibility: hidden !important;
+}
+
+.layout-skeleton-shape::after {
+  position: absolute;
+  inset: 3px 0;
+  display: block;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    90deg,
+    var(--el-fill-color-light) 25%,
+    hsl(var(--border)) 50%,
+    var(--el-fill-color-light) 75%
+  );
+  background-size: 400% 100%;
+  border-radius: calc(var(--radius) * 0.5);
+  animation: layout-skeleton-wave 1.8s ease infinite;
+}
+
+/* Replaced elements cannot host pseudo elements. */
+:is(svg, img, canvas, input, textarea).layout-skeleton-shape {
+  background: var(--el-fill-color-light) !important;
+  border-color: transparent !important;
+  border-radius: calc(var(--radius) * 0.5);
+  fill: transparent !important;
+}
+
+:is(button, td).layout-skeleton-shape::after {
+  inset: 8px 12px;
+}
+
+.layout-skeleton {
+  cursor: wait;
+}
+
+@keyframes layout-skeleton-wave {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-skeleton-shape::after {
+    animation: none;
+  }
+}
+
+/* Action loading belongs to the button component. Only explicit page/data
+   skeleton regions mask buttons while their content is being loaded. */
+
+/* Fixed Ant columns use ::after for a translated shadow; the loading shape
+   must remain inside that cell instead of inheriting its shadow geometry. */
+.layout-skeleton .layout-skeleton-shape::after,
+.layout-skeleton-shape.layout-skeleton::after {
+  width: auto !important;
+  height: auto !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.layout-skeleton td.layout-skeleton-shape::after {
+  inset: 8px 12px !important;
+}
+
+button.layout-skeleton-shape::after {
+  inset: 6px min(12px, 15%);
+}

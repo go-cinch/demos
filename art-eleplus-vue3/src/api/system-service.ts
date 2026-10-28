@@ -1,3 +1,4 @@
+import { refreshI18nCatalog } from '@/locales'
 import { authClient, createPasswordCredential } from './auth-service'
 
 export interface PageResult<T> {
@@ -19,6 +20,7 @@ export interface ActionRecord {
   updated_at: number
 }
 export interface RoleRecord {
+  action_summaries?: Array<{ code: string; name: string; group: string }>
   id: number
   name: string
   word: string
@@ -44,11 +46,14 @@ export interface UserRecord {
   updated_at: number
 }
 export interface UserGroupRecord {
+  action_summaries?: Array<{ code: string; name: string; group: string }>
   id: number
   name: string
   word: string
   action_codes: string[]
   actions: ActionRecord[]
+  member_count?: number
+  member_preview?: Array<{ id: number; username: string; code: string }>
   users: Array<{ id: number; username: string; code: string }>
   created_at: number
   updated_at: number
@@ -84,7 +89,11 @@ export async function listResource<T extends SystemRecord>(
   resource: ResourceKind,
   params: Record<string, unknown> = {}
 ) {
-  return (await authClient.get<PageResult<T>>(`/${resource}`, { params })).data
+  return (
+    await authClient.get<PageResult<T>>(`/${resource}`, {
+      params
+    })
+  ).data
 }
 
 export async function createResource<T extends SystemRecord>(
@@ -97,11 +106,14 @@ export async function createResource<T extends SystemRecord>(
     delete body.password
     body = { ...body, ...(await createPasswordCredential(password)) }
   }
-  return (
+  const record = (
     await authClient.post<T>(`/${resource}`, body, {
-      headers: { 'x-idempotent': crypto.randomUUID() }
+      headers: { 'x-idempotent': crypto.randomUUID() },
+      params: resource === 'user-group' ? { f: 'actions,member_count,member_preview' } : {}
     })
   ).data
+  if (resource === 'action') await refreshI18nCatalog()
+  return record
 }
 
 export async function updateResource<T extends SystemRecord>(
@@ -117,7 +129,13 @@ export async function updateResource<T extends SystemRecord>(
   } else if (resource === 'user') {
     delete body.password
   }
-  return (await authClient.patch<T>(`/${resource}/${id}`, body)).data
+  const record = (
+    await authClient.patch<T>(`/${resource}/${id}`, body, {
+      params: resource === 'user-group' ? { f: 'actions,member_count,member_preview' } : {}
+    })
+  ).data
+  if (resource === 'action') await refreshI18nCatalog()
+  return record
 }
 
 export async function deleteResources(resource: ResourceKind, ids: number[]) {

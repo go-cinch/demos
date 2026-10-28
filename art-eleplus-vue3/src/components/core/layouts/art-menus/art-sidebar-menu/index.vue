@@ -15,7 +15,11 @@
 
       <ElScrollbar style="height: calc(100% - 135px)">
         <ul>
-          <li v-for="menu in firstLevelMenus" :key="menu.path" @click="handleMenuJump(menu, true)">
+          <li
+            v-for="menu in firstLevelMenus"
+            :key="menu.name || menu.path"
+            @click="handleMenuJump(menu, true)"
+          >
             <ElTooltip
               class="box-item"
               effect="dark"
@@ -29,7 +33,9 @@
                 :class="{
                   'is-active': menu.meta.isFirstLevel
                     ? menu.path === route.path
-                    : menu.path === firstLevelMenuPath
+                    : firstLevelMenuName
+                      ? menu.name === firstLevelMenuName
+                      : menu.path === firstLevelMenuPath
                 }"
                 :style="{
                   height: dualMenuShowText ? '60px' : '46px'
@@ -181,6 +187,7 @@
 
   // 路由相关
   const firstLevelMenuPath = computed(() => route.matched[0]?.path)
+  const firstLevelMenuName = computed(() => route.matched[0]?.name)
   const routerPath = computed(() => String(route.meta.activePath || route.path))
 
   // 菜单数据
@@ -209,7 +216,9 @@
 
     // 返回当前顶级路径对应的子菜单
     const currentTopPath = `/${route.path.split('/')[1]}`
-    const currentMenu = allMenus.find((menu) => menu.path === currentTopPath)
+    const currentMenu = firstLevelMenuName.value
+      ? allMenus.find((menu) => menu.name === firstLevelMenuName.value)
+      : allMenus.find((menu) => menu.path === currentTopPath)
     return currentMenu?.children ?? []
   })
 

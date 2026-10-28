@@ -1,15 +1,18 @@
 <script setup lang="ts">
+  import { usePermissions } from '@/composables/use-permissions'
+  import { markMessageRead } from '@/utils/message-read-policy'
+  import MessageTypeIcon from '@/components/common/MessageTypeIcon.vue'
   import { onBeforeUnmount, ref, watch, onMounted } from 'vue'
   import { useRoute } from 'vue-router'
-  import MessageTable from '@/views/msg/MessageTable.vue'
+  import InboxFeed from '@/views/msg/InboxFeed.vue'
   import { useI18n } from 'vue-i18n'
   import { ElMessageBox } from 'element-plus'
   import { msgApi, msgChanged, type Msg } from '@/api/msg'
-  import { useUserStore } from '@/store/modules/user'
   import { formatDateTime } from '@/utils/msg-date-time'
   import { $t } from '@/locales'
-  const props = defineProps<{ anchor?: HTMLElement }>()
-  const userStore = useUserStore()
+  defineProps<{ anchor?: HTMLElement }>()
+  const { hasButton } = usePermissions()
+  const canControl = (control: string) => hasButton(`admin:btn:msg:inbox:${control}`, '/msg/inbox')
   const timezone = ref(
     localStorage.getItem('art-timezone') || new Intl.DateTimeFormat().resolvedOptions().timeZone
   )
@@ -65,9 +68,10 @@
     }
   }
   async function mark(row: Msg) {
+    if (busy.value || !canControl('mark-read')) return
     busy.value = true
     try {
-      await msgApi.read(row.id)
+      if (!(await markMessageRead(row, () => canControl('mark-read'), msgApi.read))) return
       msgChanged()
       await load()
     } finally {
@@ -79,10 +83,16 @@
     selected.value = value
     open.value = false
     detail.value = true
-    if (!value.read_at) await mark(value)
+    if (!value.read_at && canControl('mark-read')) await mark(value)
   }
   async function remove(row: Msg) {
-    if (!(await ask($t('msg.deleteConfirm')))) return
+    if (
+      busy.value ||
+      !canControl('delete') ||
+      !(await ask($t('msg.deleteConfirm'))) ||
+      !canControl('delete')
+    )
+      return
     busy.value = true
     try {
       await msgApi.remove(row.id, false)
@@ -96,13 +106,18 @@
     const ids = rows.value.map((row) => row.id)
     if (
       busy.value ||
+      !canControl('delete-selected') ||
       !ids.length ||
-      !(await ask(translate('msg.clearPreviewConfirm', { count: ids.length })))
+      !(await ask(translate('msg.clearPreviewConfirm', { count: ids.length }))) ||
+      !canControl('delete-selected')
     )
       return
     busy.value = true
     try {
-      for (const id of ids) await msgApi.remove(id, false)
+      for (const id of ids) {
+        if (!canControl('delete-selected')) break
+        await msgApi.remove(id, false)
+      }
     } finally {
       busy.value = false
       msgChanged()
@@ -110,7 +125,7 @@
     }
   }
   async function readAll() {
-    if (busy.value) return
+    if (busy.value || !canControl('read-all')) return
     busy.value = true
     try {
       await msgApi.readAll()
@@ -141,7 +156,7 @@
   <ElPopover
     :visible="open"
     virtual-triggering
-    :virtual-ref="props.anchor"
+    :virtual-ref="anchor"
     placement="bottom-end"
     :offset="8"
     :show-arrow="false"
@@ -165,6 +180,7 @@
           text
           circle
           :disabled="busy || loading || !rows.length"
+          v-if="canControl('read-all')"
           :aria-label="$t('msg.readAll')"
           :title="$t('msg.readAll')"
           @click="readAll"
@@ -174,11 +190,7 @@
       <div v-loading="loading" class="notification-scroll"
         ><ul
           ><li v-for="row in rows" :key="row.id" class="notification-row">
-            <div data-testid="notification-avatar"
-              ><ElAvatar :size="40" class="notification-avatar">{{
-                userStore.info.userName?.trim().slice(0, 2).toUpperCase()
-              }}</ElAvatar></div
-            >
+            <div data-testid="notification-avatar"><MessageTypeIcon :type="row.type" /></div>
             <button
               type="button"
               class="notification-copy"
@@ -189,7 +201,7 @@
                 row.title
               }}</span
               ><span class="notification-message" data-testid="notification-content">{{
-                row.content
+                row.summary ?? row.content
               }}</span
               ><time class="notification-date">{{
                 formatDateTime(row.published_at, timezone)
@@ -198,6 +210,7 @@
             <ElButton
               text
               circle
+              v-if="row.read_at ? canControl('delete') : canControl('mark-read')"
               :type="row.read_at ? 'danger' : undefined"
               :disabled="busy || loading"
               :aria-label="$t(row.read_at ? 'msg.delete' : 'msg.markRead')"
@@ -210,9 +223,12 @@
         }}</div></div
       >
       <footer class="notification-footer"
-        ><ElButton text :disabled="busy || loading || !rows.length" @click="clearPreview">{{
-          $t('msg.clear')
-        }}</ElButton
+        ><ElButton
+          v-if="canControl('delete-selected')"
+          text
+          :disabled="busy || loading || !rows.length"
+          @click="clearPreview"
+          >{{ $t('msg.clear') }}</ElButton
         ><ElButton type="primary" size="small" @click="history">{{
           $t('msg.viewAll')
         }}</ElButton></footer
@@ -226,9 +242,13 @@
       ><p class="msg-content">{{ selected.content }}</p></template
     ></ElDialog
   >
-  <ElDialog v-model="historyOpen" :title="$t('msg.history')" fullscreen :show-close="true"
-    ><MessageTable v-if="historyOpen" embedded @close="historyOpen = false"
-  /></ElDialog>
+  <ElDrawer
+    v-model="historyOpen"
+    :title="$t('msg.history')"
+    size="min(640px,100vw)"
+    :show-close="false"
+    ><InboxFeed v-if="historyOpen" @close="historyOpen = false"
+  /></ElDrawer>
 </template>
 <style scoped>
   .art-notification-panel {

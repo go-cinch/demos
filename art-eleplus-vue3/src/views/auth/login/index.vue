@@ -65,7 +65,11 @@
   watch(
     () => form.username,
     (_username, previousUsername) => {
-      if (previousUsername !== undefined) form.password = ''
+      if (previousUsername !== undefined) {
+        form.password = ''
+        formRef.value?.clearValidate(['password'])
+        nextTick(() => formRef.value?.clearValidate(['password']))
+      }
       captcha.value = undefined
       form.captchaPoints = []
       form.sliderProof = ''
@@ -161,7 +165,15 @@
             @keyup.enter="submit"
           >
             <ElFormItem :label="$t('auth.username')" prop="username" :rules="loginRules.username">
-              <LoginAccountInput v-model="form.username" @select="form.password = ''" />
+              <LoginAccountInput
+                v-model="form.username"
+                @select="
+                  () => {
+                    form.password = ''
+                    formRef?.clearValidate(['password'])
+                  }
+                "
+              />
             </ElFormItem>
             <ElFormItem :label="$t('auth.password')" prop="password" :rules="loginRules.password">
               <ElInput
