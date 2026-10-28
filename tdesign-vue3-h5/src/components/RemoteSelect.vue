@@ -152,7 +152,7 @@ function choose(value: string | number) {
     ><Icon name="chevron-down" :size="18" /></button
   ><Sheet v-model="open" :title="label"
     ><t-search
-      v-if="!options?.length || resource || group"
+      v-if="!options?.length || resource || group || msgRecipients"
       v-model="query"
       :placeholder="t('searchOptions')"
     />

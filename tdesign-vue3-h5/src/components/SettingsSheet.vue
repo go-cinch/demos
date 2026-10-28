@@ -33,7 +33,7 @@ function paletteKeyboard(event: KeyboardEvent, index: number) {
       ><t-switch v-model="p.reducedTransparency" :aria-label="t('reduced')" />
     </div>
     <Field name="accent" :label="t('color')"
-      ><div class="theme-palette-options" role="radiogroup">
+      ><div class="theme-palette-options" role="radiogroup" :aria-label="t('color')">
         <button
           v-for="(palette, index) in palettes"
           :key="palette"
@@ -42,6 +42,7 @@ function paletteKeyboard(event: KeyboardEvent, index: number) {
           :class="{ 'is-selected': p.accent === palette }"
           :data-palette="palette"
           role="radio"
+          :aria-label="t(palette)"
           :aria-checked="p.accent === palette"
           :tabindex="p.accent === palette ? 0 : -1"
           @click="p.accent = palette"
