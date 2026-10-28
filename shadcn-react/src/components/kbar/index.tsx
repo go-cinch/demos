@@ -1,4 +1,7 @@
 'use client';
+
+import { guardedNavigate } from '@/features/admin/navigation-guard';
+import { useAuth } from '@/features/auth/auth-context';
 import { navGroups } from '@/config/nav-config';
 import { KBarAnimator, KBarPortal, KBarPositioner, KBarProvider, KBarSearch } from 'kbar';
 import { Kbd } from '@/components/ui/kbd';
@@ -12,16 +15,25 @@ const filteredGroups = navGroups;
 
 export default function KBar({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { user } = useAuth();
   const { locale, pick } = useLocale();
 
   // These action are for the navigation
   const actions = useMemo(() => {
     // Define navigateTo inside the useMemo callback to avoid dependency array issues
     const navigateTo = (url: string) => {
-      router.push(url);
+      guardedNavigate(url, () => router.push(url));
     };
 
-    const allItems = filteredGroups.flatMap((group) => group.items);
+    const menus = user?.permission.menus ?? [];
+    const allowed = (path: string) =>
+      path === '/dashboard/overview' ||
+      path === '/profile' ||
+      menus.includes('*') ||
+      menus.includes(path);
+    const allItems = filteredGroups
+      .flatMap((group) => group.items)
+      .filter((item) => allowed(item.url));
 
     const titleFor = (title: string) => {
       const [english, chinese] = title.split(' / ');
@@ -59,7 +71,7 @@ export default function KBar({ children }: { children: React.ReactNode }) {
       // Return only valid actions (ignoring null base actions for containers)
       return baseAction ? [baseAction, ...childActions] : childActions;
     });
-  }, [locale, pick, router]);
+  }, [locale, pick, router, user?.permission.menus]);
 
   return (
     <KBarProvider actions={actions}>

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/features/auth/auth-context';
 import { useLocale } from '@/features/i18n/locale-context';
 import { listRecords } from '../api';
 import type { FieldConfig } from '../types';
@@ -69,7 +70,8 @@ export function RelationPicker({
   multiple = false,
   value,
   onChange,
-  loadOptions
+  loadOptions,
+  initialOptions = []
 }: {
   field: Pick<FieldConfig, 'key' | 'label'>;
   resource: 'action' | 'role' | 'user';
@@ -77,8 +79,13 @@ export function RelationPicker({
   value: Array<string | number> | string | number;
   onChange: (value: unknown) => void;
   loadOptions?: (query: string) => Promise<RelationOption[]>;
+  initialOptions?: RelationOption[];
 }) {
   const { pick } = useLocale();
+  const auth = useAuth();
+  const canBrowse =
+    auth.user?.permission.permission_scope === '*' ||
+    auth.user?.permission.menus.includes(`/system/${resource}`) === true;
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [options, setOptions] = React.useState<RelationOption[]>([]);
@@ -89,25 +96,20 @@ export function RelationPicker({
       : [];
   const selectedKey = selected.map(String).join('\u0000');
   React.useEffect(() => {
+    if (!open || !canBrowse) return;
     let active = true;
     const timer = setTimeout(async () => {
       try {
         const fetched = loadOptions
           ? await loadOptions(query)
           : await (async () => {
-              const results = query
-                ? await Promise.all(
-                    resource === 'user'
-                      ? [
-                          listRecords('user', { p: 1, s: 20, username: query }),
-                          listRecords('user', { p: 1, s: 20, code: query })
-                        ]
-                      : [
-                          listRecords(resource, { p: 1, s: 20, name: query }),
-                          listRecords(resource, { p: 1, s: 20, word: query })
-                        ]
-                  )
-                : [await listRecords(resource, { p: 1, s: 20 })];
+              const f =
+                resource === 'role'
+                  ? 'id,name,word'
+                  : resource === 'user'
+                    ? 'id,username,code'
+                    : 'id,name,word,code';
+              const results = [await listRecords(resource, { p: 1, s: 20, q: query, f })];
               return results
                 .flatMap((result) => result.items)
                 .map((item) => {
@@ -146,7 +148,7 @@ export function RelationPicker({
       active = false;
       clearTimeout(timer);
     };
-  }, [query, resource, selectedKey, loadOptions]);
+  }, [query, resource, selectedKey, loadOptions, open, canBrowse]);
   function toggle(option: RelationOption) {
     if (!multiple) {
       onChange(option.value);
@@ -178,8 +180,9 @@ export function RelationPicker({
             {selected.length ? (
               selected.map((item) => (
                 <Badge key={String(item)} variant='secondary'>
-                  {options.find((option) => String(option.value) === String(item))?.label ??
-                    String(item)}
+                  {[...initialOptions, ...options].find(
+                    (option) => String(option.value) === String(item)
+                  )?.label ?? String(item)}
                 </Badge>
               ))
             ) : (

@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +32,7 @@ export default function SignUpViewPage() {
     const timer = setTimeout(
       () =>
         request<{ available: boolean }>(
-          `/auth/pub/register/username?username=${encodeURIComponent(username.trim())}`,
+          `/pub/register/username?username=${encodeURIComponent(username.trim())}`,
           {},
           false
         )
@@ -55,7 +56,7 @@ export default function SignUpViewPage() {
       nextErrors.username = pick('Username is required', '请输入用户名');
     if (!isValidPassword(password))
       nextErrors.password = pick('Password is required', '请输入密码');
-    if (password !== confirm || !confirm)
+    if (password.trim() !== confirm.trim() || !confirm.trim())
       nextErrors.confirm = pick('Passwords do not match', '两次输入的密码不一致');
     if (!proof)
       nextErrors.verification = pick('Please complete slider verification', '请完成滑块验证');
@@ -68,7 +69,7 @@ export default function SignUpViewPage() {
     setBusy(true);
     try {
       const availability = await request<{ available: boolean }>(
-        `/auth/pub/register/username?username=${encodeURIComponent(username.trim())}`,
+        `/pub/register/username?username=${encodeURIComponent(username.trim())}`,
         {},
         false
       );
@@ -119,7 +120,7 @@ export default function SignUpViewPage() {
             </p>
           )}
           {available !== undefined && (
-            <p className={`text-xs ${available ? 'text-emerald-600' : 'text-destructive'}`}>
+            <p className={cn('text-xs', available ? 'text-emerald-600' : 'text-destructive')}>
               {available
                 ? pick('Username is available', '用户名可用')
                 : pick('Username is already used', '用户名已被使用')}

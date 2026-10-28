@@ -26,7 +26,7 @@ export default function ResetPasswordPage() {
     const nextErrors: Record<string, string> = {};
     if (!isValidPassword(password))
       nextErrors.password = pick('Password is required', '请输入密码');
-    if (!confirm || password !== confirm)
+    if (!confirm.trim() || password.trim() !== confirm.trim())
       nextErrors.confirm = pick('Passwords do not match', '两次输入的密码不一致');
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);

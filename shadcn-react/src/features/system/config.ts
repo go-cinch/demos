@@ -80,10 +80,12 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
       ['code', 'User Code / 用户编码'],
       ['role', 'Role / 角色'],
       ['status', 'Status / 状态'],
-      ['metadata', 'Metadata / 元数据'],
+      ['login_count', 'Login count / 登录次数'],
+      ['last_logged_in_at', 'Last login / 最近登录'],
       ['action_codes', 'Permissions / 权限'],
       ['created_at', 'Created At / 创建时间'],
-      ['updated_at', 'Updated At / 更新时间']
+      ['updated_at', 'Updated At / 更新时间'],
+      ['metadata', 'Metadata / 元数据']
     ].map(([key, label]) => ({ key, label })),
     fields: [
       { key: 'username', label: 'Username / 用户名', type: 'text', required: true },
@@ -181,5 +183,5 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
 };
 
 export function isResourceKind(value: string): value is ResourceKind {
-  return value in resourceConfigs;
+  return value !== 'whitelist' && value in resourceConfigs;
 }

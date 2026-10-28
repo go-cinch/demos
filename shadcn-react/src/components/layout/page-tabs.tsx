@@ -1,5 +1,8 @@
 'use client';
 
+import { guardedNavigate } from '@/features/admin/navigation-guard';
+import { useAuth } from '@/features/auth/auth-context';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/features/i18n/locale-context';
 import { IconPin, IconPinned, IconX } from '@tabler/icons-react';
@@ -22,9 +25,11 @@ const titleKeys: Record<
   | 'groups'
   | 'actions'
   | 'dictionaries'
-  | 'whitelist'
+  | 'developer'
   | 'profile'
   | 'messages'
+  | 'auditLogin'
+  | 'auditOperation'
 > = {
   '/dashboard/overview': 'overview',
   '/dashboard/workspace': 'workspace',
@@ -33,9 +38,11 @@ const titleKeys: Record<
   '/system/user-group': 'groups',
   '/system/action': 'actions',
   '/system/dictionary': 'dictionaries',
-  '/system/whitelist': 'whitelist',
+  '/system/developer': 'developer',
   '/profile': 'profile',
-  '/system/msg': 'messages'
+  '/system/msg': 'messages',
+  '/audit/login': 'auditLogin',
+  '/audit/operation': 'auditOperation'
 };
 
 function readTabs(): OpenTab[] {
@@ -49,6 +56,10 @@ function readTabs(): OpenTab[] {
 
 export function PageTabs() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const menuSignature = user?.permission.menus.join('|') ?? '';
+  const allowed = (path: string) =>
+    ['/dashboard/overview', '/profile'].includes(path) || user?.permission.menus.includes(path);
   const router = useRouter();
   const { t, pick } = useLocale();
   const [tabs, setTabs] = React.useState<OpenTab[]>([
@@ -56,18 +67,18 @@ export function PageTabs() {
   ]);
 
   React.useEffect(() => {
-    const saved = readTabs();
+    const saved = readTabs().filter((tab) => allowed(tab.path));
     const normalized = saved.some((tab) => tab.path === '/dashboard/overview')
       ? saved.map((tab) => (tab.path === '/dashboard/overview' ? { ...tab, pinned: true } : tab))
       : [{ path: '/dashboard/overview', pinned: true }, ...saved];
     const next =
-      titleKeys[pathname] && !normalized.some((tab) => tab.path === pathname)
+      titleKeys[pathname] && allowed(pathname) && !normalized.some((tab) => tab.path === pathname)
         ? [...normalized, { path: pathname, pinned: false }]
         : normalized;
     // oxlint-disable-next-line react/set-state-in-effect -- synchronize persisted tabs with client-side navigation
     setTabs(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, [pathname]);
+  }, [pathname, user?.id, menuSignature]);
 
   function update(next: OpenTab[]) {
     setTabs(next);
@@ -75,6 +86,11 @@ export function PageTabs() {
   }
 
   function closeTab(path: string) {
+    const event = new CustomEvent('go-cinch-before-tab-close', {
+      detail: { path },
+      cancelable: true
+    });
+    if (!window.dispatchEvent(event)) return;
     const index = tabs.findIndex((tab) => tab.path === path);
     const next = tabs.filter((tab) => tab.path !== path || tab.pinned);
     if (next.length === tabs.length) return;
@@ -82,6 +98,16 @@ export function PageTabs() {
     if (pathname === path) router.push(next[Math.max(0, index - 1)]?.path ?? '/dashboard/overview');
   }
 
+  React.useEffect(() => {
+    const close = (event: Event) => {
+      const path = (event as CustomEvent<{ path: string }>).detail.path;
+      const next = tabs.filter((tab) => tab.path !== path || tab.pinned);
+      update(next);
+      if (pathname === path) router.push(next.at(-1)?.path ?? '/dashboard/overview');
+    };
+    window.addEventListener('go-cinch-close-tab', close);
+    return () => window.removeEventListener('go-cinch-close-tab', close);
+  }, [tabs, pathname, router]);
   return (
     <nav
       aria-label={pick('Opened pages', '已打开页面')}
@@ -93,9 +119,14 @@ export function PageTabs() {
         return (
           <div
             key={tab.path}
-            className={`group/tab flex shrink-0 items-center rounded-md border text-sm ${active ? 'border-primary/40 bg-primary/10 text-primary' : 'bg-background text-muted-foreground'}`}
+            className={cn(
+              'group/tab flex shrink-0 items-center rounded-md border text-sm',
+              active
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'bg-background text-muted-foreground'
+            )}
           >
-            <button type='button' className='px-3 py-1.5' onClick={() => router.push(tab.path)}>
+            <button type='button' className='px-3 py-1.5' onClick={() => guardedNavigate(tab.path, () => router.push(tab.path))}>
               {t(key)}
             </button>
             {tab.path !== '/dashboard/overview' && (

@@ -1,4 +1,5 @@
 'use client';
+import { useDefaultPageSize, setDefaultPageSize } from '@/features/admin/page-size';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import MsgBell from '@/features/messages/msg-bell';
@@ -57,6 +58,7 @@ export default function Header() {
   const { locale, setLocale, pick, timezone, setTimezone } = useLocale();
   const [fullscreen, setFullscreen] = React.useState(false);
   const [locked, setLocked] = React.useState(false);
+  const defaultSize = useDefaultPageSize();
   const { preferences: copyright, update: updateCopyright } = useCopyright();
 
   React.useEffect(() => {
@@ -97,6 +99,20 @@ export default function Header() {
               </h3>
               <div className='mt-3'>
                 <ThemeSelector />
+              </div>
+              <div className='mt-5 space-y-2'>
+                <Label htmlFor='default-table-size'>
+                  {pick('Default page size', '默认每页条数')}
+                </Label>
+                <Input
+                  id='default-table-size'
+                  type='number'
+                  min={10}
+                  max={200}
+                  step={10}
+                  value={defaultSize}
+                  onChange={(event) => setDefaultPageSize(Number(event.target.value))}
+                />
               </div>
               <h3 className='mt-5 font-medium'>{pick('Copyright', '版权设置')}</h3>
               <div className='mt-3 flex items-center justify-between'>

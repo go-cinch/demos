@@ -6,6 +6,10 @@ export type Locale = 'zh-CN' | 'en-US';
 
 const messages = {
   'zh-CN': {
+    developer: '开发者工作台',
+    audit: '审计',
+    auditLogin: '登录日志',
+    auditOperation: '操作日志',
     dashboard: '概览',
     overview: '概览',
     workspace: '工作台',
@@ -32,6 +36,10 @@ const messages = {
     language: '语言'
   },
   'en-US': {
+    developer: 'Developer workspace',
+    audit: 'Audit',
+    auditLogin: 'Login logs',
+    auditOperation: 'Operation logs',
     dashboard: 'Dashboard',
     overview: 'Overview',
     workspace: 'Workspace',
