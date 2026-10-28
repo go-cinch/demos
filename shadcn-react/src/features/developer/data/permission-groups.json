@@ -1,0 +1,373 @@
+{
+  "groups": [
+    {
+      "key": "admin:system:default",
+      "type": 1,
+      "names": {
+        "zh-CN": "默认",
+        "en-US": "Default"
+      }
+    },
+    {
+      "key": "admin:system:high-risk",
+      "type": 2,
+      "names": {
+        "zh-CN": "高风险",
+        "en-US": "High risk"
+      }
+    }
+  ],
+  "resource_directory": {
+    "key": "admin:high-risk",
+    "after": "admin:default",
+    "frontend_visible": false,
+    "permission_group": "admin:system:high-risk",
+    "names": {
+      "zh-CN": "高风险权限",
+      "en-US": "High-risk permissions"
+    }
+  },
+  "resource_catalog": {
+    "resources": {
+      "admin:high-risk": {
+        "kind": "directory",
+        "sort": 1,
+        "frontend_visible": false,
+        "permission_group": "admin:system:high-risk",
+        "child_order": [
+          {
+            "kind": "node",
+            "key": "admin:high-risk:permission-admin"
+          },
+          {
+            "kind": "node",
+            "key": "admin:high-risk:all"
+          }
+        ]
+      },
+      "admin:high-risk:permission-admin": {
+        "kind": "resource",
+        "parent": "admin:high-risk",
+        "sort": 0,
+        "entries": {},
+        "operations": {
+          "read": {
+            "entry_keys": [],
+            "button_keys": [
+              "admin:high-risk:permission-admin:user-read",
+              "admin:high-risk:permission-admin:role-read",
+              "admin:high-risk:permission-admin:action-read"
+            ]
+          },
+          "create": {
+            "entry_keys": [],
+            "button_keys": [
+              "admin:high-risk:permission-admin:user-create",
+              "admin:high-risk:permission-admin:role-create",
+              "admin:high-risk:permission-admin:action-create"
+            ]
+          },
+          "update": {
+            "entry_keys": [],
+            "button_keys": [
+              "admin:high-risk:permission-admin:user-update",
+              "admin:high-risk:permission-admin:role-update",
+              "admin:high-risk:permission-admin:action-update"
+            ]
+          },
+          "delete": {
+            "entry_keys": [],
+            "button_keys": [
+              "admin:high-risk:permission-admin:user-delete",
+              "admin:high-risk:permission-admin:role-delete",
+              "admin:high-risk:permission-admin:action-delete"
+            ]
+          }
+        }
+      },
+      "admin:high-risk:all": {
+        "kind": "resource",
+        "parent": "admin:high-risk",
+        "sort": 10,
+        "permission_scope": "*"
+      }
+    },
+    "buttons": {
+      "admin:high-risk:permission-admin:user-read": {
+        "permission_resource": "user",
+        "btn": [
+          "admin:btn:system:user:query",
+          "admin:btn:system:user:reset-query",
+          "admin:btn:system:user:refresh",
+          "admin:btn:system:user:view-detail"
+        ],
+        "entry_keys": ["admin:menu:system:user"],
+        "http": [
+          {
+            "path": "/user",
+            "method": "GET"
+          },
+          {
+            "path": "/user/summary",
+            "method": "GET"
+          },
+          {
+            "path": "/user/{id}",
+            "method": "GET"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:role-read": {
+        "permission_resource": "role",
+        "btn": [
+          "admin:btn:system:role:query",
+          "admin:btn:system:role:reset-query",
+          "admin:btn:system:role:refresh",
+          "admin:btn:system:role:view-detail"
+        ],
+        "entry_keys": ["admin:menu:system:role"],
+        "http": [
+          {
+            "path": "/role",
+            "method": "GET"
+          },
+          {
+            "path": "/role/summary",
+            "method": "GET"
+          },
+          {
+            "path": "/role/{id}",
+            "method": "GET"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:action-read": {
+        "permission_resource": "action",
+        "btn": [
+          "admin:btn:system:action:query",
+          "admin:btn:system:action:reset-query",
+          "admin:btn:system:action:refresh",
+          "admin:btn:system:action:view-detail"
+        ],
+        "entry_keys": ["admin:menu:system:action"],
+        "http": [
+          {
+            "path": "/action",
+            "method": "GET"
+          },
+          {
+            "path": "/action/summary",
+            "method": "GET"
+          },
+          {
+            "path": "/action/group",
+            "method": "GET"
+          },
+          {
+            "path": "/action/catalog",
+            "method": "GET"
+          },
+          {
+            "path": "/action/{id}",
+            "method": "GET"
+          },
+          {
+            "method": "GET",
+            "path": "/action/effective"
+          },
+          {
+            "method": "GET",
+            "path": "/dictionary"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:user-create": {
+        "permission_resource": "user",
+        "btn": ["admin:btn:system:user:create"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/user",
+            "method": "POST"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:role-create": {
+        "permission_resource": "role",
+        "btn": ["admin:btn:system:role:create"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/role",
+            "method": "POST"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:action-create": {
+        "permission_resource": "action",
+        "btn": ["admin:btn:system:action:create", "admin:btn:system:action:create-group"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/action",
+            "method": "POST"
+          },
+          {
+            "method": "GET",
+            "path": "/dictionary"
+          },
+          {
+            "method": "PATCH",
+            "path": "/dictionary/{id}"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:user-update": {
+        "permission_resource": "user",
+        "btn": [
+          "admin:btn:system:user:edit",
+          "admin:btn:system:user:approve",
+          "admin:btn:system:user:lock",
+          "admin:btn:system:user:unlock",
+          "admin:btn:system:user:unlock-password"
+        ],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/user/{id}",
+            "method": "PATCH"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:role-update": {
+        "permission_resource": "role",
+        "btn": ["admin:btn:system:role:edit"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/role/{id}",
+            "method": "PATCH"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:action-update": {
+        "permission_resource": "action",
+        "btn": ["admin:btn:system:action:edit", "admin:btn:system:action:reorder-groups"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/action/{id}",
+            "method": "PATCH"
+          },
+          {
+            "method": "GET",
+            "path": "/dictionary"
+          },
+          {
+            "method": "PATCH",
+            "path": "/dictionary/{id}"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:user-delete": {
+        "permission_resource": "user",
+        "btn": ["admin:btn:system:user:delete", "admin:btn:system:user:delete-selected"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/user/{id}",
+            "method": "DELETE"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:role-delete": {
+        "permission_resource": "role",
+        "btn": ["admin:btn:system:role:delete", "admin:btn:system:role:delete-selected"],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/role/{id}",
+            "method": "DELETE"
+          }
+        ],
+        "grpc": []
+      },
+      "admin:high-risk:permission-admin:action-delete": {
+        "permission_resource": "action",
+        "btn": [
+          "admin:btn:system:action:delete",
+          "admin:btn:system:action:delete-selected",
+          "admin:btn:system:action:delete-group"
+        ],
+        "entry_keys": [],
+        "http": [
+          {
+            "path": "/action/{id}",
+            "method": "DELETE"
+          },
+          {
+            "method": "GET",
+            "path": "/dictionary"
+          },
+          {
+            "method": "PATCH",
+            "path": "/dictionary/{id}"
+          }
+        ],
+        "grpc": []
+      }
+    }
+  },
+  "resource_names": {
+    "zh-CN": {
+      "admin:high-risk": "高风险权限",
+      "admin:high-risk:permission-admin": "权限分配",
+      "admin:high-risk:all": "全部权限"
+    },
+    "en-US": {
+      "admin:high-risk": "High-risk permissions",
+      "admin:high-risk:permission-admin": "Manage permissions",
+      "admin:high-risk:all": "All permissions"
+    }
+  },
+  "feature_names": {
+    "zh-CN": {
+      "admin:high-risk:permission-admin:user-read": "查看用户",
+      "admin:high-risk:permission-admin:role-read": "查看角色",
+      "admin:high-risk:permission-admin:action-read": "查看行为",
+      "admin:high-risk:permission-admin:user-create": "创建用户",
+      "admin:high-risk:permission-admin:role-create": "创建角色",
+      "admin:high-risk:permission-admin:action-create": "创建行为",
+      "admin:high-risk:permission-admin:user-update": "修改用户",
+      "admin:high-risk:permission-admin:role-update": "修改角色",
+      "admin:high-risk:permission-admin:action-update": "修改行为",
+      "admin:high-risk:permission-admin:user-delete": "删除用户",
+      "admin:high-risk:permission-admin:role-delete": "删除角色",
+      "admin:high-risk:permission-admin:action-delete": "删除行为"
+    },
+    "en-US": {
+      "admin:high-risk:permission-admin:user-read": "View users",
+      "admin:high-risk:permission-admin:role-read": "View roles",
+      "admin:high-risk:permission-admin:action-read": "View actions",
+      "admin:high-risk:permission-admin:user-create": "Create users",
+      "admin:high-risk:permission-admin:role-create": "Create roles",
+      "admin:high-risk:permission-admin:action-create": "Create actions",
+      "admin:high-risk:permission-admin:user-update": "Edit users",
+      "admin:high-risk:permission-admin:role-update": "Edit roles",
+      "admin:high-risk:permission-admin:action-update": "Edit actions",
+      "admin:high-risk:permission-admin:user-delete": "Delete users",
+      "admin:high-risk:permission-admin:role-delete": "Delete roles",
+      "admin:high-risk:permission-admin:action-delete": "Delete actions"
+    }
+  }
+}

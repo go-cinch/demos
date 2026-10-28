@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import Checkbox from "@/components/form/input/Checkbox";
 import Switch from "@/components/form/switch/Switch";
-import { AspectIcon, ListIcon, RegenerateIcon, SettingsAltIcon } from "@/icons";
+import { FullscreenIcon, ListIcon, RegenerateIcon, SettingsAltIcon } from "@/icons";
 import type { Dispatch, SetStateAction } from "react";
 export type Density = "compact" | "default" | "loose";
 export type TableSettings = {
@@ -13,6 +13,7 @@ const buttonClass =
   "inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition";
 export default function ResultToolbar({
   refresh,
+  canRefresh = true,
   density,
   setDensity,
   fullscreen,
@@ -24,6 +25,7 @@ export default function ResultToolbar({
   setSettings,
 }: {
   refresh: () => void;
+  canRefresh?: boolean;
   density: Density;
   setDensity: (v: Density) => void;
   fullscreen: boolean;
@@ -37,14 +39,14 @@ export default function ResultToolbar({
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <button
+      {canRefresh && <button
         aria-label={t("common.refresh")}
         className={`${buttonClass} border border-gray-300 dark:border-gray-700`}
         onClick={() => refresh()}
         title={t("common.refresh")}
       >
         <RegenerateIcon className="size-4" />
-      </button>
+      </button>}
       <details className="relative">
         <summary
           className={`${buttonClass} cursor-pointer list-none border border-gray-300 dark:border-gray-700`}
@@ -72,7 +74,7 @@ export default function ResultToolbar({
         onClick={() => toggleFullscreen()}
         title={t(fullscreen ? "table.exitFullscreen" : "table.fullscreen")}
       >
-        <AspectIcon className="size-4" />
+        <FullscreenIcon className="size-4" />
       </button>
       <details className="relative">
         <summary

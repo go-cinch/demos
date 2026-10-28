@@ -1,5 +1,37 @@
+import { canSystemControl } from "@/utils/admin/system-permissions";
+import { defaultUserColumns, systemListFields } from "@/utils/admin/list-fields";
+import { authorizedEditorPayload, canDeleteAssignedRecord, canManageDefinition, isAssignmentField, isExistingCredentialField } from "./components/assignment-policy";
+import { isValidActionGroup } from "./components/action-group-model";
+import { permissionResult } from "./components/permission-result";
+import { Field } from "./developer/ResourceEditor";
+import ActionGroupNavigation from "./ActionGroupNavigation";
+import PermissionEditor from "./PermissionEditor";
+import { resolveResourceBindings } from "./components/resource-catalog";
+import { getPermissionCatalog, type ActionResourceBinding } from "@/api/system";
+import NotFound from "@/pages/OtherPage/NotFound";
+import ActiveFilters from "./active-filters";
+import { useDefaultPageSize } from "@/utils/admin/page-size";
+import ManagementOverview from "./management-overview";
+import ResourceCards from "./resource-cards";
+import RecordDetail from "./record-detail";
+import AssociationEditor from "./association-editor";
+import GroupMemberEditor from "./group-member-editor";
+import RuleListEditor from "./rule-list-editor";
+import {
+  AdminDrawer,
+  AButton,
+  useAdminText,
+  useAdminTimezone,
+} from "./admin-ui";
+import { getAdminRecord } from "@/utils/admin/service";
+import {
+  adminDate,
+  parseAdminDateTime,
+  sameAdminValue,
+  type AdminRecord,
+} from "@/utils/admin/model";
 import ResultToolbar from "./ResultToolbar";
-import { ApiError } from "@/api/client";
+import { apiRequest, ApiError } from "@/api/client";
 import {
   createRecord,
   deleteRecords,
@@ -38,21 +70,11 @@ function isResource(value?: string): value is ResourceKind {
     "user-group",
     "action",
     "dictionary",
-    "whitelist",
   ].includes(value || "");
 }
 
-function formatDate(value: unknown) {
-  if (typeof value !== "number") return "-";
-  const date = new Date(value);
-  const part = (number: number) => String(number).padStart(2, "0");
-  return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}`;
-}
-
-function formatDateTimeInput(value: number) {
-  const date = new Date(value);
-  const part = (number: number) => String(number).padStart(2, "0");
-  return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}T${part(date.getHours())}:${part(date.getMinutes())}`;
+function formatDateTimeInput(value: number, zone?: string) {
+  return adminDate(value, zone).slice(0, 16).replace(" ", "T");
 }
 
 export default function SystemManagement() {
@@ -64,10 +86,33 @@ export default function SystemManagement() {
   const config = resourceConfigs[resource];
   const { t } = useTranslation();
   const auth = useAuth();
+  const text = useAdminText();
+  const timezone = useAdminTimezone();
+  const [view, setView] = useState<"cards" | "matrix" | "table">(
+    resource === "user" ? "table" : resource === "action" ? "matrix" : "cards",
+  );
+  const [viewResource, setViewResource] = useState(resource);
+  const [summaryRevision, setSummaryRevision] = useState(0);
+  const [actionLocales, setActionLocales] = useState<{ tag: string; name: string }[]>([]);
+  useEffect(() => {
+    if (resource !== "action") return;
+    let active = true;
+    apiRequest<{ locales: { tag: string; name: string }[] }>("/dictionary/pub/i18n?f=locales", { auth: false }).then(value => { if (active) setActionLocales(value.locales); }).catch(() => { if (active) setActionLocales([{ tag: "zh-CN", name: t("developer.zh") }, { tag: "en-US", name: t("developer.en") }]); });
+    return () => { active = false; };
+  }, [resource, t]);
+  const [detailRecord, setDetailRecord] = useState<AdminRecord>();
+  const [memberAdded, setMemberAdded] = useState<number[]>([]);
+  const [memberRemoved, setMemberRemoved] = useState<number[]>([]);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [records, setRecords] = useState<SystemRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const defaultSize = useDefaultPageSize();
+  const [pageSize, setPageSize] = useState(defaultSize);
+  useEffect(() => {
+    setPageSize(defaultSize);
+    setPage(1);
+  }, [defaultSize]);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [draftFilters, setDraftFilters] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<number[]>([]);
@@ -79,6 +124,7 @@ export default function SystemManagement() {
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [initialForm, setInitialForm] = useState<Record<string, unknown>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [permissionValid, setPermissionValid] = useState(true);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [editorOptions, setEditorOptions] = useState<
     Record<string, SearchableOption[]>
@@ -86,7 +132,7 @@ export default function SystemManagement() {
   const [lockUser, setLockUser] = useState<UserRecord | null>(null);
   const [lockMode, setLockMode] = useState<"until" | "permanent">("until");
   const [lockUntil, setLockUntil] = useState(() =>
-    formatDateTimeInput(Date.now() + 86400000),
+    formatDateTimeInput(Date.now() + 86400000, timezone),
   );
   const [lockError, setLockError] = useState("");
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -99,20 +145,35 @@ export default function SystemManagement() {
     striped: true,
   });
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() =>
-    config.columns.map((column) => column.key),
+    resource === "user" ? defaultUserColumns : config.columns.map((column) => column.key),
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const listRun = useRef(0);
+  const editorRun = useRef(0);
   const autoSearchTimer = useRef<number | undefined>(undefined);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const can = useCallback(
-    (operation: "create" | "read" | "update" | "delete") =>
-      auth.canButton(`${config.permission}.${operation}`),
-    [auth, config.permission],
-  );
+  const canOpenPage =
+    isResource(resourceParam) &&
+    auth.canMenu(
+      `/system/${resource}`,
+    );
+  const access = useRef(auth);
+  useEffect(() => { access.current = auth; }, [auth]);
+  const canControl = useCallback((control: string) => canSystemControl(auth, resource, control), [auth, resource]);
+  const currentControl = (control: string) => canSystemControl(access.current, resource, control);
+  const canRead = canOpenPage;
+  const manageableDefinition = (record: Record<string, unknown>, permissionAuth = auth) => resource !== "action" || !!record.config && canManageDefinition(String(record.word ?? ""), (record.config as { builtin?: string }).builtin, permissionAuth.user?.permission.permission_scope === "*", permissionAuth.canButton("system.developer.publish"), (record.config as { permission_scope?: string }).permission_scope);
+  const canRemoveRecord = (record: Record<string, unknown>, control = "delete", permissionAuth = auth) => canSystemControl(permissionAuth, resource, control) && manageableDefinition(record, permissionAuth) && canDeleteAssignedRecord(resource, record, permissionAuth.user?.permission.permission_scope === "*" || !!permissionAuth.user?.permission.permission_scopes?.includes(`${resource}:delete`));
+  const canSelectRecord = (record: Record<string, unknown>) => canRemoveRecord(record, "delete-selected");
+  const openDetail = (record: AdminRecord) => { if (canControl("view-detail") && !loading) setDetailRecord(record); };
+
+  const protectDeletion = !(auth.user?.permission.permission_scope === "*" || auth.user?.permission.permission_scopes?.includes(`${resource}:delete`)) && (canControl("delete") || canControl("delete-selected"));
+  const listFields = systemListFields(resource, view, visibleColumnKeys, protectDeletion);
 
   const load = useCallback(async () => {
-    if (!can("read")) return;
+    const run = ++listRun.current;
+    if (viewResource !== resource || !canRead) return;
     setLoading(true);
     setError("");
     try {
@@ -120,38 +181,81 @@ export default function SystemManagement() {
         p: page,
         s: pageSize,
         ...filters,
+        f: listFields,
       });
-      setRecords(result.items);
+      if (run !== listRun.current) return;
+      setRecords(
+        result.items.map((record) =>
+          resource === "user-group"
+            ? {
+                ...record,
+                users:
+                  "member_preview" in record
+                    ? record.member_preview
+                    : "users" in record
+                      ? record.users
+                      : [],
+              }
+            : "role_summary" in record ? { ...record, role: record.role_summary } : record,
+        ) as SystemRecord[],
+      );
       setTotal(result.t);
       setSelected([]);
     } catch (caught) {
+      if (run !== listRun.current) return;
+      setRecords([]);
+      setTotal(0);
       setError(
         caught instanceof ApiError ? caught.message : t("errors.network"),
       );
     } finally {
-      setLoading(false);
+      if (run === listRun.current) setLoading(false);
     }
-  }, [can, filters, page, pageSize, resource, t]);
+  }, [canRead, filters, page, pageSize, resource, t, listFields, viewResource]);
 
   useEffect(() => {
     void load();
+    return () => { listRun.current++; editorRun.current++; };
   }, [load]);
   useEffect(() => {
     const routeFilters = Object.fromEntries(
-      config.filters
+      [
+        ...config.filters,
+        ...[
+          "created_from",
+          "created_to",
+          "last_logged_in_from",
+          "last_logged_in_to",
+          "has_permissions",
+          "has_members",
+          "group_exact",
+          "groups_all",
+          "groups_exact",
+        ].map((key) => ({ key })),
+      ]
         .map((filter) => [filter.key, searchParams.get(filter.key) || ""])
         .filter(([, value]) => value),
     );
+    setViewResource(resource);
+    setView(
+      resource === "user"
+        ? "table"
+        : resource === "action"
+          ? "matrix"
+          : "cards",
+    );
+    setDetailRecord(undefined);
     setPage(1);
     setFilters(routeFilters);
     setDraftFilters(routeFilters);
     setRecords([]);
     setSearchExpanded(false);
-    setVisibleColumnKeys(config.columns.map((column) => column.key));
+    setVisibleColumnKeys(resource === "user" ? defaultUserColumns : config.columns.map((column) => column.key));
   }, [config.columns, config.filters, resource, searchParams]);
-  useEffect(() => () => window.clearTimeout(autoSearchTimer.current), []);
+  useEffect(() => () => window.clearTimeout(autoSearchTimer.current), [canControl]);
 
-  const applySearch = (nextFilters = draftFilters) => {
+  const applySearch = (nextFilters = draftFilters, control: "query" | "reset-query" = "query") => {
+    if (!currentControl(control)) return;
     window.clearTimeout(autoSearchTimer.current);
     setPage(1);
     setFilters({ ...nextFilters });
@@ -159,6 +263,7 @@ export default function SystemManagement() {
 
   const scheduleSearch = (nextFilters = draftFilters) => {
     window.clearTimeout(autoSearchTimer.current);
+    if (!currentControl("query")) return;
     autoSearchTimer.current = window.setTimeout(
       () => applySearch(nextFilters),
       500,
@@ -200,11 +305,16 @@ export default function SystemManagement() {
                 value: item.id,
               }),
             };
-    const requests = query
-      ? definitions.fields.map((key) =>
-          listRecords(definitions.resource, { [key]: query, p: 1, s: 20 }),
-        )
-      : [listRecords(definitions.resource, { p: 1, s: 20 })];
+    if (!auth.canMenu(`/system/${definitions.resource}`)) return [];
+    const f =
+      definitions.resource === "role"
+        ? "id,name,word"
+        : definitions.resource === "user"
+          ? "id,username,code"
+          : "id,name,word,code";
+    const requests = [
+      listRecords(definitions.resource, { q: query, p: 1, s: 20, f }),
+    ];
     const results = await Promise.all(requests);
     const options = new Map<string, SearchableOption>();
     for (const result of results) {
@@ -216,7 +326,17 @@ export default function SystemManagement() {
     return [...options.values()];
   };
 
-  const openEditor = (record?: SystemRecord) => {
+  const openEditor = async (sparse?: SystemRecord) => {
+    if (!currentControl(sparse ? "edit" : "create") || loading) return;
+    const run = ++editorRun.current;
+    let record: SystemRecord | undefined;
+    try { record = sparse ? await getAdminRecord(resource, sparse.id) as unknown as SystemRecord : undefined; }
+    catch (cause) { if (run === editorRun.current) setError(cause instanceof Error ? cause.message : t("errors.network")); return; }
+    if (run !== editorRun.current || !currentControl(sparse ? "edit" : "create")) return;
+    if (record && !manageableDefinition(record as unknown as AdminRecord, access.current)) return;
+    setDetailRecord(undefined);
+    setMemberAdded([]);
+    setMemberRemoved([]);
     const values: Record<string, unknown> = {};
     const selectedOptions: Record<string, SearchableOption[]> = {};
     for (const field of config.fields) values[field.key] = field.defaultValue;
@@ -224,7 +344,7 @@ export default function SystemManagement() {
       for (const field of config.fields) {
         if (field.key === "password") values.password = "";
         else if (field.key === "user_ids" && "users" in record)
-          values.user_ids = record.users.map((user) => user.id);
+          values.user_ids = (Array.isArray(record.users) ? record.users : []).map((user: { id: number }) => user.id);
         else if (field.key === "value" && "value" in record)
           values.value = JSON.stringify(record.value, null, 2);
         else
@@ -245,13 +365,15 @@ export default function SystemManagement() {
           },
         ];
       if ("users" in record)
-        selectedOptions.user_ids = record.users.map((user) => ({
+        selectedOptions.user_ids = (Array.isArray(record.users) ? record.users : []).map((user: { username: string; code: string; id: number }) => ({
           label: `${user.username} · ${user.code}`,
           value: user.id,
         }));
       if ("group" in record && record.group)
         selectedOptions.group = [{ label: record.group, value: record.group }];
     }
+    if (resource === "action" && record && "config" in record) { values.config = record.config; values.names = record.names ?? {}; }
+    setPermissionValid(true);
     setEditing(record || null);
     setForm(values);
     setInitialForm(values);
@@ -262,6 +384,7 @@ export default function SystemManagement() {
 
   const submitEditor = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!currentControl(editing ? "edit" : "create") || (editing && !manageableDefinition(editing as unknown as AdminRecord, access.current))) return;
     const nextErrors: Record<string, string> = {};
     for (const field of config.fields) {
       const value = form[field.key];
@@ -279,6 +402,10 @@ export default function SystemManagement() {
       if ((!editing || form.password) && !isValidUserPassword(form.password))
         nextErrors.password = t("validation.password");
     }
+    if (resource === "action") {
+      if (typeof form.word !== "string" || !/^[a-z][a-z0-9_-]*:(?:read|create|update|delete|all|default|grant):[a-z][a-z0-9_-]*(?::[a-z][a-z0-9_-]*)+$/.test(form.word) || form.word.length > 128) nextErrors.word = t("catalogUI.invalid");
+      if (typeof form.group !== "string" || !isValidActionGroup(form.group, String(form.word).split(":")[0])) nextErrors.group = t("catalogUI.invalid");
+    }
     if (resource === "dictionary") {
       if (
         typeof form.key !== "string" ||
@@ -292,31 +419,52 @@ export default function SystemManagement() {
       }
     }
     setFormErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
+    if (Object.keys(nextErrors).length || !permissionValid) return;
     setSubmitting(true);
     setError("");
     setNotice("");
     try {
-      const payload: Record<string, unknown> = {};
+      let payload: Record<string, unknown> = {};
       for (const field of config.fields) {
         let value = form[field.key];
+        if (typeof value === "string" && field.type !== "json")
+          value = value.trim();
         if (field.type === "json" && typeof value === "string")
           value = JSON.parse(value);
         let initialValue = initialForm[field.key];
         if (field.type === "json" && typeof initialValue === "string")
           initialValue = JSON.parse(initialValue);
         if (field.key === "password" && editing && !value) continue;
-        if (!editing || JSON.stringify(value) !== JSON.stringify(initialValue))
+        if (!editing || !sameAdminValue(value, initialValue))
           payload[field.key] = value;
       }
+      if (resource === "action") { delete payload.name; payload.names = Object.fromEntries(Object.entries((form.names ?? {}) as Record<string,string>).filter(([tag, value]) => !editing || value !== ((initialForm.names ?? {}) as Record<string,string>)[tag])); payload.config = form.config ?? { bindings: [], ui: [], endpoints: [] }; }
+      if (form.action_bindings !== undefined) {
+        const bindings = form.action_bindings as ActionResourceBinding[];
+        if (resource === "action") {
+          const catalog = await getPermissionCatalog();
+          payload.config = resolveResourceBindings(catalog.resource_catalog, String(bindings[0]?.resource_key.split(":")[0] ?? "admin"), bindings);
+        } else {
+          delete payload.action_codes;
+          payload.action_bindings = bindings;
+        }
+      }
+      if (resource === "user-group" && editing) {
+        delete payload.user_ids;
+        if (memberAdded.length) payload.add_user_ids = memberAdded;
+        if (memberRemoved.length) payload.remove_user_ids = memberRemoved;
+      }
+      payload = authorizedEditorPayload(resource, payload, access.current.user?.permission.permission_scope === "*" || !!access.current.user?.permission.permission_scopes?.includes(`${resource}:${editing ? "update" : "create"}`), access.current.user?.permission.permission_scope === "*", !!editing);
       if (editing && Object.keys(payload).length === 0) {
         setError(t("messages.noChanges"));
         return;
       }
+      if (!currentControl(editing ? "edit" : "create") || (editing && !manageableDefinition(editing as unknown as AdminRecord, access.current))) return;
       if (editing) await updateRecord(resource, editing.id, payload);
       else await createRecord(resource, payload);
       setNotice(t(editing ? "messages.updated" : "messages.created"));
       setEditorOpen(false);
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (caught) {
       setError(
@@ -331,22 +479,21 @@ export default function SystemManagement() {
     }
   };
 
-  const remove = async (ids: number[]) => {
-    if (!window.confirm(t("confirm.delete"))) return;
+  const remove = async (ids: number[], control: "delete" | "delete-selected" = "delete") => {
+    if (!ids.length || !currentControl(control) || ids.some(id => !records.some(record => record.id === id))) return;
     try {
+      const details = await Promise.all(ids.map(id => getAdminRecord(resource, id)));
+      if (!currentControl(control) || details.some(record => !canRemoveRecord(record, control, access.current))) return;
+      if (!window.confirm(t("confirm.delete")) || !currentControl(control)) return;
       await deleteRecords(resource, ids);
-      if (records.length === ids.length && page > 1)
-        setPage((value) => value - 1);
-      else await load();
+      if (records.length === ids.length && page > 1) setPage(value => value - 1);
+      else { setSummaryRevision(value => value + 1); await load(); }
       setNotice(t("messages.deleted"));
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError ? caught.message : t("errors.network"),
-      );
-    }
+    } catch (caught) { setError(caught instanceof ApiError ? caught.message : t("errors.network")); }
   };
 
   const approve = async (user: UserRecord, approved: boolean) => {
+    if (resource !== "user" || !currentControl("approve")) return;
     const metadata = { ...(user.metadata || {}) };
     if (approved) delete metadata.reject_register_reason;
     else {
@@ -356,30 +503,36 @@ export default function SystemManagement() {
     }
     await updateRecord("user", user.id, { metadata, status: approved ? 1 : 0 });
     setNotice(t(approved ? "messages.approved" : "messages.rejected"));
+    setSummaryRevision((value) => value + 1);
     await load();
   };
 
   const unlock = async (user: UserRecord) => {
+    if (resource !== "user" || !currentControl("unlock")) return;
     const metadata = { ...(user.metadata || {}) };
     delete metadata.lock_expired_at;
     await updateRecord("user", user.id, { metadata, status: 1 });
     setNotice(t("messages.unlocked"));
+    setSummaryRevision((value) => value + 1);
     await load();
   };
 
   const unlockPassword = async (user: UserRecord) => {
+    if (resource !== "user" || !currentControl("unlock-password")) return;
     const metadata = { ...(user.metadata || {}) };
     delete metadata.password_change_failures;
     await updateRecord("user", user.id, { metadata });
     setNotice(t("messages.passwordUnlocked"));
+    setSummaryRevision((value) => value + 1);
     await load();
   };
 
   const submitLock = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!lockUser) return;
+    if (!lockUser || resource !== "user" || !currentControl("lock")) return;
     const expiration =
-      lockMode === "permanent" ? 0 : new Date(lockUntil).getTime();
+      lockMode === "permanent" ? 0 : parseAdminDateTime(lockUntil, timezone);
+    // eslint-disable-next-line react-hooks/purity -- This deadline check runs only in the form submit handler.
     if (lockMode === "until" && expiration <= Date.now())
       return setLockError(t("users.futureLock"));
     setLockError("");
@@ -389,15 +542,33 @@ export default function SystemManagement() {
     });
     setLockUser(null);
     setNotice(t("messages.locked"));
+    setSummaryRevision((value) => value + 1);
     await load();
   };
 
+  function closeEditor() {
+    if (submitting) return;
+    if (
+      JSON.stringify(form) !== JSON.stringify(initialForm) ||
+      memberAdded.length ||
+      memberRemoved.length
+    )
+      setDiscardOpen(true);
+    else setEditorOpen(false);
+  }
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  const allSelected = records.length > 0 && selected.length === records.length;
+  const selectableRecords = records.filter(record => canSelectRecord(record as unknown as AdminRecord));
+  const checkedSelected = selected.filter(id => selectableRecords.some(record => record.id === id));
+  const allSelected = selectableRecords.length > 0 && checkedSelected.length === selectableRecords.length;
   const tableColumns = useMemo(
     () =>
-      config.columns.filter((column) => visibleColumnKeys.includes(column.key)),
-    [config.columns, visibleColumnKeys],
+      config.columns.filter(
+        (column) =>
+          visibleColumnKeys.includes(column.key) &&
+          (view !== "matrix" ||
+            ["name", "resource", "menu", "button"].includes(column.key)),
+      ),
+    [config.columns, visibleColumnKeys, view],
   );
   const visibleFilters = searchExpanded
     ? config.filters
@@ -411,7 +582,15 @@ export default function SystemManagement() {
 
   const renderValue = (record: SystemRecord, key: string, kind?: string) => {
     const value = (record as unknown as Record<string, unknown>)[key];
-    if (kind === "date") return formatDate(value);
+    if (resource === "action" && ["resource", "menu", "button"].includes(key) && "config" in record) {
+      const result = permissionResult(record.config);
+      const labels = key === "resource" ? result.operations.map(operation => String(t(`operations.${operation}`, {defaultValue:operation}))) : key === "menu" ? result.menus.map(menu => String(t(`menus.${menu}`, {defaultValue:menu}))) : result.features.map(feature => String(t(`features.${feature}`, {defaultValue:feature})));
+      return <button className="flex max-w-80 flex-wrap gap-1 text-start" type="button" disabled={!canControl("view-detail")} onClick={() => openDetail(record as unknown as AdminRecord)}>{(result.all ? [t("catalogUI.all")] : labels.length ? labels : ["—"]).map((label, index) => <span key={`${index}:${label}`} className="rounded bg-brand-50 px-2 py-1 text-xs text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{label}</span>)}</button>;
+    }
+    if (key === "last_logged_in_at" && !value)
+      return text("system-insights.neverLoggedIn");
+    if (kind === "date" || key.endsWith("_at"))
+      return adminDate(value, timezone);
     if (kind === "status")
       return (
         <span
@@ -500,9 +679,9 @@ export default function SystemManagement() {
           {value
             .split(/\r?\n/)
             .filter(Boolean)
-            .map((rule) => (
+            .map((rule, index) => (
               <span
-                key={rule}
+                key={`${index}:${rule}`}
                 className={`rounded px-2 py-1 text-xs ${"category" in record && typeof record.category === "number" ? (record.category === 0 ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" : "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-300") : rule.trim().toUpperCase().startsWith("DELETE|") ? "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-300" : rule.trim().toUpperCase().startsWith("GET|") ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-300" : rule.trim().toUpperCase().startsWith("PATCH|") ? "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300" : rule.trim().toUpperCase().startsWith("POST|") ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"}`}
               >
                 {rule}
@@ -520,6 +699,7 @@ export default function SystemManagement() {
     setFormErrors((current) => ({ ...current, [field.key]: "" }));
   };
 
+  if (!canOpenPage) return <NotFound />;
   return (
     <>
       <PageMeta
@@ -531,6 +711,35 @@ export default function SystemManagement() {
         className={`space-y-5 ${isFullscreen ? "fixed inset-0 z-99999 overflow-auto bg-gray-50 p-4 dark:bg-gray-950" : ""}`}
         ref={tableContainerRef}
       >
+        {resource === "action" && <ActionGroupNavigation onSaved={() => { setSummaryRevision(value => value + 1); void load(); }} revision={summaryRevision} selected={filters.group_exact} onChange={group => { const next = {...draftFilters}; if (group === undefined) delete next.group_exact; else next.group_exact = group; setDraftFilters(next); applySearch(next); }} />}
+        <ManagementOverview
+          resource={resource}
+          allowed={canRead}
+          refreshKey={summaryRevision}
+          filters={filters}
+          onFilter={(updates) => {
+            const next = { ...draftFilters };
+            for (const [key, value] of Object.entries(updates)) {
+              if (value === undefined) delete next[key];
+              else next[key] = String(value);
+            }
+            setDraftFilters(next);
+            applySearch(next);
+          }}
+          onGroup={(id) => { if (canControl("view-detail")) void getAdminRecord("user-group", id).then(openDetail); }}
+        />
+        <ActiveFilters
+          filters={filters}
+          onChange={(updates) => {
+            const next = { ...draftFilters };
+            for (const [key, value] of Object.entries(updates)) {
+              if (value === undefined) delete next[key];
+              else next[key] = String(value);
+            }
+            setDraftFilters(next);
+            applySearch(next);
+          }}
+        />
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3">
           <form
             className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4"
@@ -624,24 +833,23 @@ export default function SystemManagement() {
               ),
             )}
             <div className="flex items-center gap-2">
-              <button
+              {canControl("query") && <button
                 className={`${buttonClass} bg-brand-500 text-white hover:bg-brand-600`}
                 type="submit"
               >
                 {t("common.search")}
-              </button>
-              <button
+              </button>}
+              {canControl("reset-query") && <button
                 className={`${buttonClass} border border-gray-300 text-gray-700 dark:border-gray-700 dark:text-gray-300`}
                 onClick={() => {
-                  window.clearTimeout(autoSearchTimer.current);
+                  if (!canControl("reset-query")) return;
                   setDraftFilters({});
-                  setFilters({});
-                  setPage(1);
+                  applySearch({}, "reset-query");
                 }}
                 type="button"
               >
                 {t("common.reset")}
-              </button>
+              </button>}
               {config.filters.length > 3 && (
                 <button
                   className="inline-flex items-center gap-1 px-2 py-2 text-sm font-medium text-brand-500"
@@ -659,7 +867,18 @@ export default function SystemManagement() {
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-5 dark:border-gray-800">
             <div className="flex flex-wrap items-center gap-2">
-              {can("create") && (
+              {(
+                [resource === "action" ? "matrix" : "cards", "table"] as const
+              ).map((mode) => (
+                <AButton
+                  key={mode}
+                  active={view === mode}
+                  onClick={() => setView(mode)}
+                >
+                  {text(`system-insights.${mode}`)}
+                </AButton>
+              ))}
+              {canControl("create") && (
                 <button
                   className={`${buttonClass} bg-brand-500 text-white hover:bg-brand-600`}
                   onClick={() => openEditor()}
@@ -668,10 +887,10 @@ export default function SystemManagement() {
                   {t("common.create")}
                 </button>
               )}
-              {can("delete") && selected.length > 0 && (
+              {canControl("delete-selected") && checkedSelected.length > 0 && (
                 <button
                   className={`${buttonClass} bg-error-500 text-white`}
-                  onClick={() => void remove(selected)}
+                  onClick={() => void remove(checkedSelected, "delete-selected")}
                   type="button"
                 >
                   {t("common.batchDelete")}
@@ -679,7 +898,12 @@ export default function SystemManagement() {
               )}
             </div>
             <ResultToolbar
-              refresh={() => void load()}
+              canRefresh={canControl("refresh")}
+              refresh={() => {
+                if (!canControl("refresh")) return;
+                setSummaryRevision((value) => value + 1);
+                void load();
+              }}
               density={tableDensity}
               setDensity={setTableDensity}
               fullscreen={isFullscreen}
@@ -704,13 +928,48 @@ export default function SystemManagement() {
               {notice}
             </p>
           )}
-          {!can("read") ? (
+          {!canRead ? (
             <p className="p-8 text-center text-gray-500">
               {t("errors.noPermission")}
             </p>
+          ) : view === "cards" ? (
+            <ResourceCards
+              resource={resource}
+              records={records as unknown as AdminRecord[]}
+              loading={loading}
+              selected={checkedSelected}
+              canSelectRecord={canSelectRecord}
+              canEditRecord={record => manageableDefinition(record)}
+              canDeleteRecord={record => canRemoveRecord(record)}
+              onSelect={(id) => {
+                if (!records.some(record => record.id === id && canSelectRecord(record as unknown as AdminRecord))) return;
+                setSelected((old) =>
+                  old.includes(id)
+                    ? old.filter((value) => value !== id)
+                    : [...old, id],
+                );
+              }}
+              onDetail={canControl("view-detail") ? openDetail : undefined}
+              onEdit={
+                canControl("edit")
+                  ? (record) => openEditor(record as unknown as SystemRecord)
+                  : undefined
+              }
+              onDelete={canControl("delete") ? (id) => void remove([id]) : undefined}
+              renderValue={(key, _value, record) =>
+                renderValue(
+                  record as unknown as SystemRecord,
+                  key,
+                  config.columns.find((column) => column.key === key)?.kind,
+                )
+              }
+            />
           ) : (
             <div className="relative overflow-x-auto">
-              <table className="w-full text-start text-sm">
+              <table
+                data-testid="management-table"
+                className="w-full text-start text-sm"
+              >
                 <thead
                   className={tableSettings.sticky ? "sticky top-0 z-20" : ""}
                 >
@@ -720,11 +979,11 @@ export default function SystemManagement() {
                     >
                       <Checkbox
                         checked={allSelected}
-                        onChange={(checked) =>
-                          setSelected(
-                            checked ? records.map((record) => record.id) : [],
-                          )
-                        }
+                        disabled={!selectableRecords.length}
+                        onChange={(checked) => {
+                          if (!currentControl("delete-selected")) return;
+                          setSelected(checked ? selectableRecords.map(record => record.id) : []);
+                        }}
                       />
                     </th>
                     {tableColumns.map((column) => (
@@ -735,7 +994,7 @@ export default function SystemManagement() {
                         {t(column.label)}
                       </th>
                     ))}
-                    {(can("update") || can("delete")) && (
+                    {canRead && (
                       <th className="sticky end-0 z-10 border-s border-gray-200 bg-gray-50 px-4 py-3 text-start shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
                         {t("common.actions")}
                       </th>
@@ -752,14 +1011,16 @@ export default function SystemManagement() {
                         className={`${cellPadding} ${tableSettings.bordered ? "border-e border-gray-100 dark:border-gray-800" : ""}`}
                       >
                         <Checkbox
-                          checked={selected.includes(record.id)}
-                          onChange={(checked) =>
+                          checked={checkedSelected.includes(record.id)}
+                          disabled={!canSelectRecord(record as unknown as AdminRecord)}
+                          onChange={(checked) => {
+                            if (!canSelectRecord(record as unknown as AdminRecord)) return;
                             setSelected((values) =>
                               checked
                                 ? [...values, record.id]
                                 : values.filter((id) => id !== record.id),
-                            )
-                          }
+                            );
+                          }}
                         />
                       </td>
                       {tableColumns.map((column) => (
@@ -770,12 +1031,19 @@ export default function SystemManagement() {
                           {renderValue(record, column.key, column.kind)}
                         </td>
                       ))}
-                      {(can("update") || can("delete")) && (
+                      {canRead && (
                         <td
                           className={`sticky end-0 z-10 min-w-52 border-s border-gray-100 bg-white align-top shadow-theme-sm group-hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:group-hover:bg-gray-900 ${cellPadding}`}
                         >
                           <div className="flex flex-wrap gap-2">
-                            {can("update") &&
+                            {canControl("view-detail") && <button
+                              type="button"
+                              className="text-brand-500"
+                              onClick={() => openDetail(record as unknown as AdminRecord)}
+                            >
+                              {text("system-insights.details")}
+                            </button>}
+                            {canControl("approve") &&
                               resource === "user" &&
                               (record as UserRecord).status === 0 && (
                                 <>
@@ -797,7 +1065,7 @@ export default function SystemManagement() {
                                   </button>
                                 </>
                               )}
-                            {can("update") && (
+                            {canControl("edit") && manageableDefinition(record as unknown as AdminRecord) && (
                               <button
                                 className="text-brand-500"
                                 onClick={() => openEditor(record)}
@@ -805,19 +1073,19 @@ export default function SystemManagement() {
                                 {t("common.edit")}
                               </button>
                             )}
-                            {can("update") &&
+                            {canControl("lock") &&
                               resource === "user" &&
                               (record as UserRecord).status === 1 && (
                                 <button
                                   className="text-warning-600"
                                   onClick={() =>
-                                    setLockUser(record as UserRecord)
+                                    canControl("lock") && setLockUser(record as UserRecord)
                                   }
                                 >
                                   {t("users.lock")}
                                 </button>
                               )}
-                            {can("update") &&
+                            {canControl("unlock") &&
                               resource === "user" &&
                               (record as UserRecord).status === 2 && (
                                 <button
@@ -829,7 +1097,7 @@ export default function SystemManagement() {
                                   {t("users.unlock")}
                                 </button>
                               )}
-                            {can("update") &&
+                            {canControl("unlock-password") &&
                               resource === "user" &&
                               Number(
                                 (record as UserRecord).metadata
@@ -844,7 +1112,7 @@ export default function SystemManagement() {
                                   {t("users.unlockPassword")}
                                 </button>
                               )}
-                            {can("delete") && (
+                            {canRemoveRecord(record as unknown as AdminRecord) && (
                               <button
                                 className="text-error-500"
                                 onClick={() => void remove([record.id])}
@@ -932,18 +1200,59 @@ export default function SystemManagement() {
         </div>
       </div>
 
-      <Modal
-        className="max-h-[90vh] max-w-2xl overflow-y-auto p-6 sm:p-8"
-        isOpen={editorOpen}
-        onClose={() => setEditorOpen(false)}
+      <RecordDetail
+        resource={resource}
+        record={canControl("view-detail") ? detailRecord : undefined}
+        canViewMembers={canControl("view-members")}
+        onClose={() => setDetailRecord(undefined)}
+        onEdit={
+          canControl("edit")
+            ? (record) => openEditor(record as unknown as SystemRecord)
+            : undefined
+        }
+        renderValue={(key, _value, record) =>
+          renderValue(
+            record as unknown as SystemRecord,
+            key,
+            config.columns.find((column) => column.key === key)?.kind,
+          )
+        }
+      />
+      <AdminDrawer
+        open={editorOpen}
+        title={t(editing ? "common.editEntity" : "common.createEntity", {
+          entity: t(config.entity),
+        })}
+        onClose={closeEditor}
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              className={`${buttonClass} border border-gray-300 dark:border-gray-700`}
+              onClick={closeEditor}
+              type="button"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              className={`${buttonClass} bg-brand-500 text-white`}
+              disabled={submitting}
+              type="submit"
+              form="management-editor-form"
+            >
+              {submitting ? t("common.loading") : t("common.save")}
+            </button>
+          </div>
+        }
       >
-        <h3 className="mb-6 text-xl font-semibold text-gray-800 dark:text-white/90">
-          {t(editing ? "common.editEntity" : "common.createEntity", {
-            entity: t(config.entity),
-          })}
-        </h3>
-        <form className="space-y-5" noValidate onSubmit={submitEditor}>
-          {config.fields.map((field) => {
+        <form
+          id="management-editor-form"
+          className="space-y-5"
+          noValidate
+          onSubmit={submitEditor}
+        >
+          {resource === "action" && <div className="grid gap-3 md:grid-cols-2">{actionLocales.map(locale => <Field key={locale.tag} title={locale.name} value={(form.names as Record<string,string> | undefined)?.[locale.tag] ?? ""} onChange={value => setForm(current => ({...current,names:{...(current.names as Record<string,string> ?? {}),[locale.tag]:value}}))} />)}</div>}
+          {resource === "action" && <PermissionEditor key={`action-${editing?.id ?? "new"}`} definition config={form.config as never} bindings={form.action_bindings as ActionResourceBinding[] | undefined} onValidity={setPermissionValid} onChange={value => setForm(current => ({ ...current, action_bindings: value, ...(!editing && !current.word && value[0] ? {word: `${value[0].resource_key.split(":")[0]}:${value[0].operation}:${value[0].resource_key.split(":").slice(1).join(":")}`} : {}) }))} />}
+          {config.fields.filter(field => (resource !== "action" || !["name", "resource", "menu", "button"].includes(field.key)) && (!editing || auth.user?.permission.permission_scope === "*" || !isExistingCredentialField(resource, field.key)) && (!isAssignmentField(resource, field.key) || auth.user?.permission.permission_scope === "*" || !!auth.user?.permission.permission_scopes?.includes(`${resource}:${editing ? "update" : "create"}`))).map((field) => {
             const fieldId = `${resource}-${field.key}`;
             const searchable = [
               "action-group",
@@ -963,7 +1272,41 @@ export default function SystemManagement() {
                     <span className="text-error-500"> *</span>
                   )}
                 </label>
-                {field.type === "textarea" || field.type === "json" ? (
+                {field.key === "user_ids" &&
+                editing &&
+                resource === "user-group" ? (
+                  <GroupMemberEditor
+                    record={editing as unknown as AdminRecord}
+                    added={memberAdded}
+                    removed={memberRemoved}
+                    onChange={(added, removed) => {
+                      setMemberAdded(added);
+                      setMemberRemoved(removed);
+                    }}
+                  />
+                ) : field.type === "action-select" ? (
+                  <PermissionEditor key={`${resource}-${editing?.id ?? "new"}`} codes={(form.action_codes as string[]) ?? []} bindings={form.action_bindings as ActionResourceBinding[] | undefined} disabled={!(auth.user?.permission.permission_scope === "*" || auth.user?.permission.permission_scopes?.includes(`${resource}:${editing ? "update" : "create"}`))} onValidity={setPermissionValid} onChange={value => setForm(current => ({ ...current, action_bindings: value }))} />
+                ) : field.type === "user-select" ? (
+                  <AssociationEditor
+                    resource={
+                      "user"
+                    }
+                    seed={
+                      editing &&
+                      ("users" in editing)
+                        ? ((editing as { users: unknown }).users as AdminRecord[])
+                        : []
+                    }
+                    value={(form[field.key] as Array<string | number>) ?? []}
+                    onChange={(value) => updateForm(field, value)}
+                  />
+                ) : ["resource", "menu", "button"].includes(field.key) ? (
+                  <RuleListEditor
+                    label={t(field.label)}
+                    value={String(form[field.key] ?? "")}
+                    onChange={(value) => updateForm(field, value)}
+                  />
+                ) : field.type === "textarea" || field.type === "json" ? (
                   <textarea
                     aria-invalid={Boolean(formErrors[field.key])}
                     className={`${inputClass} max-h-72 min-h-28 resize-y ${formErrors[field.key] ? "border-error-500 focus:border-error-500" : ""}`}
@@ -994,13 +1337,9 @@ export default function SystemManagement() {
                   />
                 ) : searchable ? (
                   <SearchableSelect
-                    allowCustom={field.type === "action-group"}
                     id={fieldId}
                     initialOptions={editorOptions[field.key]}
-                    multiple={
-                      field.type === "action-select" ||
-                      field.type === "user-select"
-                    }
+                    multiple={false}
                     name={field.key}
                     onChange={(value) => updateForm(field, value)}
                     onSearch={(query) => searchEditorOptions(field, query)}
@@ -1033,23 +1372,29 @@ export default function SystemManagement() {
               {error}
             </p>
           )}
-          <div className="flex justify-end gap-3">
-            <button
-              className={`${buttonClass} border border-gray-300 dark:border-gray-700`}
-              onClick={() => setEditorOpen(false)}
-              type="button"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              className={`${buttonClass} bg-brand-500 text-white`}
-              disabled={submitting}
-              type="submit"
-            >
-              {submitting ? t("common.loading") : t("common.save")}
-            </button>
-          </div>
         </form>
+      </AdminDrawer>
+      <Modal
+        isOpen={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        className="max-w-lg p-6"
+      >
+        <h2 className="mb-4 text-lg font-semibold">
+          {text("system-editor.discardTitle")}
+        </h2>
+        <div className="flex justify-end gap-2">
+          <AButton onClick={() => setDiscardOpen(false)}>
+            {text("system-editor.continue")}
+          </AButton>
+          <AButton
+            onClick={() => {
+              setDiscardOpen(false);
+              setEditorOpen(false);
+            }}
+          >
+            {text("system-editor.discard")}
+          </AButton>
+        </div>
       </Modal>
 
       <Modal

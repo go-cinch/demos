@@ -56,7 +56,7 @@ export default function SignInViewPage() {
     let active = true;
     const timer = setTimeout(() => {
       request<{ captcha_required: boolean; captcha?: PointCaptcha }>(
-        `/auth/pub/login/verification?username=${encodeURIComponent(username.trim())}`,
+        `/pub/login/verification?username=${encodeURIComponent(username.trim())}`,
         {},
         false
       )
@@ -78,7 +78,7 @@ export default function SignInViewPage() {
       setCaptchaVerifying(true);
       try {
         const result = await request<{ verified: boolean; captcha?: PointCaptcha }>(
-          '/auth/pub/captcha/verify',
+          '/pub/captcha/verify',
           {
             method: 'POST',
             body: JSON.stringify({
@@ -213,16 +213,18 @@ export default function SignInViewPage() {
             </p>
           )}
         </div>
-        <SliderCaptcha
-          key={sliderAttempt}
-          purpose='login'
-          username={username}
-          onUsernameResolved={setUsername}
-          onVerified={(proof) => {
-            setSliderProof(proof);
-            setErrors((old) => ({ ...old, verification: '' }));
-          }}
-        />
+        {!captcha && (
+          <SliderCaptcha
+            key={sliderAttempt}
+            purpose='login'
+            username={username}
+            onUsernameResolved={setUsername}
+            onVerified={(proof) => {
+              setSliderProof(proof);
+              setErrors((old) => ({ ...old, verification: '' }));
+            }}
+          />
+        )}
         {captcha && (
           <PointCaptchaView
             key={captcha.captcha_id}
@@ -230,7 +232,7 @@ export default function SignInViewPage() {
             onChange={(value) => void updateCaptchaPoints(value)}
             onRefresh={() =>
               void request<PointCaptcha>(
-                '/auth/pub/captcha',
+                '/pub/captcha',
                 { method: 'POST', body: JSON.stringify({ captcha_id: captcha.captcha_id }) },
                 false
               ).then((next) => {
@@ -332,7 +334,9 @@ export function AuthShell({
           </div>
           <Card className='w-full'>
             <CardHeader>
-              <CardTitle className='text-2xl'>{title}</CardTitle>
+              <CardTitle role='heading' aria-level={1} className='text-2xl'>
+                {title}
+              </CardTitle>
               <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>{children}</CardContent>

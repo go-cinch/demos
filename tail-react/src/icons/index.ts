@@ -1,3 +1,6 @@
+import { ReactComponent as FullscreenIcon } from "./fullscreen.svg?react";
+import { ReactComponent as ShieldIcon } from "./shield.svg?react";
+export { FullscreenIcon, ShieldIcon };
 import { ReactComponent as PlusIcon } from "./plus.svg?react";
 import { ReactComponent as CloseIcon } from "./close.svg?react";
 import { ReactComponent as BoxIcon } from "./box.svg?react";

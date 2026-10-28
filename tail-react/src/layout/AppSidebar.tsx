@@ -1,7 +1,12 @@
+import type { PermissionNavigation } from "@/api/auth";
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
 import {
   BellAltIcon,
+  GroupIcon,
+  ShieldIcon,
+  DocsIcon,
+  ClockIcon,
   ChevronDownIcon,
   DashboardAltIcon,
   GridIcon,
@@ -31,6 +36,7 @@ const dashboardItems = [
 ];
 
 const systemItems = [
+  { permission: "/system/developer", path: "/system/developer", label: "developer.title", icon: SettingsAltIcon },
   {
     permission: "/system/user",
     path: "/system/user",
@@ -41,13 +47,13 @@ const systemItems = [
     permission: "/system/role",
     path: "/system/role",
     label: "system.roles",
-    icon: KeyIcon,
+    icon: ShieldIcon,
   },
   {
-    permission: "/system/group",
+    permission: "/system/user-group",
     path: "/system/user-group",
     label: "system.userGroups",
-    icon: UserCircleIcon,
+    icon: GroupIcon,
   },
   {
     permission: "/system/action",
@@ -59,13 +65,7 @@ const systemItems = [
     permission: "/system/dictionary",
     path: "/system/dictionary",
     label: "system.dictionaries",
-    icon: ListIcon,
-  },
-  {
-    permission: "/system/whitelist",
-    path: "/system/whitelist",
-    label: "system.whitelists",
-    icon: ListIcon,
+    icon: DocsIcon,
   },
   {
     permission: "/system/msg",
@@ -115,6 +115,25 @@ function MenuSection({
   );
 }
 
+
+function CatalogNavigation({ nodes, showText }: { nodes: PermissionNavigation[]; showText: boolean }) {
+  const { t } = useTranslation(); const location = useLocation();
+  const [opened, setOpened] = useState<Record<string,boolean>>({});
+  const contains = (node: PermissionNavigation): boolean => node.menu_path === location.pathname || (node.children ?? []).some(contains);
+  const visible = (node: PermissionNavigation): PermissionNavigation[] => {
+    if (node.menu_path) return node.menu_path.startsWith('/dashboard/') ? [] : [node];
+    const children = (node.children ?? []).flatMap(visible); return children.length ? [{...node,children}] : [];
+  };
+  return <>{nodes.flatMap(visible).map(node => {
+    const fallback = systemItems.find(item => item.path === node.menu_path)?.label ?? (node.menu_path?.startsWith('/audit/') ? `pc.audit.${node.menu_path.split('/').at(-1)}` : node.resource_key);
+    const label = String(t(`resources.${node.resource_key}`,{defaultValue:String(t(fallback))}));
+    const Icon = systemItems.find(item => item.path === node.menu_path)?.icon
+      ?? (node.menu_path === '/audit/login' ? UserCircleIcon : node.menu_path === '/audit/operation' ? ClockIcon : SettingsAltIcon);
+    if (node.menu_path) return <li key={`${node.resource_key}:${node.menu_key}`}><Link className={`menu-item ${location.pathname === node.menu_path ? 'menu-item-active' : 'menu-item-inactive'}`} to={node.menu_path}><Icon className="size-5"/>{showText&&<span className="break-words">{label}</span>}</Link></li>;
+    const open = opened[node.resource_key] ?? contains(node);
+    return <MenuSection key={node.resource_key} icon={SettingsAltIcon} label={label} open={open} showText={showText} toggle={()=>setOpened(old=>({...old,[node.resource_key]:!open}))}><CatalogNavigation nodes={node.children??[]} showText={showText}/></MenuSection>;
+  })}</>;
+}
 export default function AppSidebar() {
   const { t } = useTranslation();
   const auth = useAuth();
@@ -125,6 +144,7 @@ export default function AppSidebar() {
   const [sections, setSections] = useState({
     dashboard: location.pathname.startsWith("/dashboard"),
     system: location.pathname.startsWith("/system"),
+    audit: location.pathname.startsWith("/audit"),
   });
 
   useEffect(() => {
@@ -137,7 +157,7 @@ export default function AppSidebar() {
 
   const itemClass = (path: string) =>
     `menu-dropdown-item block ${location.pathname === path ? "menu-dropdown-item-active" : "menu-dropdown-item-inactive"}`;
-  const toggleSection = (section: "dashboard" | "system") =>
+  const toggleSection = (section: "dashboard" | "system" | "audit") =>
     setSections((value) => ({ ...value, [section]: !value[section] }));
 
   return (
@@ -181,30 +201,8 @@ export default function AppSidebar() {
             showText={showText}
             toggle={() => toggleSection("dashboard")}
           >
-            {dashboardItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.path}>
-                  <Link
-                    className={`${itemClass(item.path)} flex items-center gap-2`}
-                    to={item.path}
-                  >
-                    <Icon className="size-4" />
-                    {t(item.label)}
-                  </Link>
-                </li>
-              );
-            })}
-          </MenuSection>
-          <MenuSection
-            icon={SettingsAltIcon}
-            label={t("nav.management")}
-            open={sections.system}
-            showText={showText}
-            toggle={() => toggleSection("system")}
-          >
-            {systemItems
-              .filter((item) => auth.canMenu(item.permission))
+            {dashboardItems
+              .filter((item) => auth.canMenu(item.path))
               .map((item) => {
                 const Icon = item.icon;
                 return (
@@ -220,6 +218,58 @@ export default function AppSidebar() {
                 );
               })}
           </MenuSection>
+          {auth.user?.permission.navigation?.length ? <CatalogNavigation nodes={auth.user.permission.navigation} showText={showText} /> : <>
+          {systemItems.some((item) => auth.canMenu(item.permission)) && (
+            <MenuSection
+              icon={SettingsAltIcon}
+              label={t("nav.management")}
+              open={sections.system}
+              showText={showText}
+              toggle={() => toggleSection("system")}
+            >
+              {systemItems
+                .filter((item) => auth.canMenu(item.permission))
+                .map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.path}>
+                      <Link
+                        className={`${itemClass(item.path)} flex items-center gap-2`}
+                        to={item.path}
+                      >
+                        <Icon className="size-4" />
+                        {t(item.label)}
+                      </Link>
+                    </li>
+                  );
+                })}
+            </MenuSection>
+          )}
+          {["login", "operation"].some((kind) =>
+            auth.canMenu(`/audit/${kind}`),
+          ) && (
+            <MenuSection
+              icon={ListIcon}
+              label={t("pc.audit.menu")}
+              open={sections.audit}
+              showText={showText}
+              toggle={() => toggleSection("audit")}
+            >
+              {["login", "operation"]
+                .filter((kind) => auth.canMenu(`/audit/${kind}`))
+                .map((kind) => (
+                  <li key={kind}>
+                    <Link
+                      className={itemClass(`/audit/${kind}`)}
+                      to={`/audit/${kind}`}
+                    >
+                      {t(`pc.audit.${kind}`)}
+                    </Link>
+                  </li>
+                ))}
+            </MenuSection>
+          )}
+          </>}
         </ul>
       </nav>
     </aside>

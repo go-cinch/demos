@@ -1,6 +1,7 @@
+import { gatewayMessage, notifyRequestFailure } from '@/features/admin/request-error';
 import { clearLegacyLoginCredentials, recordLoginAccount } from './account-history';
 
-const API_BASE = '/api/auth';
+export const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_URL || '/api/auth';
 const REFRESH_KEY = 'go-cinch-refresh-token';
 
 let accessToken = '';
@@ -13,12 +14,27 @@ export interface LoginResult {
   password_reset_required: boolean;
 }
 
+export interface PermissionNavigation {
+  resource_key: string;
+  menu_key?: string;
+  menu_path?: string;
+  children?: PermissionNavigation[];
+}
 export interface UserInfo {
   id: number;
   code: string;
   username: string;
   role?: { id: number; name: string; word: string };
-  permission: { btns: string[]; menus: string[] };
+  scope: string;
+  permission: {
+    btns: string[];
+    menus: string[];
+    words: string[];
+    permission_scope?: '*';
+    permission_scopes?: string[];
+    navigation?: PermissionNavigation[];
+    entries: { menu_key: string; menu_path: string; parent_menu_key?: string; btns: string[] }[];
+  };
 }
 
 export interface CaptchaPoint {
@@ -48,13 +64,18 @@ async function encryptCredential(
   purpose: 'login' | 'register' | 'password_change' | 'password_reset',
   payload: Record<string, unknown>
 ) {
+  const normalized = { ...payload };
+  for (const key of ['username', 'password', 'old_password', 'new_password']) {
+    const value = normalized[key];
+    if (typeof value === 'string') normalized[key] = value.trim();
+  }
   const authenticated = purpose === 'password_change' || purpose === 'password_reset';
   const challenge = await request<{
     challenge_id: string;
     key_id: string;
     public_key: JsonWebKey;
   }>(
-    authenticated ? '/auth/challenge' : '/auth/pub/challenge',
+    authenticated ? '/challenge' : '/pub/challenge',
     {
       method: 'POST',
       body: JSON.stringify({ purpose })
@@ -98,7 +119,9 @@ async function encryptCredential(
         tagLength: 128
       },
       aesKey,
-      new TextEncoder().encode(JSON.stringify({ challenge_id: challenge.challenge_id, ...payload }))
+      new TextEncoder().encode(
+        JSON.stringify({ challenge_id: challenge.challenge_id, ...normalized })
+      )
     )
   );
   const ciphertext = sealed.slice(0, -16);
@@ -117,7 +140,12 @@ async function encryptCredential(
 
 async function parseError(response: Response) {
   const data = await response.json().catch(() => ({}));
-  const error = new Error(data.msg || data.message || `HTTP ${response.status}`) as Error & {
+  if (response.status === 502) notifyRequestFailure(gatewayMessage());
+  const error = new Error(
+    response.status === 502
+      ? gatewayMessage()
+      : data.msg || data.message || `HTTP ${response.status}`
+  ) as Error & {
     status: number;
     data: Record<string, unknown>;
   };
@@ -133,10 +161,12 @@ function emitAuthEvent(name: 'go-cinch-password-reset-required' | 'go-cinch-sess
 async function refreshSession() {
   const token = localStorage.getItem(REFRESH_KEY);
   if (!token) throw new Error('No session');
-  const response = await fetch(`${API_BASE}/auth/pub/refresh`, {
+  const response = await fetch(`${API_BASE}/pub/refresh`, {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     headers: {
       'Content-Type': 'application/json',
+      'X-Auth-Scope': 'admin',
       'Accept-Language': localStorage.getItem('go-cinch-locale') || 'zh-CN'
     },
     body: JSON.stringify({ refresh_token: token })
@@ -155,9 +185,14 @@ export async function request<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
+  headers.set('X-Auth-Scope', 'admin');
   headers.set('Accept-Language', localStorage.getItem('go-cinch-locale') || 'zh-CN');
   if (authenticated && accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    signal: init.signal ?? AbortSignal.timeout(10000)
+  });
   if (response.status === 401 && authenticated && retry && localStorage.getItem(REFRESH_KEY)) {
     refreshing ??= refreshSession().finally(() => {
       refreshing = null;
@@ -179,6 +214,7 @@ export async function request<T>(
   }
   const text = await response.text();
   if (!text) return undefined as T;
+  if (response.headers.get('content-type')?.includes('text/csv')) return text as T;
   return JSON.parse(text) as T;
 }
 
@@ -201,7 +237,7 @@ export async function login(data: {
   clearLegacyLoginCredentials();
   const encrypted = await encryptCredential('login', { ...data, remember_me: false });
   const result = await request<LoginResult>(
-    '/auth/pub/login',
+    '/pub/login',
     { method: 'POST', body: JSON.stringify(encrypted) },
     false
   );
@@ -213,14 +249,14 @@ export async function login(data: {
 export async function register(data: { username: string; password: string; slider_proof: string }) {
   clearLegacyLoginCredentials();
   const encrypted = await encryptCredential('register', data);
-  await request('/auth/pub/register', { method: 'POST', body: JSON.stringify(encrypted) }, false);
+  await request('/pub/register', { method: 'POST', body: JSON.stringify(encrypted) }, false);
 }
 
 export async function logout() {
   const refreshToken = localStorage.getItem(REFRESH_KEY);
   if (refreshToken)
     await request(
-      '/auth/pub/logout',
+      '/pub/logout',
       { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) },
       false
     ).catch(() => undefined);
@@ -228,7 +264,70 @@ export async function logout() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
-export const getUserInfo = () => request<UserInfo>('/auth/info');
+export const getUserInfo = async (): Promise<UserInfo> => {
+  const user = await request<
+    Omit<UserInfo, 'permission'> & {
+      permission: {
+        menus?: {
+          menu_key: string;
+          menu_path: string;
+          parent_menu_key?: string;
+          btns?: string[];
+        }[];
+        words?: string[];
+        permission_scope?: '*';
+        permission_scopes?: string[];
+        navigation?: PermissionNavigation[];
+      };
+    }
+  >('/info?f=id,username,code,role,scope,permission');
+  if (user.scope !== 'admin') throw new Error('Invalid permission scope');
+  const entries = (user.permission?.menus ?? [])
+    .filter(
+      (menu) =>
+        menu.menu_key?.startsWith('admin:menu:') &&
+        menu.menu_path?.startsWith('/') &&
+        !menu.menu_path.startsWith('//')
+    )
+    .map((menu) => ({
+      ...menu,
+      btns: (menu.btns ?? []).filter((key) =>
+        key.startsWith(`${menu.menu_key.replace(':menu:', ':btn:')}:`)
+      )
+    }));
+  const sanitizeNavigation = (nodes: PermissionNavigation[]): PermissionNavigation[] =>
+    nodes.flatMap((node): PermissionNavigation[] => {
+      if (!node.resource_key?.startsWith('admin:')) return [];
+      if (node.menu_path || node.menu_key)
+        return entries.some(
+          (entry) => entry.menu_key === node.menu_key && entry.menu_path === node.menu_path
+        )
+          ? [
+              {
+                resource_key: node.resource_key,
+                menu_key: node.menu_key,
+                menu_path: node.menu_path
+              }
+            ]
+          : [];
+      const children = sanitizeNavigation(node.children ?? []);
+      return children.length ? [{ resource_key: node.resource_key, children }] : [];
+    });
+  const btns = entries.flatMap((menu) => menu.btns);
+  // Compatibility names are derived from validated page-scoped controls, never words.
+  const aliases = btns.map((key) => key.replace(/^admin:btn:/, '').replaceAll(':', '.'));
+  return {
+    ...user,
+    permission: {
+      ...user.permission,
+      words: user.permission.words ?? [],
+      navigation: sanitizeNavigation(user.permission.navigation ?? []),
+      entries,
+      menus: [...new Set(entries.map((menu) => menu.menu_path))],
+      btns: [...new Set([...btns, ...aliases])]
+    }
+  };
+};
 
 export async function createPasswordCredential(password: string) {
   return encryptCredential('register', { password });
@@ -245,14 +344,14 @@ export async function changePassword(
     captcha_id: captcha?.id,
     captcha_points: captcha?.points
   });
-  return request('/auth/change/pwd', { method: 'PATCH', body: JSON.stringify(encrypted) });
+  return request('/change/pwd', { method: 'PATCH', body: JSON.stringify(encrypted) });
 }
 
 export async function resetRequiredPassword(newPassword: string) {
   clearLegacyLoginCredentials();
   const encrypted = await encryptCredential('password_reset', { new_password: newPassword });
   const result = await request<LoginResult>(
-    '/auth/reset/pwd',
+    '/reset/pwd',
     { method: 'PATCH', body: JSON.stringify(encrypted) },
     true,
     false

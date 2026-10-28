@@ -1,5 +1,7 @@
 import type { ApexOptions } from "apexcharts";
 import flatpickr from "flatpickr";
+import { Mandarin } from "flatpickr/dist/l10n/zh.js";
+import { english } from "flatpickr/dist/l10n/default.js";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { CalenderIcon } from "../../icons";
@@ -8,8 +10,9 @@ import ChartTab from "../common/ChartTab";
 const Chart = lazy(() => import("react-apexcharts"));
 
 export default function StatisticsChart() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const datePickerRef = useRef<HTMLInputElement>(null);
+  const selectedRange = useRef<Date[] | null>(null);
 
   const options: ApexOptions = {
     legend: {
@@ -131,8 +134,10 @@ export default function StatisticsChart() {
       mode: "range",
       static: true,
       monthSelectorType: "static",
-      dateFormat: "M d",
-      defaultDate: [sevenDaysAgo, today],
+      locale: i18n.language.startsWith("zh") ? Mandarin : english,
+      dateFormat: i18n.language.startsWith("zh") ? "m月d日" : "M d",
+      defaultDate: selectedRange.current ?? [sevenDaysAgo, today],
+      onChange: (dates) => { selectedRange.current = dates; },
       clickOpens: true,
       prevArrow:
         '<svg class="stroke-current" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.5 15L7.5 10L12.5 5" stroke="" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>',
@@ -145,12 +150,12 @@ export default function StatisticsChart() {
         fp.destroy();
       }
     };
-  }, []);
+  }, [i18n.language]);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white px-5 pt-5 pb-5 sm:px-6 sm:pt-6 dark:border-gray-800 dark:bg-white/3">
       <div className="mb-6 flex flex-col gap-5 sm:flex-row sm:justify-between">
-        <div className="w-full">
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
             {t("ecommerce.statistics.title")}
           </h3>
@@ -159,14 +164,14 @@ export default function StatisticsChart() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 sm:justify-end">
+        <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
           <ChartTab />
 
           <div className="relative inline-flex items-center">
             <CalenderIcon className="pointer-events-none absolute inset-s-1/2 top-1/2 z-10 size-5 -translate-x-1/2 -translate-y-1/2 text-gray-500 lg:inset-s-3 lg:top-1/2 lg:translate-x-0 lg:-translate-y-1/2 rtl:translate-x-1/2 rtl:lg:translate-x-0 dark:text-gray-400" />
             <input
               ref={datePickerRef}
-              className="h-10 w-10 cursor-pointer rounded-lg border border-gray-200 bg-white text-sm font-medium text-transparent outline-none lg:h-auto lg:w-40 lg:py-2 lg:ps-10 lg:pe-3 lg:text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:lg:text-gray-300"
+              className="h-10 w-10 cursor-pointer rounded-lg border border-gray-200 bg-white text-sm font-medium text-transparent outline-none lg:h-auto lg:w-56 lg:py-2 lg:ps-10 lg:pe-3 lg:text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:lg:text-gray-300"
               placeholder={t("ecommerce.statistics.selectDateRange")}
             />
           </div>

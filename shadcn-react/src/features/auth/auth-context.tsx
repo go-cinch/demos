@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [passwordResetRequired, setPasswordResetRequired] = React.useState(false);
   const reload = React.useCallback(async () => {
     const next = await getUserInfo();
-    setUser(next);
+    setUser((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     return next;
   }, []);
   React.useEffect(() => {
@@ -56,6 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('go-cinch-session-expired', expireSession);
     };
   }, []);
+  React.useEffect(() => {
+    if (!user || passwordResetRequired) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') void reload().catch(() => undefined);
+    };
+    const timer = window.setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [user?.id, passwordResetRequired, reload]);
   const signOut = React.useCallback(async (preserveRedirect = true) => {
     const redirect = `${window.location.pathname}${window.location.search}`;
     await apiLogout();

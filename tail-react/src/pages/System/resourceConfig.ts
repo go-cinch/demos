@@ -56,9 +56,8 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "action",
     permission: "system.action",
     title: "system.actionTitle",
-    entity: "system.action",
+    entity: "systemEntities.action",
     fields: [
-      { key: "name", label: "fields.name", type: "text", required: true },
       {
         key: "group",
         label: "fields.group",
@@ -66,9 +65,6 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
         required: true,
       },
       { key: "word", label: "fields.word", type: "text", required: true },
-      { key: "resource", label: "fields.resourceRules", type: "textarea" },
-      { key: "menu", label: "fields.menuPaths", type: "textarea" },
-      { key: "button", label: "fields.buttonPermission", type: "textarea" },
     ],
     columns: [
       { key: "id", label: "fields.id" },
@@ -76,9 +72,9 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
       { key: "group", label: "fields.group" },
       { key: "word", label: "fields.word" },
       { key: "code", label: "fields.code" },
-      { key: "resource", label: "fields.resourceRules", kind: "rules" },
-      { key: "menu", label: "fields.menuPaths", kind: "rules" },
-      { key: "button", label: "fields.buttonPermission", kind: "rules" },
+      { key: "resource", label: "catalogUI.operation", kind: "rules" },
+      { key: "menu", label: "permission-display.relatedMenus", kind: "rules" },
+      { key: "button", label: "catalogUI.features", kind: "rules" },
       { key: "created_at", label: "fields.createdAt", kind: "date" },
       { key: "updated_at", label: "fields.updatedAt", kind: "date" },
     ],
@@ -96,7 +92,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "role",
     permission: "system.role",
     title: "system.roleTitle",
-    entity: "system.role",
+    entity: "systemEntities.role",
     fields: [
       { key: "name", label: "fields.name", type: "text", required: true },
       { key: "word", label: "fields.word", type: "text", required: true },
@@ -124,7 +120,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "user",
     permission: "system.user",
     title: "system.userTitle",
-    entity: "system.user",
+    entity: "systemEntities.user",
     fields: [
       {
         key: "username",
@@ -146,10 +142,12 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
       { key: "code", label: "fields.userCode" },
       { key: "role", label: "fields.role", kind: "role" },
       { key: "status", label: "fields.status", kind: "status" },
-      { key: "metadata", label: "fields.metadata", kind: "json" },
+      { key: "login_count", label: "fields.loginCount" },
+      { key: "last_logged_in_at", label: "fields.lastLogin", kind: "date" },
       { key: "action_codes", label: "fields.permissions", kind: "tags" },
       { key: "created_at", label: "fields.createdAt", kind: "date" },
       { key: "updated_at", label: "fields.updatedAt", kind: "date" },
+      { key: "metadata", label: "fields.metadata", kind: "json" },
     ],
     filters: [
       { key: "username", label: "fields.username" },
@@ -161,7 +159,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "user-group",
     permission: "system.user.group",
     title: "system.userGroupTitle",
-    entity: "system.userGroup",
+    entity: "systemEntities.userGroup",
     fields: [
       { key: "name", label: "fields.name", type: "text", required: true },
       { key: "word", label: "fields.word", type: "text", required: true },
@@ -191,7 +189,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "dictionary",
     permission: "system.dictionary",
     title: "system.dictionaryTitle",
-    entity: "system.dictionary",
+    entity: "systemEntities.dictionary",
     fields: [
       {
         key: "key",
@@ -235,7 +233,7 @@ export const resourceConfigs: Record<ResourceKind, ResourceConfig> = {
     resource: "whitelist",
     permission: "system.whitelist",
     title: "system.whitelistTitle",
-    entity: "system.whitelist",
+    entity: "systemEntities.whitelist",
     fields: [
       {
         key: "category",
