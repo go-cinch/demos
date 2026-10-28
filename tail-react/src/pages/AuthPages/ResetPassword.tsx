@@ -26,7 +26,7 @@ export default function ResetPassword() {
     const next: Record<string, string> = {};
     if (!isValidUserPassword(password))
       next.password = t("validation.password");
-    if (password !== confirmation)
+    if (password.trim() !== confirmation.trim())
       next.confirmation = t("validation.passwordMismatch");
     setFieldErrors(next);
     if (Object.keys(next).length) return;

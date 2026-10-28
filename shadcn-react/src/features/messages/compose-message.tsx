@@ -10,14 +10,14 @@ import {
   DialogTitle,
   DialogFooter
 } from '@/components/ui/dialog';
-import { RelationPicker } from '@/features/system/components/record-selects';
+import AssociationEditor from '@/features/system/components/association-editor';
+import { Label } from '@/components/ui/label';
 import { msgApi, msgChanged } from './api/service';
 import type { MsgInput } from './api/types';
 import { useMsgLocale } from './locale';
+import { AdminDrawer } from '@/features/system/components/admin-ui';
 import { useLocale } from '@/features/i18n/locale-context';
 import { parseDateTime } from './date-time';
-const loadRecipients = async (q: string) =>
-  (await msgApi.users(q)).map((u) => ({ value: u.id, label: u.username }));
 export default function ComposeMessage({ close, saved }: { close: () => void; saved: () => void }) {
   const tr = useMsgLocale(),
     { locale, timezone } = useLocale(),
@@ -83,134 +83,125 @@ export default function ComposeMessage({ close, saved }: { close: () => void; sa
   }
   return (
     <>
-      <Dialog
+      <AdminDrawer
         open
-        onOpenChange={(next) => {
-          if (!next) requestClose();
-        }}
+        title={tr('send')}
+        onClose={requestClose}
+        footer={
+          <DialogFooter className='mt-5'>
+            <Button type='button' variant='outline' disabled={busy} onClick={requestClose}>
+              {tr('cancel')}
+            </Button>
+            <Button type='submit' form='message-compose-form' disabled={busy} aria-busy={busy}>
+              {tr('send')}
+            </Button>
+          </DialogFooter>
+        }
       >
-        <DialogContent
-          showCloseButton={false}
-          className='max-h-[90vh] overflow-y-auto sm:max-w-2xl'
+        <form
+          id='message-compose-form'
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            setAttempted(true);
+            void form.handleSubmit();
+          }}
         >
-          <DialogHeader>
-            <DialogTitle>{tr('send')}</DialogTitle>
-          </DialogHeader>
-          <form
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              setAttempted(true);
-              void form.handleSubmit();
-            }}
-          >
-            <fieldset disabled={busy} className='space-y-4'>
-              <form.AppField
-                name='title'
-                validators={{
-                  onSubmit: ({ value }) =>
-                    !value.trim() || [...value.trim()].length > 200
-                      ? { message: tr('titleError') }
-                      : undefined
-                }}
-              >
-                {(field) => <field.TextField label={tr('title')} required />}
-              </form.AppField>
-              <form.AppField
-                name='content'
-                validators={{
-                  onSubmit: ({ value }) =>
-                    !value.trim() || [...value.trim()].length > 20000
-                      ? { message: tr('contentError') }
-                      : undefined
-                }}
-              >
-                {(field) => <field.TextareaField label={tr('content')} required rows={5} />}
-              </form.AppField>
-              <form.AppField name='type'>
-                {(field) => (
-                  <field.SelectField
-                    label={tr('type')}
-                    options={['system', 'notice'].map((value) => ({
-                      value,
-                      label: tr(value)
-                    }))}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name='scope'>
-                {(field) => (
-                  <field.SelectField
-                    label={tr('scope')}
-                    options={['all', 'targeted'].map((value) => ({
-                      value,
-                      label: tr(value)
-                    }))}
-                  />
-                )}
-              </form.AppField>
-              {scope === 'targeted' && (
-                <form.Field
-                  name='recipient_ids'
-                  validators={{
-                    onSubmit: ({ value }) =>
-                      !value.length || value.length > 1000
-                        ? { message: tr('recipientError') }
-                        : undefined
-                  }}
-                >
-                  {(field) => (
-                    <div>
-                      <RelationPicker
-                        field={{
-                          key: 'msg-recipients',
-                          label: tr('recipients')
-                        }}
-                        resource='user'
-                        multiple
-                        value={field.state.value}
-                        onChange={(v) => field.handleChange(v as number[])}
-                        loadOptions={loadRecipients}
-                      />
-                      {field.state.meta.errors.map((err, i) => (
-                        <p key={i} className='text-destructive' role='alert'>
-                          {err?.message}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </form.Field>
+          <fieldset disabled={busy} className='space-y-4'>
+            <form.AppField
+              name='title'
+              validators={{
+                onSubmit: ({ value }) =>
+                  !value.trim() || [...value.trim()].length > 200
+                    ? { message: tr('titleError') }
+                    : undefined
+              }}
+            >
+              {(field) => <field.TextField label={tr('title')} required />}
+            </form.AppField>
+            <form.AppField
+              name='content'
+              validators={{
+                onSubmit: ({ value }) =>
+                  !value.trim() || [...value.trim()].length > 20000
+                    ? { message: tr('contentError') }
+                    : undefined
+              }}
+            >
+              {(field) => <field.TextareaField label={tr('content')} required rows={5} />}
+            </form.AppField>
+            <form.AppField name='type'>
+              {(field) => (
+                <field.SelectField
+                  label={tr('type')}
+                  options={['system', 'notice'].map((value) => ({
+                    value,
+                    label: tr(value)
+                  }))}
+                />
               )}
-              <form.AppField
-                name='expiry'
+            </form.AppField>
+            <form.AppField name='scope'>
+              {(field) => (
+                <field.SelectField
+                  label={tr('scope')}
+                  options={['all', 'targeted'].map((value) => ({
+                    value,
+                    label: tr(value)
+                  }))}
+                />
+              )}
+            </form.AppField>
+            {scope === 'targeted' && (
+              <form.Field
+                name='recipient_ids'
                 validators={{
                   onSubmit: ({ value }) =>
-                    value &&
-                    (!Number.isFinite(parseDateTime(value, zone)) ||
-                      parseDateTime(value, zone) <= Date.now())
-                      ? { message: tr('expiryError') }
+                    !value.length || value.length > 1000
+                      ? { message: tr('recipientError') }
                       : undefined
                 }}
               >
-                {(field) => <field.TextField type='datetime-local' label={tr('expiry')} />}
-              </form.AppField>
-              {error && (
-                <p role='alert' className='text-destructive'>
-                  {error}
-                </p>
-              )}
-            </fieldset>
-            <DialogFooter className='mt-5'>
-              <Button type='button' variant='outline' disabled={busy} onClick={requestClose}>
-                {tr('cancel')}
-              </Button>
-              <Button type='submit' disabled={busy} aria-busy={busy}>
-                {tr('send')}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                {(field) => (
+                  <div>
+                    <Label>{tr('recipients')}</Label>
+                    <AssociationEditor
+                      resource='user'
+                      kind='recipient'
+                      value={field.state.value}
+                      onChange={(value) => field.handleChange(value.map(Number))}
+                    />
+
+                    {field.state.meta.errors.map((err, i) => (
+                      <p key={i} className='text-destructive' role='alert'>
+                        {err?.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </form.Field>
+            )}
+            <form.AppField
+              name='expiry'
+              validators={{
+                onSubmit: ({ value }) =>
+                  value &&
+                  (!Number.isFinite(parseDateTime(value, zone)) ||
+                    parseDateTime(value, zone) <= Date.now())
+                    ? { message: tr('expiryError') }
+                    : undefined
+              }}
+            >
+              {(field) => <field.TextField type='datetime-local' label={tr('expiry')} />}
+            </form.AppField>
+            {error && (
+              <p role='alert' className='text-destructive'>
+                {error}
+              </p>
+            )}
+          </fieldset>
+        </form>
+      </AdminDrawer>
       <Dialog open={discard} onOpenChange={setDiscard}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>

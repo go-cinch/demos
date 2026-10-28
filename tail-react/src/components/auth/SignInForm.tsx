@@ -150,6 +150,7 @@ export default function SignInForm() {
                 setFieldErrors((value) => ({
                   ...value,
                   username: "",
+                  password: "",
                   verification: "",
                 }));
               }}

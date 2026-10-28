@@ -1,3 +1,5 @@
+import { canCloseTab } from "./navigationGuard";
+import { useAuth } from "@/context/AuthContext";
 import { CloseIcon, StarFill, StarLine } from "@/icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,34 +28,39 @@ const labelKeys: Record<string, string> = {
   "/dashboard/workspace": "dashboard.workspace",
   "/profile": "profile.title",
   "/system/msg": "msg.manage",
+  "/audit/login": "pc.audit.login",
+  "/audit/operation": "pc.audit.operation",
   "/system/user": "system.users",
   "/system/role": "system.roles",
   "/system/user-group": "system.userGroups",
   "/system/action": "system.actions",
   "/system/dictionary": "system.dictionaries",
-  "/system/whitelist": "system.whitelists",
+  "/system/developer": "developer.title",
 };
 
 export default function PageTabs() {
   const { t } = useTranslation();
   const location = useLocation();
+  const auth = useAuth();
   const navigate = useNavigate();
   const [tabs, setTabs] = useState<PageTab[]>(readTabs);
 
   useEffect(() => {
+    setTabs(current => current.filter(tab => tab.path === overview.path || tab.path === "/profile" || auth.canMenu(tab.path)));
     if (!labelKeys[location.pathname]) return;
     setTabs((current) =>
       current.some((tab) => tab.path === location.pathname)
         ? current
         : [...current, { path: location.pathname, pinned: false }],
     );
-  }, [location.pathname]);
+  }, [location.pathname, auth.user]);
   useEffect(
     () => sessionStorage.setItem("admin-page-tabs", JSON.stringify(tabs)),
     [tabs],
   );
 
-  const close = (path: string) => {
+  const close = async (path: string) => {
+    if (!(await canCloseTab(path))) return;
     const index = tabs.findIndex((tab) => tab.path === path);
     const next = tabs.filter((tab) => tab.path !== path || tab.pinned);
     setTabs(next);

@@ -8,6 +8,7 @@ import { useLocale } from '@/features/i18n/locale-context';
 export type Density = 'compact' | 'default' | 'loose';
 export default function ResultToolbar({
   loading,
+  canRefresh = true,
   refresh,
   density,
   setDensity,
@@ -22,6 +23,7 @@ export default function ResultToolbar({
   children
 }: {
   loading: boolean;
+  canRefresh?: boolean;
   refresh: () => void;
   density: Density;
   setDensity: (v: Density) => void;
@@ -39,16 +41,16 @@ export default function ResultToolbar({
   return (
     <>
       {' '}
-      <Button
+      {canRefresh && <Button
         aria-label={pick('Refresh', '刷新')}
         title={pick('Refresh', '刷新')}
         size='icon-sm'
         variant='outline'
-        onClick={() => refresh()}
+        onClick={() => { if (canRefresh) refresh(); }}
         disabled={loading}
       >
         <Icons.refresh className={loading ? 'animate-spin' : ''} />
-      </Button>
+      </Button>}
       <Popover>
         <PopoverTrigger
           render={

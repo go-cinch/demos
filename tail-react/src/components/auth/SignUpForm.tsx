@@ -50,7 +50,7 @@ export default function SignUpForm() {
       next.username = t("validation.username");
     if (!isValidUserPassword(password))
       next.password = t("validation.password");
-    if (password !== confirmation)
+    if (password.trim() !== confirmation.trim())
       next.confirmation = t("validation.passwordMismatch");
     if (!sliderProof) next.verification = t("auth.sliderRequired");
     setFieldErrors(next);
@@ -147,7 +147,7 @@ export default function SignUpForm() {
                 setFieldErrors((value) => ({
                   ...value,
                   confirmation:
-                    password === confirmation
+                    password.trim() === confirmation.trim()
                       ? ""
                       : t("validation.passwordMismatch"),
                 }))

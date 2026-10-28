@@ -55,9 +55,9 @@ export const navGroups: NavGroup[] = [
         items: []
       },
       {
-        title: 'Whitelist / 白名单',
-        url: '/system/whitelist',
-        icon: 'circleCheck',
+        title: 'Developer workspace / 开发者工作台',
+        url: '/system/developer',
+        icon: 'code',
         items: []
       },
       {
@@ -74,6 +74,13 @@ export const navGroups: NavGroup[] = [
         shortcut: ['p', 'p'],
         items: []
       }
+    ]
+  },
+  {
+    label: 'Audit / 审计',
+    items: [
+      { title: 'Login logs / 登录日志', url: '/audit/login', icon: 'search', items: [] },
+      { title: 'Operation logs / 操作日志', url: '/audit/operation', icon: 'search', items: [] }
     ]
   }
 ];

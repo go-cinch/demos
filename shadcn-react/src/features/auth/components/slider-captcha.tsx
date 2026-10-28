@@ -67,7 +67,7 @@ export function SliderCaptcha({
 
   function createChallenge(subject: string) {
     const challenge = request<{ captcha_id: string }>(
-      '/auth/pub/slider/challenge',
+      '/pub/slider/challenge',
       {
         method: 'POST',
         body: JSON.stringify({ purpose, username: subject })
@@ -146,7 +146,7 @@ export function SliderCaptcha({
       const duration = Math.max(1, Math.round(performance.now() - drag.started));
       const tracks = [...drag.tracks, { t: duration, x: drag.width }];
       const result = await request<{ proof: string }>(
-        '/auth/pub/slider/verify',
+        '/pub/slider/verify',
         {
           method: 'POST',
           body: JSON.stringify({

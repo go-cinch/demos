@@ -1,3 +1,4 @@
+import { IconBook2, IconKey, IconListCheck, IconShieldCheck, IconUsersGroup } from '@tabler/icons-react';
 import {
   IconRefresh,
   IconList,
@@ -101,6 +102,12 @@ import {
 export type Icon = React.ComponentType<IconProps>;
 
 export const Icons = {
+  book2: IconBook2,
+  key: IconKey,
+  listCheck: IconListCheck,
+  shieldCheck: IconShieldCheck,
+  users: IconUsers,
+  usersGroup: IconUsersGroup,
   refresh: IconRefresh,
   list: IconList,
   minimize: IconMinimize,
