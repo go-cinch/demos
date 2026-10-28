@@ -1,3 +1,5 @@
+import { visitMessages } from '../lib/message-attention';
+import { session } from '../lib/api';
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { InfiniteScroll, SwipeAction, type SwipeActionRef } from 'antd-mobile';
@@ -192,6 +194,8 @@ function MessageRow({
 }
 
 export default function MsgInboxPage() {
+  const userId = session.user?.id;
+  useEffect(() => { visitMessages(userId); }, [userId]);
   const [type, setType] = useState('');
   const feed = useMessageFeed(true, type, 20);
   const [busy, setBusy] = useState(false),
