@@ -148,6 +148,8 @@ export function useHoverToggle(
     },
     disable() {
       hoverWatcher.pause();
+      // Pausing the watcher must also cancel work scheduled before the pause.
+      clearTimers();
     },
   };
 
