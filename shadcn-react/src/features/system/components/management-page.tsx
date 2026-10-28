@@ -1,7 +1,41 @@
 'use client';
+import { authorizedGroupMemberDelta, groupMemberAccess, hasManagementControl, hasManagementPage } from '../management-access';
+import type { UserInfo } from '@/features/auth/api';
+import { systemListFields } from '../list-fields';
+import PermissionResultCell from '@/features/permissions/result-cell';
+import { PermissionGroupNav } from '@/features/permissions/group-controls';
+import ActionEditor from '@/features/permissions/action-editor';
+import PermissionAssignment from '@/features/permissions/assignment';
+import type { ActionResourceBinding, ActionConfig } from '@/features/permissions/types';
+import {
+  authorizedEditorPayload,
+  canDeleteAssignedRecord,
+  canManageDefinition,
+  isAssignmentField,
+  isExistingCredentialField
+} from '@/features/permissions/assignment-policy';
+import { cn } from '@/lib/utils';
+import { useDefaultPageSize } from '@/features/admin/page-size';
 import { StyledSelect, RelationPicker } from './record-selects';
 import ResultToolbar from './result-toolbar';
+import ActiveFilters from './active-filters';
+import ManagementOverview from './management-overview';
+import ResourceCards from './resource-cards';
+import RecordDetail from './record-detail';
+import AssociationEditor from './association-editor';
+import GroupMemberEditor from './group-member-editor';
+import RuleListEditor from './rule-list-editor';
+import { AdminDrawer, useAdminText } from './admin-ui';
+import { getAdminRecord } from '@/features/admin/service';
+import {
+  adminDate,
+  changedFields,
+  parseAdminDateTime,
+  type AdminQuery,
+  type AdminRecord
+} from '@/features/admin/model';
 
+import { isBadGatewayError } from '@/features/admin/request-error';
 import PageContainer from '@/components/layout/page-container';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,26 +51,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/features/auth/auth-context';
 import { useLocale, type Locale } from '@/features/i18n/locale-context';
 import {
-  IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconEdit,
   IconLock,
-  IconMaximize,
-  IconMinimize,
   IconPlus,
   IconSearch,
   IconTrash,
@@ -54,14 +77,6 @@ import { isValidPassword, isValidUsername } from '@/features/auth/validation';
 type Density = 'compact' | 'default' | 'loose';
 const dictionaryKeyPattern = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
 
-const menuPermission: Record<ResourceKind, string> = {
-  action: '/system/action',
-  role: '/system/role',
-  user: '/system/user',
-  'user-group': '/system/group',
-  dictionary: '/system/dictionary',
-  whitelist: '/system/whitelist'
-};
 
 function initialValues(resource: ResourceKind, record?: SystemRecord) {
   const result: Record<string, unknown> = {};
@@ -76,6 +91,11 @@ function initialValues(resource: ResourceKind, record?: SystemRecord) {
     result[field.key] = value;
   }
   if (resource === 'user' && record) result.password = '';
+  if (resource === 'action') {
+    result.config = record?.config;
+    result.names = record?.names ?? {};
+    result.scope = record?.scope ?? 'admin';
+  }
   return result;
 }
 
@@ -115,11 +135,7 @@ function formPayload(fields: FieldConfig[], values: Record<string, unknown>, edi
 }
 
 function changedPayload(current: Record<string, unknown>, initial: Record<string, unknown>) {
-  return Object.fromEntries(
-    Object.entries(current).filter(
-      ([key, value]) => JSON.stringify(value) !== JSON.stringify(initial[key])
-    )
-  );
+  return changedFields(current, initial);
 }
 
 function localize(value: string, locale: Locale) {
@@ -139,15 +155,8 @@ function semanticBadgeClass(color: 'blue' | 'green' | 'orange' | 'red' | 'yellow
   }[color];
 }
 
-const padDatePart = (number: number) => String(number).padStart(2, '0');
-
-function formatPlainDateTime(value: number) {
-  const date = new Date(value);
-  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
-}
-
-function formatDateTimeInput(value: number) {
-  return formatPlainDateTime(value).slice(0, 16).replace(' ', 'T');
+function formatDateTimeInput(value: number, zone?: string) {
+  return adminDate(value, zone).slice(0, 16).replace(' ', 'T');
 }
 
 function resourceRuleColor(rule: string, category?: unknown) {
@@ -167,7 +176,8 @@ function displayValue(
   locale: Locale,
   _timezone: string
 ) {
-  if (key.endsWith('_at') && typeof value === 'number') return formatPlainDateTime(value);
+  if (key === 'last_logged_in_at' && !value) return localize('Never signed in / 从未登录', locale);
+  if (key.endsWith('_at') && typeof value === 'number') return adminDate(value, _timezone);
   if (key === 'status') {
     const label = localize(
       value === 1 ? 'Active / 正常' : value === 2 ? 'Locked / 已锁定' : 'Pending / 待审核',
@@ -187,7 +197,7 @@ function displayValue(
             {lockExpiredAt === 0
               ? localize('Permanent / 永久', locale)
               : Number.isFinite(lockExpiredAt)
-                ? formatPlainDateTime(lockExpiredAt)
+                ? adminDate(lockExpiredAt, _timezone)
                 : ''}
           </div>
         )}
@@ -221,6 +231,24 @@ function displayValue(
     );
   }
   if (key === 'value') return <JsonPreview value={value} locale={locale} />;
+  if (['menu', 'button'].includes(key) && typeof value === 'string')
+    return (
+      <div className='flex max-w-80 flex-wrap gap-1'>
+        {value
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => (
+            <Badge
+              key={line}
+              variant='outline'
+              className='max-w-full whitespace-normal break-words'
+            >
+              {line}
+            </Badge>
+          ))}
+      </div>
+    );
   if (key === 'resource' && typeof value === 'string') {
     return (
       <div className='flex max-w-80 flex-col items-start gap-1'>
@@ -232,7 +260,10 @@ function displayValue(
             <Badge
               key={`${item}-${index}`}
               variant='outline'
-              className={`max-w-full whitespace-normal ${semanticBadgeClass(resourceRuleColor(item, record.category))}`}
+              className={cn(
+                'max-w-full whitespace-normal',
+                semanticBadgeClass(resourceRuleColor(item, record.category))
+              )}
             >
               {item}
             </Badge>
@@ -311,38 +342,107 @@ function loadHistory() {
 export function ManagementPage({ resource }: { resource: ResourceKind }) {
   const config = resourceConfigs[resource];
   const auth = useAuth();
+  const latestUser = React.useRef(auth.user);
+  React.useEffect(() => { latestUser.current = auth.user; }, [auth.user]);
   const { locale, pick, timezone } = useLocale();
+  const text = useAdminText();
+  const [view, setView] = React.useState<'cards' | 'matrix' | 'table'>(
+    resource === 'user' ? 'table' : resource === 'action' ? 'matrix' : 'cards'
+  );
+  const [summaryRevision, setSummaryRevision] = React.useState(0);
+  const [detailRecord, setDetailRecord] = React.useState<AdminRecord>();
+  const [memberAdded, setMemberAdded] = React.useState<number[]>([]);
+  const [memberRemoved, setMemberRemoved] = React.useState<number[]>([]);
+  const [discardOpen, setDiscardOpen] = React.useState(false);
+  function closeEditor() {
+    if (saving) return;
+    if (
+      JSON.stringify(values) !== JSON.stringify(initialEditorValues) ||
+      memberAdded.length ||
+      memberRemoved.length
+    )
+      setDiscardOpen(true);
+    else setOpen(false);
+  }
   const [records, setRecords] = React.useState<SystemRecord[]>([]);
   const [total, setTotal] = React.useState(0);
   const [page, setPage] = React.useState(1);
-  const [size, setSize] = React.useState(10);
+  const defaultSize = useDefaultPageSize();
+  const [size, setSize] = React.useState(defaultSize);
+  React.useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the local view with its remote query or controlled preference.
+    setSize(defaultSize);
+    setPage(1);
+  }, [defaultSize]);
   const [filterDraft, setFilterDraft] = React.useState<Record<string, string>>({});
   const [activeFilters, setActiveFilters] = React.useState<Record<string, string>>({});
   const filterDraftRef = React.useRef<Record<string, string>>({});
+  function applyInsight(updates: AdminQuery) {
+    if (!canNow('query')) return;
+    cancelFilterSearch();
+    filtersDirtyRef.current = false;
+    const next = { ...filterDraftRef.current };
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined) delete next[key];
+      else next[key] = String(value);
+    }
+    filterDraftRef.current = next;
+    setFilterDraft(next);
+    setActiveFilters(next);
+    setPage(1);
+  }
+
   const filtersDirtyRef = React.useRef(false);
   const filterSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterHistory, setFilterHistory] = React.useState<Record<string, string[]>>({});
   const [searchExpanded, setSearchExpanded] = React.useState(false);
   const [selected, setSelected] = React.useState<number[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<SystemRecord>();
   const [values, setValues] = React.useState<Record<string, unknown>>({});
   const [initialEditorValues, setInitialEditorValues] = React.useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
+  const [bindings, setBindings] = React.useState<ActionResourceBinding[] | undefined>();
+  const [permissionProblem, setPermissionProblem] = React.useState('');
+  const hasAllPermissions = auth.user?.permission.permission_scope === '*';
+  const editorOperation = editing ? 'update' : 'create';
+  const canAssign =
+    hasAllPermissions ||
+    !!auth.user?.permission.permission_scopes?.includes(`${resource}:${editorOperation}`);
+  const editorFields = config.fields.filter(
+    (field) =>
+      (canAssign || !isAssignmentField(resource, field.key)) &&
+      (!editing || hasAllPermissions || !isExistingCredentialField(resource, field.key))
+  );
+  const canManageRecord = (record: SystemRecord, user: UserInfo | null = auth.user) => {
+    if (resource !== 'action') return true;
+    if (!record.config || typeof record.config !== 'object' || Array.isArray(record.config)) return false;
+    const definition = record.config as Partial<ActionConfig>;
+    return canManageDefinition(String(record.word ?? ''), definition.builtin,
+      user?.permission.permission_scope === '*',
+      !!user?.permission.entries.some((entry) => entry.menu_path === '/system/developer' &&
+        entry.btns.includes('admin:btn:system:developer:publish')),
+      definition.permission_scope);
+  };
+  const canDeleteRecord = (record: SystemRecord, control: 'delete' | 'delete-selected' = 'delete', user: UserInfo | null = auth.user) =>
+    hasManagementControl(user, resource, control) && canManageRecord(record, user) &&
+    canDeleteAssignedRecord(resource, record, user?.permission.permission_scope === '*' ||
+      !!user?.permission.permission_scopes?.includes(`${resource}:delete`));
   const [reviewUser, setReviewUser] = React.useState<SystemRecord>();
   const [reviewDecision, setReviewDecision] = React.useState<'approve' | 'reject'>('approve');
   const [reviewReason, setReviewReason] = React.useState('');
   const [reviewSaving, setReviewSaving] = React.useState(false);
   const [lockUser, setLockUser] = React.useState<SystemRecord>();
-  const [minimumLockTime] = React.useState(() => formatDateTimeInput(Date.now()));
+  const [minimumLockTime] = React.useState(() => formatDateTimeInput(Date.now(), timezone));
   const [lockMode, setLockMode] = React.useState<'until' | 'permanent'>('until');
   const [lockUntil, setLockUntil] = React.useState('');
   const [lockSaving, setLockSaving] = React.useState(false);
   const [density, setDensity] = React.useState<Density>('default');
   const [visibleColumns, setVisibleColumns] = React.useState(
-    () => new Set(config.columns.map((column) => column.key))
+    () => new Set(resource === 'user' ? ['username', 'role', 'status', 'login_count', 'last_logged_in_at', 'metadata'] : config.columns.map((column) => column.key))
   );
   const [showSelection, setShowSelection] = React.useState(true);
   const [bordered, setBordered] = React.useState(true);
@@ -350,21 +450,33 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
   const [sticky, setSticky] = React.useState(true);
   const [fullscreen, setFullscreen] = React.useState(false);
   const tableContainer = React.useRef<HTMLDivElement>(null);
-  const permissions = React.useMemo(
-    () => auth.user?.permission.btns ?? [],
-    [auth.user?.permission.btns]
-  );
-  const canOpenPage = Boolean(
-    auth.user?.permission.menus.includes('*') ||
-    auth.user?.permission.menus.includes(menuPermission[resource])
-  );
-  const can = React.useCallback(
-    (operation: string) =>
-      permissions.includes('*') || permissions.includes(`${config.permission}.${operation}`),
-    [config.permission, permissions]
-  );
+  const canOpenPage = hasManagementPage(auth.user, resource);
+  const can = React.useCallback((operation: string) => operation === 'read'
+    ? hasManagementPage(auth.user, resource)
+    : hasManagementControl(auth.user, resource, operation === 'update' ? 'edit' : operation),
+  [auth.user, resource]);
+  function canNow(operation: string) {
+    return operation === 'read' ? hasManagementPage(latestUser.current, resource)
+      : hasManagementControl(latestUser.current, resource, operation === 'update' ? 'edit' : operation);
+  }
+  function openDetail(record: AdminRecord) {
+    if (!loading && canNow('view-detail')) setDetailRecord(record);
+  }
+  function refreshRecords() {
+    if (!canNow('refresh')) return;
+    setSummaryRevision((value) => value + 1);
+    void load();
+  }
   const visibleFilterFields = searchExpanded ? config.filters : config.filters.slice(0, 3);
-  const shownColumns = config.columns.filter((column) => visibleColumns.has(column.key));
+  const shownColumns = config.columns.filter(
+    (column) =>
+      visibleColumns.has(column.key) &&
+      (view !== 'matrix' || ['name', 'resource', 'menu', 'button'].includes(column.key))
+  );
+  const listFields = systemListFields(resource, view, [...visibleColumns],
+    can('delete') || can('delete-selected'),
+    !!hasAllPermissions || !!auth.user?.permission.permission_scopes?.includes(`${resource}:delete`));
+  const listGeneration = React.useRef(0);
   const cellPadding = density === 'compact' ? 'p-1.5' : density === 'loose' ? 'p-4' : 'p-3';
 
   React.useEffect(() => {
@@ -373,7 +485,20 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     const applyRouteFilters = () => {
       const query = new URLSearchParams(window.location.search);
       const next = Object.fromEntries(
-        config.filters
+        [
+          ...config.filters,
+          ...[
+            'created_from',
+            'created_to',
+            'last_logged_in_from',
+            'last_logged_in_to',
+            'has_permissions',
+            'has_members',
+            'group_exact',
+            'groups_all',
+            'groups_exact'
+          ].map((key) => ({ key }))
+        ]
           .map((field) => [field.key, query.get(field.key) ?? ''])
           .filter(([, value]) => value !== '')
       );
@@ -390,26 +515,37 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
   }, [config.filters]);
 
   const load = React.useCallback(async () => {
+    const run = ++listGeneration.current;
     if (!canOpenPage || !can('read')) {
       setLoading(false);
       return;
     }
     setLoading(true);
+    setLoadError(false);
     try {
       const result = await listRecords(resource, {
         p: page,
         s: size,
+        f: listFields,
         ...activeFilters
       });
-      setRecords(result.items);
+      if (run !== listGeneration.current) return;
+      setRecords(result.items.map((record) => resource === 'user-group'
+        ? { ...record, users: record.member_preview ?? [] }
+        : resource === 'user' ? { ...record, role: record.role_summary ?? record.role } : record));
       setTotal(result.t);
       setSelected([]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : pick('Failed to load', '加载失败'));
+      if (run !== listGeneration.current) return;
+      setLoadError(true);
+      setRecords([]);
+      setTotal(0);
+      if (!isBadGatewayError(error))
+        toast.error(error instanceof Error ? error.message : pick('Failed to load', '加载失败'));
     } finally {
-      setLoading(false);
+      if (run === listGeneration.current) setLoading(false);
     }
-  }, [activeFilters, can, canOpenPage, page, pick, resource, size]);
+  }, [activeFilters, can, canOpenPage, page, pick, resource, size, listFields]);
 
   React.useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- synchronize remote records with query state
@@ -430,6 +566,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
 
   function runSearch(event?: React.FormEvent) {
     event?.preventDefault();
+    if (!canNow('query')) return;
     cancelFilterSearch();
     filtersDirtyRef.current = false;
     const normalized = Object.fromEntries(
@@ -451,9 +588,10 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
 
   function scheduleFilterSearch() {
     cancelFilterSearch();
+    if (!canNow('query')) return;
     filterSearchTimer.current = setTimeout(() => {
       filterSearchTimer.current = null;
-      if (filtersDirtyRef.current && can('read')) runSearch();
+      if (filtersDirtyRef.current && canNow('query')) runSearch();
     }, 500);
   }
 
@@ -465,6 +603,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
   );
 
   function resetSearch() {
+    if (!canNow('reset-query')) return;
     cancelFilterSearch();
     filtersDirtyRef.current = false;
     filterDraftRef.current = {};
@@ -473,7 +612,28 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     setPage(1);
   }
 
-  function openEditor(record?: SystemRecord) {
+  const editorGeneration = React.useRef(0);
+  async function openEditor(record?: SystemRecord) {
+    const run = ++editorGeneration.current;
+    if (!canNow(record ? 'update' : 'create')) return;
+    if (record) {
+      try {
+        const full = await getAdminRecord(resource, record.id, 'edit');
+        if (run !== editorGeneration.current || !canNow('update') || !canManageRecord(full as SystemRecord, latestUser.current)) return;
+        record = full as SystemRecord;
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : pick('Unable to load record', '无法加载记录')
+        );
+        return;
+      }
+    }
+    if (record && !canManageRecord(record, latestUser.current)) return;
+    setBindings(undefined);
+    setPermissionProblem('');
+    setDetailRecord(undefined);
+    setMemberAdded([]);
+    setMemberRemoved([]);
     const next = initialValues(resource, record);
     setEditing(record);
     setValues(next);
@@ -484,8 +644,13 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (
+      !canNow(editing ? 'update' : 'create') ||
+      (editing && !canManageRecord(editing, latestUser.current))
+    )
+      return;
     const errors: Record<string, string> = {};
-    for (const field of config.fields) {
+    for (const field of resource === 'action' ? [] : editorFields) {
       const required = Boolean(field.required || (!editing && field.key === 'password'));
       const value = values[field.key];
       if (
@@ -507,7 +672,11 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
         }
       }
     }
-    if (resource === 'user' && !isValidUsername(String(values.username ?? ''))) {
+    if (
+      resource === 'user' &&
+      (!editing || hasAllPermissions) &&
+      !isValidUsername(String(values.username ?? ''))
+    ) {
       errors.username = pick('Username is required', '请输入用户名');
     }
     const password = values.password;
@@ -525,6 +694,10 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
         '请使用大写字母、数字，并以下划线分隔各段'
       );
     }
+    if (resource === 'action' && (!values.group || permissionProblem))
+      errors.word = permissionProblem || pick('Select a group', '请选择分组');
+    if (canAssign && permissionProblem)
+      errors.action_codes = pick('Permission catalog is not ready', '权限目录尚未就绪');
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       requestAnimationFrame(() => document.getElementById(Object.keys(errors)[0])?.focus());
@@ -533,9 +706,36 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     setFieldErrors({});
     setSaving(true);
     try {
-      const fullPayload = formPayload(config.fields, values, Boolean(editing));
-      const initialPayload = editing ? formPayload(config.fields, initialEditorValues, true) : {};
-      const payload = editing ? changedPayload(fullPayload, initialPayload) : fullPayload;
+      const fullPayload =
+        resource === 'action'
+          ? { word: values.word, group: values.group, names: values.names, config: values.config }
+          : formPayload(editorFields, values, Boolean(editing));
+      const initialPayload = editing
+        ? resource === 'action'
+          ? {
+              word: initialEditorValues.word,
+              group: initialEditorValues.group,
+              names: initialEditorValues.names,
+              config: initialEditorValues.config
+            }
+          : formPayload(editorFields, initialEditorValues, true)
+        : {};
+      let payload = editing ? changedPayload(fullPayload, initialPayload) : fullPayload;
+      if (bindings !== undefined && canAssign) {
+        delete payload.action_codes;
+        payload.action_bindings = bindings;
+      }
+      if (resource === 'user-group' && editing) {
+        delete payload.user_ids;
+        Object.assign(payload, authorizedGroupMemberDelta(latestUser.current, memberAdded, memberRemoved));
+      }
+      payload = authorizedEditorPayload(
+        resource,
+        payload,
+        !!canAssign,
+        !!hasAllPermissions,
+        !!editing
+      );
       if (editing && Object.keys(payload).length === 0) {
         toast.info(pick('No changes to save', '没有需要保存的修改'));
         return;
@@ -548,6 +748,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
           : pick('Created successfully', '创建成功')
       );
       setOpen(false);
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : pick('Save failed', '保存失败'));
@@ -556,16 +757,23 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     }
   }
 
-  async function remove(ids: number[]) {
+  async function remove(ids: number[], control: 'delete' | 'delete-selected' = 'delete') {
+    if (
+      loading || !ids.length || !canNow(control) ||
+      ids.some((id) => !records.some((record) => record.id === id && canDeleteRecord(record, control, latestUser.current)))
+    )
+      return;
     if (
       !confirm(
         pick(`Delete ${ids.length} selected record(s)?`, `确认删除选中的 ${ids.length} 条记录？`)
       )
     )
       return;
+    if (!canNow(control) || ids.some((id) => !records.some((record) => record.id === id && canDeleteRecord(record, control, latestUser.current)))) return;
     try {
       await deleteRecords(resource, ids);
       toast.success(pick('Deleted successfully', '删除成功'));
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : pick('Delete failed', '删除失败'));
@@ -573,6 +781,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
   }
 
   async function updateUserAction(record: SystemRecord, action: 'unlock' | 'unlock-password') {
+    if (resource !== 'user' || !canNow(action)) return;
     const metadata = { ...(record.metadata as Record<string, unknown>) };
     const payload: Record<string, unknown> = { metadata };
     if (action === 'unlock') {
@@ -583,6 +792,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     try {
       await updateRecord('user', record.id, payload);
       toast.success(pick('Updated successfully', '修改成功'));
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : pick('Update failed', '修改失败'));
@@ -590,13 +800,14 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
   }
 
   function openReview(record: SystemRecord) {
+    if (resource !== 'user' || !canNow('approve')) return;
     setReviewUser(record);
     setReviewDecision('approve');
     setReviewReason('');
   }
 
   async function submitReview() {
-    if (!reviewUser || reviewSaving) return;
+    if (resource !== 'user' || !reviewUser || reviewSaving || !canNow('approve')) return;
     if (reviewDecision === 'reject' && !reviewReason.trim()) {
       toast.error(pick('Please enter a rejection reason', '请输入驳回原因'));
       return;
@@ -616,6 +827,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
           : pick('Registration rejected', '注册申请已驳回')
       );
       setReviewUser(undefined);
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : pick('Review failed', '审核失败'));
@@ -624,20 +836,19 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
     }
   }
 
-  function openLock(record: SystemRecord) {
-    const next = new Date(Date.now() + 86_400_000);
-    const local = new Date(next.getTime() - next.getTimezoneOffset() * 60_000)
-      .toISOString()
-      .slice(0, 16);
+  function openLock(record: SystemRecord, now: number) {
+    if (resource !== 'user' || !canNow('lock')) return;
+    const next = new Date(now + 86_400_000);
+    const local = formatDateTimeInput(next.getTime(), timezone);
     setLockUser(record);
     setLockMode('until');
     setLockUntil(local);
   }
 
-  async function submitLock() {
-    if (!lockUser || lockSaving) return;
-    const expiration = lockMode === 'permanent' ? 0 : new Date(lockUntil).getTime();
-    if (lockMode === 'until' && (!Number.isFinite(expiration) || expiration <= Date.now())) {
+  async function submitLock(now: number) {
+    if (resource !== 'user' || !lockUser || lockSaving || !canNow('lock')) return;
+    const expiration = lockMode === 'permanent' ? 0 : parseAdminDateTime(lockUntil, timezone);
+    if (lockMode === 'until' && (!Number.isFinite(expiration) || expiration <= now)) {
       toast.error(pick('Please select a future lock expiration time', '请选择未来的锁定截止时间'));
       return;
     }
@@ -650,6 +861,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
       await updateRecord('user', lockUser.id, { metadata, status: 2 });
       toast.success(pick('User locked successfully', '用户锁定成功'));
       setLockUser(undefined);
+      setSummaryRevision((value) => value + 1);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : pick('Lock failed', '锁定失败'));
@@ -694,12 +906,24 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
         </div>
       }
       pageTitle={localize(config.title, locale)}
-      pageDescription={pick('Connected to the Go Cinch auth service', '已连接 Go Cinch 认证后端')}
     >
       <div
         ref={tableContainer}
-        className={`min-w-0 max-w-full space-y-4 bg-background ${fullscreen ? 'h-screen overflow-auto p-5' : ''}`}
+        className={cn(
+          'min-w-0 max-w-full space-y-4 bg-background',
+          fullscreen ? 'h-screen overflow-auto p-5' : ''
+        )}
       >
+        <ManagementOverview
+          resource={resource}
+          allowed={canOpenPage && can('read')}
+          refreshKey={summaryRevision}
+          filters={activeFilters}
+          canRefresh={can('refresh')}
+          onFilter={can('query') ? applyInsight : undefined}
+          onGroup={can('view-detail') ? (id) => openDetail({ id }) : undefined}
+        />
+        <ActiveFilters filters={activeFilters} onChange={can('query') ? applyInsight : undefined} />
         <form
           className='gap-4 rounded-lg border bg-card p-3 2xl:flex 2xl:items-start 2xl:justify-between'
           onSubmit={runSearch}
@@ -753,6 +977,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
                 ) : (
                   <FilterTextInput
                     resource={resource}
+                    canQuery={can('query')}
                     field={{ ...field, label: localize(field.label, locale) }}
                     value={filterDraft[field.key] ?? ''}
                     history={filterHistory[`${resource}:${field.key}`] ?? []}
@@ -774,13 +999,17 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
             ))}
           </div>
           <div className='mt-3 flex shrink-0 items-center justify-end gap-2 2xl:mt-0 2xl:pt-5'>
-            <Button type='button' variant='outline' onClick={resetSearch}>
-              {pick('Reset', '重置')}
-            </Button>
-            <Button type='submit' variant='secondary'>
-              <IconSearch />
-              {pick('Search', '查询')}
-            </Button>
+            {can('reset-query') && (
+              <Button type='button' variant='outline' onClick={resetSearch}>
+                {pick('Reset', '重置')}
+              </Button>
+            )}
+            {can('query') && (
+              <Button type='submit' variant='secondary'>
+                <IconSearch />
+                {pick('Search', '查询')}
+              </Button>
+            )}
             {config.filters.length > 3 && (
               <Button
                 type='button'
@@ -794,16 +1023,39 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
           </div>
         </form>
 
+        {resource === 'action' && (
+          <PermissionGroupNav
+            selected={activeFilters.group_exact ?? ''}
+            selectable={can('query')}
+            onSelect={(group) => applyInsight({ group_exact: group || undefined })}
+            revision={summaryRevision}
+          />
+        )}
         <div className='min-w-0 max-w-full space-y-3 bg-background'>
           <div className='flex flex-wrap items-center gap-2'>
+            <div role='group' aria-label={text('system-insights.cards')} className='flex gap-1'>
+              {(resource === 'action'
+                ? (['matrix', 'table'] as const)
+                : (['cards', 'table'] as const)
+              ).map((mode) => (
+                <Button
+                  key={mode}
+                  size='sm'
+                  variant={view === mode ? 'default' : 'outline'}
+                  onClick={() => setView(mode)}
+                >
+                  {text(`system-insights.${mode}`)}
+                </Button>
+              ))}
+            </div>
             {can('create') && (
               <Button onClick={() => openEditor()}>
                 <IconPlus />
                 {pick('Create', '新建')}
               </Button>
             )}
-            {selected.length > 0 && can('delete') && (
-              <Button variant='destructive' onClick={() => void remove(selected)}>
+            {selected.length > 0 && can('delete-selected') && (
+              <Button variant='destructive' onClick={() => void remove(selected, 'delete-selected')}>
                 <IconTrash />
                 {pick('Delete selected', '批量删除')} ({selected.length})
               </Button>
@@ -813,7 +1065,8 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
             </span>
             <ResultToolbar
               loading={loading}
-              refresh={() => void load()}
+              canRefresh={can('refresh')}
+              refresh={refreshRecords}
               density={density}
               setDensity={setDensity}
               fullscreen={fullscreen}
@@ -875,162 +1128,227 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
             </ResultToolbar>
           </div>
 
-          <div
-            className={`w-full max-w-full overflow-auto rounded-lg bg-card ${bordered ? 'border' : ''}`}
-          >
-            <table className='w-full min-w-max text-sm'>
-              <thead className={`${sticky ? 'sticky top-0 z-10' : ''} bg-muted/90`}>
-                <tr>
-                  {showSelection && (
-                    <th className={`${cellPadding} text-left`}>
-                      <Checkbox
-                        aria-label={pick('Select all', '全选')}
-                        checked={records.length > 0 && selected.length === records.length}
-                        onCheckedChange={(checked) =>
-                          setSelected(checked ? records.map((record) => record.id) : [])
-                        }
-                      />
-                    </th>
-                  )}
-                  {shownColumns.map((column) => (
-                    <th key={column.key} className={`${cellPadding} text-left font-medium`}>
-                      {localize(column.label, locale)}
-                    </th>
-                  ))}
-                  <th className={`sticky right-0 bg-muted/95 ${cellPadding} text-right`}>
-                    {pick('Actions', '操作')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
+          {loadError && (
+            <div
+              role='alert'
+              className='mb-4 flex items-center gap-3 rounded-lg border border-amber-500/40 p-3'
+            >
+              <span>{text('system-insights.loadError')}</span>
+              {can('refresh') && <Button variant='outline' onClick={refreshRecords}>
+                {text('system-insights.retry')}
+              </Button>}
+            </div>
+          )}
+          {view === 'cards' ? (
+            <ResourceCards
+              resource={resource}
+              records={records}
+              loading={loading}
+              selected={selected}
+              onSelect={(id) => {
+                const record = records.find((record) => record.id === id);
+                if (record && canDeleteRecord(record, 'delete-selected', latestUser.current))
+                  setSelected((old) => old.includes(id) ? old.filter((value) => value !== id) : [...old, id]);
+              }}
+              canSelect={(record) => canDeleteRecord(record as SystemRecord, 'delete-selected')}
+              onDetail={can('view-detail') ? openDetail : undefined}
+              canEdit={(record) => resource !== 'action' || canManageRecord(record as SystemRecord)}
+              canDelete={(record) => canDeleteRecord(record as SystemRecord)}
+              onEdit={can('update') ? (record) => openEditor(record as SystemRecord) : undefined}
+              onDelete={can('delete') ? (id) => void remove([id]) : undefined}
+              renderValue={(key, value, record) =>
+                displayValue(key, value, record as SystemRecord, locale, timezone)
+              }
+            />
+          ) : (
+            <div
+              data-testid='management-table'
+              className={cn(
+                'w-full max-w-full overflow-auto rounded-lg bg-card',
+                bordered ? 'border' : ''
+              )}
+            >
+              <table className='w-full min-w-max text-sm'>
+                <thead className={cn(sticky ? 'sticky top-0 z-10' : '', 'bg-muted/90')}>
                   <tr>
-                    <td
-                      className='p-8 text-center text-muted-foreground'
-                      colSpan={shownColumns.length + 2}
-                    >
-                      {pick('Loading…', '加载中…')}
-                    </td>
-                  </tr>
-                ) : records.length === 0 ? (
-                  <tr>
-                    <td
-                      className='p-8 text-center text-muted-foreground'
-                      colSpan={shownColumns.length + 2}
-                    >
-                      {pick('No data', '暂无数据')}
-                    </td>
-                  </tr>
-                ) : (
-                  records.map((record, rowIndex) => (
-                    <tr
-                      key={record.id}
-                      className={`${bordered ? 'border-t' : ''} ${striped && rowIndex % 2 === 1 ? 'bg-muted/35' : ''} hover:bg-muted/30`}
-                    >
-                      {showSelection && (
-                        <td className={cellPadding}>
-                          <Checkbox
-                            aria-label={`Select ${record.id}`}
-                            checked={selected.includes(record.id)}
-                            onCheckedChange={(checked) =>
-                              setSelected((old) =>
-                                checked
-                                  ? [...new Set([...old, record.id])]
-                                  : old.filter((id) => id !== record.id)
-                              )
-                            }
-                          />
-                        </td>
-                      )}
-                      {shownColumns.map((column) => (
-                        <td
-                          key={column.key}
-                          className={`max-w-80 ${cellPadding} align-top`}
-                          title={
-                            typeof record[column.key] === 'string'
-                              ? (record[column.key] as string)
-                              : undefined
+                    {showSelection && (
+                      <th className={cn(cellPadding, 'text-left')}>
+                        <Checkbox
+                          aria-label={pick('Select all', '全选')}
+                          checked={records.some((record) => canDeleteRecord(record, 'delete-selected')) && records.filter((record) => canDeleteRecord(record, 'delete-selected')).every((record) => selected.includes(record.id))}
+                          disabled={!records.some((record) => canDeleteRecord(record, 'delete-selected'))}
+                          onCheckedChange={(checked) =>
+                            setSelected(checked ? records.filter((record) => canDeleteRecord(record, 'delete-selected', latestUser.current)).map((record) => record.id) : [])
                           }
-                        >
-                          {displayValue(column.key, record[column.key], record, locale, timezone)}
-                        </td>
-                      ))}
+                        />
+                      </th>
+                    )}
+                    {shownColumns.map((column) => (
+                      <th key={column.key} className={cn(cellPadding, 'text-left font-medium')}>
+                        {resource === 'action' && view === 'matrix' && ['menu', 'resource', 'button'].includes(column.key)
+                          ? text(({ menu: 'permission-display.relatedMenus', resource: 'action-editor.operation', button: 'action-editor.features' } as Record<string, string>)[column.key])
+                          : localize(column.label, locale)}
+                      </th>
+                    ))}
+                    <th className={cn('sticky right-0 bg-muted/95', cellPadding, 'text-right')}>
+                      {pick('Actions', '操作')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
                       <td
-                        className={`sticky right-0 z-1 min-w-24 space-x-1 bg-card ${cellPadding} text-right shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.45)]`}
+                        className='p-8 text-center text-muted-foreground'
+                        colSpan={shownColumns.length + 2}
                       >
-                        {resource === 'user' && can('update') && Number(record.status) === 0 && (
-                          <Button
-                            title={pick('Review registration', '注册审核')}
-                            size='sm'
-                            variant='ghost'
-                            onClick={() => openReview(record)}
-                          >
-                            <IconUserCheck />
-                            {pick('Review', '审核')}
-                          </Button>
+                        {pick('Loading…', '加载中…')}
+                      </td>
+                    </tr>
+                  ) : records.length === 0 ? (
+                    <tr>
+                      <td
+                        className='p-8 text-center text-muted-foreground'
+                        colSpan={shownColumns.length + 2}
+                      >
+                        {pick('No data', '暂无数据')}
+                      </td>
+                    </tr>
+                  ) : (
+                    records.map((record, rowIndex) => (
+                      <tr
+                        key={record.id}
+                        className={cn(
+                          bordered ? 'border-t' : '',
+                          striped && rowIndex % 2 === 1 ? 'bg-muted/35' : '',
+                          'hover:bg-muted/30'
                         )}
-                        {resource === 'user' && can('update') && Number(record.status) === 1 && (
-                          <Button
-                            title={pick('Lock', '锁定')}
-                            size='icon-sm'
-                            variant='ghost'
-                            onClick={() => openLock(record)}
-                          >
-                            <IconLock />
-                          </Button>
+                      >
+                        {showSelection && (
+                          <td className={cellPadding}>
+                            <Checkbox
+                              aria-label={`Select ${record.id}`}
+                              checked={selected.includes(record.id)}
+                              disabled={!canDeleteRecord(record, 'delete-selected')}
+                              onCheckedChange={(checked) => {
+                                if (!canDeleteRecord(record, 'delete-selected', latestUser.current)) return;
+                                setSelected((old) =>
+                                  checked
+                                    ? [...new Set([...old, record.id])]
+                                    : old.filter((id) => id !== record.id)
+                                );
+                              }}
+                            />
+                          </td>
                         )}
-                        {resource === 'user' && can('update') && Number(record.status) === 2 && (
-                          <Button
-                            size='sm'
-                            variant='ghost'
-                            onClick={() => void updateUserAction(record, 'unlock')}
+                        {shownColumns.map((column) => (
+                          <td
+                            key={column.key}
+                            className={cn('max-w-80', cellPadding, 'align-top')}
+                            title={
+                              typeof record[column.key] === 'string'
+                                ? (record[column.key] as string)
+                                : undefined
+                            }
                           >
-                            {pick('Unlock', '解锁')}
-                          </Button>
-                        )}
-                        {resource === 'user' &&
-                          can('update') &&
-                          Number(
-                            (record.metadata as Record<string, unknown>)?.password_change_failures
-                          ) > 0 && (
+                            {resource === 'action' && view === 'matrix' && ['resource', 'menu', 'button'].includes(column.key) ? (
+                              <PermissionResultCell config={record.config as ActionConfig | undefined} field={column.key} matrix={view === 'matrix'} onDetail={can('view-detail') ? () => openDetail(record) : undefined} />
+                            ) : view === 'matrix' && column.key === 'name' ? (
+                              <>
+                                <strong>{String(record.name)}</strong>
+                                <div className='text-xs text-muted-foreground'>
+                                  {String(record.word)}
+                                </div>
+                              </>
+                            ) : (
+                              displayValue(column.key, record[column.key], record, locale, timezone)
+                            )}
+                          </td>
+                        ))}
+                        <td
+                          className={cn(
+                            'sticky right-0 z-1 min-w-24 space-x-1 bg-card',
+                            cellPadding,
+                            'text-right shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.45)]'
+                          )}
+                        >
+                          {can('view-detail') && <Button size='sm' variant='ghost' onClick={() => openDetail(record)}>
+                            {text('system-insights.details')}
+                          </Button>}
+                          {resource === 'user' && can('approve') && Number(record.status) === 0 && (
+                            <Button
+                              title={pick('Review registration', '注册审核')}
+                              size='sm'
+                              variant='ghost'
+                              onClick={() => openReview(record)}
+                            >
+                              <IconUserCheck />
+                              {pick('Review', '审核')}
+                            </Button>
+                          )}
+                          {resource === 'user' && can('lock') && Number(record.status) === 1 && (
+                            <Button
+                              title={pick('Lock', '锁定')}
+                              size='icon-sm'
+                              variant='ghost'
+                              onClick={() => openLock(record, Date.now())}
+                            >
+                              <IconLock />
+                            </Button>
+                          )}
+                          {resource === 'user' && can('unlock') && Number(record.status) === 2 && (
                             <Button
                               size='sm'
                               variant='ghost'
-                              onClick={() => void updateUserAction(record, 'unlock-password')}
+                              onClick={() => void updateUserAction(record, 'unlock')}
                             >
-                              {pick('Password unlock', '解锁改密')}
+                              {pick('Unlock', '解锁')}
                             </Button>
                           )}
-                        {can('update') && (
-                          <Button
-                            aria-label={pick('Edit', '编辑')}
-                            title={pick('Edit', '编辑')}
-                            size='icon-sm'
-                            variant='ghost'
-                            onClick={() => openEditor(record)}
-                          >
-                            <IconEdit />
-                          </Button>
-                        )}
-                        {can('delete') && (
-                          <Button
-                            aria-label={pick('Delete', '删除')}
-                            title={pick('Delete', '删除')}
-                            size='icon-sm'
-                            variant='ghost'
-                            className='text-destructive'
-                            onClick={() => void remove([record.id])}
-                          >
-                            <IconTrash />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                          {resource === 'user' &&
+                            can('unlock-password') &&
+                            Number(
+                              (record.metadata as Record<string, unknown>)?.password_change_failures
+                            ) > 0 && (
+                              <Button
+                                size='sm'
+                                variant='ghost'
+                                onClick={() => void updateUserAction(record, 'unlock-password')}
+                              >
+                                {pick('Password unlock', '解锁改密')}
+                              </Button>
+                            )}
+                          {can('update') && (resource !== 'action' || canManageRecord(record)) && (
+                            <Button
+                              aria-label={pick('Edit', '编辑')}
+                              title={pick('Edit', '编辑')}
+                              size='icon-sm'
+                              variant='ghost'
+                              onClick={() => openEditor(record)}
+                            >
+                              <IconEdit />
+                            </Button>
+                          )}
+                          {can('delete') && canDeleteRecord(record) && (
+                            <Button
+                              aria-label={pick('Delete', '删除')}
+                              title={pick('Delete', '删除')}
+                              size='icon-sm'
+                              variant='ghost'
+                              className='text-destructive'
+                              onClick={() => void remove([record.id])}
+                            >
+                              <IconTrash />
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className='flex items-center justify-end gap-2'>
             <StyledSelect
               value={String(size)}
@@ -1068,47 +1386,112 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-2xl'>
+      <RecordDetail
+        resource={resource}
+        record={can('view-detail') ? detailRecord : undefined}
+        onClose={() => setDetailRecord(undefined)}
+        onEdit={can('update') ? (record) => openEditor(record as SystemRecord) : undefined}
+        renderValue={(key, value, record) =>
+          displayValue(key, value, record as SystemRecord, locale, timezone)
+        }
+      />
+      <AdminDrawer
+        wide={['action', 'role', 'user', 'user-group'].includes(resource)}
+        open={open}
+        title={`${editing ? pick('Edit', '编辑') : pick('Create', '新增')} — ${localize(config.title, locale)}`}
+        onClose={closeEditor}
+        footer={
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={closeEditor}>
+              {pick('Cancel', '取消')}
+            </Button>
+            {can(editing ? 'update' : 'create') && <Button type='submit' form='management-editor-form' disabled={saving}>
+              {saving ? pick('Saving…', '保存中…') : pick('Save', '保存')}
+            </Button>}
+          </DialogFooter>
+        }
+      >
+        <form id='management-editor-form' className='space-y-4' noValidate onSubmit={submit}>
+          {resource === 'action' ? (
+            <ActionEditor
+              values={values}
+              recordId={editing?.id}
+              onChange={(changes) => setValues((old) => ({ ...old, ...changes }))}
+              onValidity={setPermissionProblem}
+            />
+          ) : (
+            editorFields.map((field) =>
+              field.type === 'action-select' ? (
+                <PermissionAssignment
+                  key={field.key}
+                  codes={Array.isArray(values.action_codes) ? values.action_codes.map(String) : []}
+                  onChange={setBindings}
+                  onValidity={setPermissionProblem}
+                />
+              ) : field.key === 'user_ids' && editing && resource === 'user-group' ? (
+                <GroupMemberEditor
+                  key={field.key}
+                  record={editing}
+                  disabled={saving}
+                  added={memberAdded}
+                  removed={memberRemoved}
+                  onChange={(added, removed) => {
+                    const members = groupMemberAccess(latestUser.current);
+                    if (members.add) setMemberAdded(added);
+                    if (members.remove) setMemberRemoved(removed);
+                  }}
+                />
+              ) : (
+                <FieldEditor
+                  key={field.key}
+                  field={{ ...field, label: localize(field.label, locale) }}
+                  value={values[field.key]}
+                  seed={editing}
+                  associationAllowed={resource === 'user-group' && field.type === 'user-select' ? !!canAssign && can(editing ? 'update' : 'create') : undefined}
+                  required={Boolean(field.required || (!editing && field.key === 'password'))}
+                  error={fieldErrors[field.key]}
+                  onChange={(value) => {
+                    setValues((old) => ({ ...old, [field.key]: value }));
+                    setFieldErrors((old) => {
+                      const next = { ...old };
+                      delete next[field.key];
+                      return next;
+                    });
+                  }}
+                />
+              )
+            )
+          )}
+          {fieldErrors.word && (
+            <p role='alert' className='text-destructive'>
+              {fieldErrors.word}
+            </p>
+          )}
+          {fieldErrors.action_codes && (
+            <p role='alert' className='text-destructive'>
+              {fieldErrors.action_codes}
+            </p>
+          )}
+        </form>
+      </AdminDrawer>
+      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editing ? pick('Edit', '编辑') : pick('Create', '新增')} —{' '}
-              {localize(config.title, locale)}
-            </DialogTitle>
-            <DialogDescription>
-              {pick(
-                'Search related records by name or code. Passwords use one-time encrypted challenges.',
-                '可按名称或编码检索关联项，密码使用一次性挑战加密。'
-              )}
-            </DialogDescription>
+            <DialogTitle>{text('system-editor.discardTitle')}</DialogTitle>
+            <DialogDescription>{text('system-editor.unsaved')}</DialogDescription>
           </DialogHeader>
-          <form className='space-y-4' noValidate onSubmit={submit}>
-            {config.fields.map((field) => (
-              <FieldEditor
-                key={field.key}
-                field={{ ...field, label: localize(field.label, locale) }}
-                value={values[field.key]}
-                required={Boolean(field.required || (!editing && field.key === 'password'))}
-                error={fieldErrors[field.key]}
-                onChange={(value) => {
-                  setValues((old) => ({ ...old, [field.key]: value }));
-                  setFieldErrors((old) => {
-                    const next = { ...old };
-                    delete next[field.key];
-                    return next;
-                  });
-                }}
-              />
-            ))}
-            <DialogFooter>
-              <Button type='button' variant='outline' onClick={() => setOpen(false)}>
-                {pick('Cancel', '取消')}
-              </Button>
-              <Button type='submit' disabled={saving}>
-                {saving ? pick('Saving…', '保存中…') : pick('Save', '保存')}
-              </Button>
-            </DialogFooter>
-          </form>
+          <DialogFooter>
+            <Button onClick={() => setDiscardOpen(false)}>{text('system-editor.continue')}</Button>
+            <Button
+              variant='destructive'
+              onClick={() => {
+                setDiscardOpen(false);
+                setOpen(false);
+              }}
+            >
+              {text('system-editor.discard')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog
@@ -1165,7 +1548,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
             <Button type='button' variant='outline' onClick={() => setReviewUser(undefined)}>
               {pick('Cancel', '取消')}
             </Button>
-            <Button type='button' disabled={reviewSaving} onClick={() => void submitReview()}>
+            <Button type='button' disabled={reviewSaving || !can('approve')} onClick={() => void submitReview()}>
               {reviewSaving ? pick('Saving…', '保存中…') : pick('Confirm', '确认')}
             </Button>
           </DialogFooter>
@@ -1220,7 +1603,7 @@ export function ManagementPage({ resource }: { resource: ResourceKind }) {
             <Button type='button' variant='outline' onClick={() => setLockUser(undefined)}>
               {pick('Cancel', '取消')}
             </Button>
-            <Button type='button' disabled={lockSaving} onClick={() => void submitLock()}>
+            <Button type='button' disabled={lockSaving || !can('lock')} onClick={() => void submitLock(Date.now())}>
               {lockSaving ? pick('Saving…', '保存中…') : pick('Lock', '锁定')}
             </Button>
           </DialogFooter>
@@ -1246,6 +1629,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 }
 
 function FilterTextInput({
+  canQuery,
   resource,
   field,
   value,
@@ -1253,6 +1637,7 @@ function FilterTextInput({
   onChange,
   onRemoveHistory
 }: {
+  canQuery: boolean;
   resource: ResourceKind;
   field: FieldConfig;
   value: string;
@@ -1263,7 +1648,13 @@ function FilterTextInput({
   const [backend, setBackend] = React.useState<string[]>([]);
   const [open, setOpen] = React.useState(false);
   React.useEffect(() => {
-    if (!value.trim()) return;
+    let active = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- Synchronize the local view with its remote query or controlled preference.
+    setBackend([]);
+    if (!canQuery || !value.trim())
+      return () => {
+        active = false;
+      };
     const timer = setTimeout(async () => {
       try {
         const suggestionResource: ResourceKind = field.key === 'action_code' ? 'action' : resource;
@@ -1271,8 +1662,10 @@ function FilterTextInput({
         const result = await listRecords(suggestionResource, {
           p: 1,
           s: 10,
+          f: suggestionKey,
           [suggestionKey]: value.trim()
         });
+        if (!active) return;
         setBackend([
           ...new Set(
             result.items
@@ -1285,18 +1678,21 @@ function FilterTextInput({
           )
         ]);
       } catch {
-        setBackend([]);
+        if (active) setBackend([]);
       }
     }, 250);
-    return () => clearTimeout(timer);
-  }, [field.key, resource, value]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [field.key, resource, value, canQuery]);
   const { pick } = useLocale();
   const backendOptions = [...new Set(backend)].slice(0, 6);
   const historyOptions = [...new Set(history)];
   const query = value.split(',').at(-1)?.trim() ?? '';
   const hasSuggestions = backendOptions.length > 0 || historyOptions.length > 0;
   return (
-    <Popover open={open && hasSuggestions} onOpenChange={setOpen}>
+    <Popover open={canQuery && open && hasSuggestions} onOpenChange={setOpen}>
       <PopoverTrigger
         nativeButton={false}
         render={
@@ -1447,8 +1843,12 @@ function FieldEditor({
   value,
   required,
   error,
-  onChange
+  onChange,
+  seed,
+  associationAllowed
 }: {
+  seed?: SystemRecord;
+  associationAllowed?: boolean;
   field: FieldConfig;
   value: unknown;
   required: boolean;
@@ -1517,29 +1917,27 @@ function FieldEditor({
         {errorMessage}
       </div>
     );
-  if (field.type === 'action-select')
+  if (field.type === 'action-select' || field.type === 'user-select')
     return (
-      <div>
-        <RelationPicker
-          field={field}
-          resource='action'
-          multiple
-          value={Array.isArray(value) ? value.map(String) : []}
+      <div className='space-y-2'>
+        {label}
+        <AssociationEditor
+          resource={field.type === 'action-select' ? 'action' : 'user'}
+          browseAllowed={associationAllowed}
+          value={Array.isArray(value) ? (value as Array<string | number>) : []}
+          seed={
+            ((field.type === 'action-select' ? seed?.actions : seed?.users) as AdminRecord[]) ?? []
+          }
           onChange={onChange}
         />
         {errorMessage}
       </div>
     );
-  if (field.type === 'user-select')
+  if (['resource', 'menu', 'button'].includes(field.key))
     return (
-      <div>
-        <RelationPicker
-          field={field}
-          resource='user'
-          multiple
-          value={Array.isArray(value) ? value.map(Number) : []}
-          onChange={onChange}
-        />
+      <div className='space-y-2'>
+        {label}
+        <RuleListEditor label={field.label} value={String(value ?? '')} onChange={onChange} />
         {errorMessage}
       </div>
     );
@@ -1549,6 +1947,16 @@ function FieldEditor({
         <RelationPicker
           field={field}
           resource='role'
+          initialOptions={
+            seed?.role
+              ? [
+                  {
+                    value: Number((seed.role as Record<string, unknown>).id),
+                    label: `${String((seed.role as Record<string, unknown>).name)} · ${String((seed.role as Record<string, unknown>).word)}`
+                  }
+                ]
+              : []
+          }
           value={typeof value === 'number' ? value : Number(value || 0)}
           onChange={onChange}
         />

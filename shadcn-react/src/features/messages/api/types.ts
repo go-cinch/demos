@@ -1,7 +1,9 @@
 export interface Msg {
   id: number;
   title: string;
-  content: string;
+  content?: string;
+  summary?: string;
+  recipients?: Array<{ id: number; username: string; code: string }>;
   type: 'system' | 'notice';
   scope: 'all' | 'targeted';
   sender_id: number | null;
@@ -27,4 +29,15 @@ export interface MsgInput {
 export interface MsgUser {
   id: number;
   username: string;
+}
+
+export interface MsgSentSummary {
+  total: number;
+  counts: {
+    notice: number;
+    system: number;
+    all: number;
+    targeted: number;
+    latest_published_at: number | null;
+  };
 }

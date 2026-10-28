@@ -45,8 +45,12 @@ export function useBreadcrumbs() {
       'user-group': t('groups'),
       action: t('actions'),
       dictionary: t('dictionaries'),
-      whitelist: t('whitelist'),
-      profile: t('profile')
+      developer: t('developer'),
+      profile: t('profile'),
+      audit: t('audit'),
+      login: t('auditLogin'),
+      operation: t('auditOperation'),
+      msg: t('messages')
     };
     return segments.map((segment, index) => {
       const path = `/${segments.slice(0, index + 1).join('/')}`;
