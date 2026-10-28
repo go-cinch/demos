@@ -33,7 +33,7 @@
    */
   const xAxisData = computed(() =>
     Array.from({ length: 12 }, (_, index) =>
-      $t('dashboardContent.common.monthNumber').replace('{number}', String(index + 1))
+      $t('dashboardContent.common.monthNumber', { number: index + 1 })
     )
   )
 </script>

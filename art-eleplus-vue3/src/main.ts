@@ -1,3 +1,4 @@
+import './utils/ui/iconify-loader'
 import App from './App.vue'
 import { clearLegacyLoginCredentials } from './utils/login-account-history'
 import { createApp } from 'vue'

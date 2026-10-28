@@ -1,8 +1,12 @@
+import {
+  gatewayMessage,
+  isBadGatewayError,
+  notifyRequestFailure
+} from '@/utils/admin/request-error'
 import type { JWK } from 'jose'
 
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { CompactEncrypt, importJWK } from 'jose'
-import { ElMessage } from 'element-plus'
 
 import { i18n } from '@/locales/instance'
 import { useUserStore } from '@/store/modules/user'
@@ -37,10 +41,23 @@ export interface SessionResult {
   refresh_token: string
 }
 
+export interface PermissionNavigation {
+  resource_key: string
+  menu_key?: string
+  menu_path?: string
+  children?: PermissionNavigation[]
+}
 export interface AuthInfo {
   code: string
   id: number
-  permission: { btns: string[]; menus: string[] }
+  scope: string
+  permission: {
+    permission_scope?: '*'
+    permission_scopes?: string[]
+    navigation?: PermissionNavigation[]
+    words: string[]
+    menus: Array<{ menu_key: string; menu_path: string; parent_menu_key?: string; btns: string[] }>
+  }
   role?: { id: number; name: string; word: string }
   username: string
 }
@@ -75,6 +92,7 @@ function localeHeader() {
 
 function prepare(config: InternalAxiosRequestConfig) {
   config.headers.set('Accept-Language', localeHeader())
+  config.headers.set('X-Auth-Scope', 'admin')
   return config
 }
 
@@ -87,12 +105,18 @@ client.interceptors.request.use((config) => {
 })
 
 function backendMessage(error: AxiosError<{ error_code?: string; msg?: string }>) {
-  return error.response?.data?.msg || error.message
+  return isBadGatewayError(error) ? gatewayMessage() : error.response?.data?.msg || error.message
 }
 
 publicClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ error_code?: string; msg?: string }>) => Promise.reject(error)
+  (error: AxiosError<{ error_code?: string; msg?: string }>) => {
+    if (isBadGatewayError(error)) {
+      error.message = gatewayMessage()
+      notifyRequestFailure(error.message)
+    }
+    return Promise.reject(error)
+  }
 )
 
 client.interceptors.response.use(
@@ -104,7 +128,7 @@ client.interceptors.response.use(
     const store = useUserStore()
     if (error.response?.data?.error_code === 'AUTH_PASSWORD_RESET_REQUIRED') {
       store.passwordResetRequired = true
-      if (location.pathname !== '/auth/reset-password') location.assign('/auth/reset-password')
+      if (location.pathname !== '/reset-password') location.assign('/reset-password')
       return Promise.reject(error)
     }
     if (error.response?.status === 401 && original && !original._retried && store.refreshToken) {
@@ -121,19 +145,25 @@ client.interceptors.response.use(
         store.logOut()
       }
     }
-    ElMessage.error(backendMessage(error))
+    if (isBadGatewayError(error)) error.message = gatewayMessage()
+    notifyRequestFailure(backendMessage(error))
     return Promise.reject(error)
   }
 )
 
 async function encryptCredential(purpose: CredentialPurpose, payload: Record<string, unknown>) {
+  const normalized = { ...payload }
+  for (const key of ['username', 'password', 'old_password', 'new_password']) {
+    const value = normalized[key]
+    if (typeof value === 'string') normalized[key] = value.trim()
+  }
   const authenticated = purpose === 'password_change' || purpose === 'password_reset'
   const api = authenticated ? client : publicClient
-  const path = authenticated ? '/auth/challenge' : '/auth/pub/challenge'
+  const path = authenticated ? '/challenge' : '/pub/challenge'
   const { data: challenge } = await api.post<CredentialChallenge>(path, { purpose })
   const key = await importJWK(challenge.public_key, 'RSA-OAEP-256')
   const plaintext = new TextEncoder().encode(
-    JSON.stringify({ challenge_id: challenge.challenge_id, ...payload })
+    JSON.stringify({ challenge_id: challenge.challenge_id, ...normalized })
   )
   const credential = await new CompactEncrypt(plaintext)
     .setProtectedHeader({
@@ -155,7 +185,7 @@ export async function login(data: LoginParams) {
     slider_proof: data.slider_proof,
     username: data.username.trim()
   })
-  const session = (await publicClient.post<SessionResult>('/auth/pub/login', encrypted)).data
+  const session = (await publicClient.post<SessionResult>('/pub/login', encrypted)).data
   if (session.access_token) recordLoginAccount(data.username)
   return session
 }
@@ -166,12 +196,12 @@ export async function register(username: string, password: string, sliderProof: 
     slider_proof: sliderProof,
     username
   })
-  return (await publicClient.post('/auth/pub/register', encrypted)).data
+  return (await publicClient.post('/pub/register', encrypted)).data
 }
 
 export async function usernameAvailable(username: string) {
   return (
-    await publicClient.get<{ available: boolean }>('/auth/pub/register/username', {
+    await publicClient.get<{ available: boolean }>('/pub/register/username', {
       params: { username }
     })
   ).data
@@ -180,16 +210,15 @@ export async function usernameAvailable(username: string) {
 export async function loginVerification(username: string) {
   return (
     await publicClient.get<{ captcha?: PointCaptchaChallenge; captcha_required: boolean }>(
-      '/auth/pub/login/verification',
+      '/pub/login/verification',
       { params: { username } }
     )
   ).data
 }
 
 export async function refreshLoginCaptcha(captchaId: string) {
-  return (
-    await publicClient.post<PointCaptchaChallenge>('/auth/pub/captcha', { captcha_id: captchaId })
-  ).data
+  return (await publicClient.post<PointCaptchaChallenge>('/pub/captcha', { captcha_id: captchaId }))
+    .data
 }
 
 export async function verifyLoginCaptcha(
@@ -199,7 +228,7 @@ export async function verifyLoginCaptcha(
 ) {
   return (
     await publicClient.post<{ captcha?: PointCaptchaChallenge; verified: boolean }>(
-      '/auth/pub/captcha/verify',
+      '/pub/captcha/verify',
       { captcha_id: captchaId, captcha_points: points, username }
     )
   ).data
@@ -207,13 +236,10 @@ export async function verifyLoginCaptcha(
 
 export async function createSliderChallenge(purpose: 'login' | 'register', username: string) {
   return (
-    await publicClient.post<{ captcha_id: string; expired_at: number }>(
-      '/auth/pub/slider/challenge',
-      {
-        purpose,
-        username
-      }
-    )
+    await publicClient.post<{ captcha_id: string; expired_at: number }>('/pub/slider/challenge', {
+      purpose,
+      username
+    })
   ).data
 }
 
@@ -226,28 +252,29 @@ export async function verifySlider(data: {
   username: string
   width: number
 }) {
-  return (await publicClient.post<{ proof: string }>('/auth/pub/slider/verify', data)).data
+  return (await publicClient.post<{ proof: string }>('/pub/slider/verify', data)).data
 }
 
 export async function getAuthInfo() {
-  return (await client.get<AuthInfo>('/auth/info')).data
-}
-
-export async function refreshSession(refreshToken: string) {
   return (
-    await publicClient.post<SessionResult>('/auth/pub/refresh', { refresh_token: refreshToken })
+    await client.get<AuthInfo>('/info', { params: { f: 'id,username,code,role,scope,permission' } })
   ).data
 }
 
+export async function refreshSession(refreshToken: string) {
+  return (await publicClient.post<SessionResult>('/pub/refresh', { refresh_token: refreshToken }))
+    .data
+}
+
 export async function logout(refreshToken: string) {
-  await publicClient.post('/auth/pub/logout', { refresh_token: refreshToken })
+  await publicClient.post('/pub/logout', { refresh_token: refreshToken })
 }
 
 export async function resetPassword(newPassword: string) {
   const encrypted = await encryptCredential('password_reset', { new_password: newPassword })
   const token = useUserStore().accessToken
   return (
-    await publicClient.patch<SessionResult>('/auth/reset/pwd', encrypted, {
+    await publicClient.patch<SessionResult>('/reset/pwd', encrypted, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined
     })
   ).data
@@ -264,22 +291,19 @@ export async function changePassword(
     new_password: newPassword,
     old_password: oldPassword
   })
-  return (await client.patch('/auth/change/pwd', encrypted)).data
+  return (await client.patch('/change/pwd', encrypted)).data
 }
 
 export async function refreshPasswordCaptcha(captchaId: string) {
-  return (await client.post<PointCaptchaChallenge>('/auth/captcha', { captcha_id: captchaId })).data
+  return (await client.post<PointCaptchaChallenge>('/captcha', { captcha_id: captchaId })).data
 }
 
 export async function verifyPasswordCaptcha(captchaId: string, points: CaptchaPoint[]) {
   return (
-    await client.post<{ captcha?: PointCaptchaChallenge; verified: boolean }>(
-      '/auth/captcha/verify',
-      {
-        captcha_id: captchaId,
-        captcha_points: points
-      }
-    )
+    await client.post<{ captcha?: PointCaptchaChallenge; verified: boolean }>('/captcha/verify', {
+      captcha_id: captchaId,
+      captcha_points: points
+    })
   ).data
 }
 

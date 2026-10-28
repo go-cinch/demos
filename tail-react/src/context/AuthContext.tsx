@@ -1,3 +1,4 @@
+import { refreshCatalogMessages } from "@/i18n/catalog";
 import {
   getUserInfo,
   login,
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const reloadUser = useCallback(async () => {
     const info = await getUserInfo();
     setUser(info);
+    void refreshCatalogMessages().catch(() => {});
     return info;
   }, []);
 
@@ -102,11 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       user,
       passwordResetRequired,
-      canButton: (code) =>
-        Boolean(
-          user?.permission.btns.includes("*") ||
-          user?.permission.btns.includes(code),
-        ),
+      canButton: (code) => {
+        const parts = code.replace('system.user.group', 'system.user-group').split('.');
+        const operation = parts.pop() ?? '';
+        const control = ({ read: 'query', update: 'edit' } as Record<string, string>)[operation] ?? operation;
+        return Boolean(user?.permission.btns.includes(`admin:btn:${parts.join(':')}:${control}`) || user?.permission.btns.includes(code));
+      },
       canMenu: (path) =>
         path === "/dashboard/overview" ||
         Boolean(

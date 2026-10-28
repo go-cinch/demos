@@ -81,6 +81,9 @@ declare namespace Api {
 
     /** 用户信息 */
     interface UserInfo {
+      scope?: string
+      permission?: import('@/api/auth-service').AuthInfo['permission']
+
       buttons: string[]
       roles: string[]
       menus: string[]

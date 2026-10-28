@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import { visitMessages } from '@/utils/message-attention'
+
   import type { Msg, MsgInput, MsgUser } from '@/api/msg'
 
   import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
@@ -9,8 +11,14 @@
   import { ElMessageBox, ElMessage } from 'element-plus'
   import { formatDateTime as formatInstant, parseDateTime } from '@/utils/msg-date-time'
   import { msgApi, msgChanged } from '@/api/msg'
+  import { markMessageRead } from '@/utils/message-read-policy'
+  import { usePermissions } from '@/composables/use-permissions'
   import { $t } from '@/locales'
   import ResultToolbar from '../system/components/ResultToolbar.vue'
+  import { useDefaultPageSize } from '@/utils/admin/preferences'
+  import AssociationEditor from '../system/components/AssociationEditor.vue'
+  import SentSummary from './SentSummary.vue'
+  import SentWorkspace from './SentWorkspace.vue'
 
   const timezone = ref(
     localStorage.getItem('art-timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -33,8 +41,6 @@
       : null
   }
   const user = useUserStore()
-  const hasAccessByCodes = (codes: string[]) =>
-    codes.some((code) => user.info.buttons?.includes('*') || user.info.buttons?.includes(code))
   const props = withDefaults(defineProps<{ sent?: boolean; embedded?: boolean }>(), {
     sent: false,
     embedded: false
@@ -43,25 +49,87 @@
   const active = ref(true)
   const sent = computed(() => props.sent)
 
-  const canRead = computed(() => !sent.value || hasAccessByCodes(['system.msg.read']))
-  const canSend = computed(() => sent.value && hasAccessByCodes(['system.msg.send']))
-  const canDelete = computed(() => !sent.value || hasAccessByCodes(['system.msg.delete']))
+  const { hasPage, hasButton } = usePermissions()
+  const canControl = (control: string) =>
+    hasButton(
+      `admin:btn:${sent.value ? 'system:msg' : 'msg:inbox'}:${control}`,
+      sent.value ? '/system/msg' : '/msg/inbox'
+    )
+  const canRead = computed(() => hasPage(sent.value ? '/system/msg' : '/msg/inbox'))
+  const canSend = computed(() => sent.value && canControl('send'))
+  const canDelete = computed(() => canControl('delete'))
   const table = ref<TableInstance>()
-  function clearChecks() {
-    table.value?.clearSelection()
-    checkedRows.value = []
-  }
   const checkedRows = ref<Msg[]>([])
   const checkedVisible = computed(() =>
     checkedRows.value.filter((row) => rows.value.some((item) => item.id === row.id))
   )
   const page = ref(1)
   const rows = ref<Msg[]>([])
-  const size = ref(10)
+  const defaultPageSize = useDefaultPageSize()
+  const size = ref(defaultPageSize.value)
+  watch(defaultPageSize, (value) => {
+    size.value = value
+    page.value = 1
+  })
   const total = ref(0)
   const busy = ref(false)
   const error = ref(false)
   const loading = ref(false)
+  const keyword = ref(''),
+    query = ref(''),
+    scope = ref(''),
+    sentView = ref('split'),
+    summaryRevision = ref(0),
+    previewId = ref<number>(),
+    preview = ref<Msg>(),
+    previewLoading = ref(false),
+    previewError = ref(false)
+  let searchTimer: ReturnType<typeof setTimeout>,
+    previewRun = 0
+  const suggestions = ref<string[]>([])
+  let suggestionRun = 0
+  function suggestKeyword(value: string, callback: (items: Array<{ value: string }>) => void) {
+    const run = ++suggestionRun
+    suggestions.value = []
+    if (!value.trim()) {
+      callback([])
+      return
+    }
+    void msgApi
+      .list(true, { q: value.trim(), f: 'title', p: 1, s: 8 })
+      .then((result) => {
+        if (!active.value || run !== suggestionRun || keyword.value.trim() !== value.trim()) return
+        suggestions.value = [...new Set(result.items.map((row) => row.title))]
+        callback(suggestions.value.map((value) => ({ value })))
+      })
+      .catch(() => {
+        if (active.value && run === suggestionRun) callback([])
+      })
+  }
+  function applyKeyword() {
+    clearTimeout(searchTimer)
+    query.value = keyword.value.trim()
+    search()
+  }
+  function scheduleKeyword() {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(applyKeyword, 300)
+  }
+  async function selectPreview(row: Msg) {
+    const run = ++previewRun
+    previewId.value = row.id
+    preview.value = row
+    previewLoading.value = true
+    previewError.value = false
+    try {
+      const detail = await msgApi.get(row.id, true)
+      if (run === previewRun && active.value) preview.value = detail
+    } catch {
+      if (run === previewRun) previewError.value = true
+    } finally {
+      if (run === previewRun) previewLoading.value = false
+    }
+  }
   const status = ref('')
   const type = ref('')
   const detailLoading = ref(false)
@@ -84,6 +152,17 @@
   const bordered = ref(true)
   const striped = ref(true)
   const visible = ref(['type', 'scope', 'published_at'])
+  const listFields = computed(() =>
+    [
+      ...new Set([
+        'id',
+        'title',
+        ...visible.value,
+        ...(sent.value ? ['expired_at'] : ['read_at']),
+        ...(sent.value && sentView.value === 'split' ? ['summary'] : [])
+      ])
+    ].join(',')
+  )
   const isFullscreen = ref(false)
   let detailGeneration = 0
   let generation = 0
@@ -123,9 +202,12 @@
     error.value = false
     try {
       const result = await msgApi.list(sent.value, {
+        f: listFields.value,
         p: page.value,
         s: size.value,
         ...(type.value ? { type: type.value } : {}),
+        ...(query.value ? { q: query.value } : {}),
+        ...(scope.value ? { scope: scope.value } : {}),
         ...(!sent.value && status.value ? { read: status.value === 'read' } : {})
       })
       if (current !== generation) return
@@ -135,6 +217,16 @@
       }
       rows.value = result.items
       total.value = result.t
+      if (sent.value && sentView.value === 'split') {
+        const row = result.items.find((item) => item.id === previewId.value) ?? result.items[0]
+        if (!row) {
+          previewRun++
+          preview.value = undefined
+          previewId.value = undefined
+        } else if (row.id !== previewId.value || (!preview.value && !previewLoading.value)) {
+          void selectPreview(row)
+        }
+      }
     } catch {
       if (current === generation) {
         error.value = true
@@ -153,9 +245,10 @@
       const value = await msgApi.get(row.id, sent.value)
       if (current !== detailGeneration || !detailOpen.value) return
       selected.value = value
-      if (!sent.value && !value.read_at) {
-        await msgApi.read(value.id)
-        value.read_at = Date.now()
+      if (
+        !sent.value &&
+        (await markMessageRead(value, () => canControl('mark-read'), msgApi.read))
+      ) {
         msgChanged()
         await load()
       }
@@ -166,9 +259,10 @@
     }
   }
   async function mark(row: Msg) {
+    if (sent.value || busy.value || !canControl('mark-read')) return
     busy.value = true
     try {
-      await msgApi.read(row.id)
+      if (!(await markMessageRead(row, () => canControl('mark-read'), msgApi.read))) return
       msgChanged()
       await load()
     } finally {
@@ -191,7 +285,7 @@
       busy.value ||
       loading.value ||
       !checkedVisible.value.length ||
-      (read ? sent.value : !canDelete.value)
+      (read ? sent.value || !canControl('mark-selected-read') : !canControl('delete-selected'))
     )
       return
     const management = sent.value
@@ -208,9 +302,12 @@
       ))
     )
       return
+    if (read ? sent.value || !canControl('mark-selected-read') : !canControl('delete-selected'))
+      return
     busy.value = true
     try {
       for (const id of ids) {
+        if (!canControl(read ? 'mark-selected-read' : 'delete-selected')) break
         if (read) await msgApi.read(id)
         else await msgApi.remove(id, management)
         const row = rows.value.find((value) => value.id === id)
@@ -228,7 +325,9 @@
   async function remove(row: Msg) {
     if (
       busy.value ||
-      !(await ask($t(sent.value ? 'msg.deleteGlobalConfirm' : 'msg.deleteConfirm')))
+      !canDelete.value ||
+      !(await ask($t(sent.value ? 'msg.deleteGlobalConfirm' : 'msg.deleteConfirm'))) ||
+      !canDelete.value
     )
       return
     busy.value = true
@@ -242,7 +341,7 @@
     }
   }
   async function readAll() {
-    if (busy.value) return
+    if (busy.value || sent.value || !canControl('read-all')) return
     busy.value = true
     try {
       await msgApi.readAll()
@@ -335,12 +434,15 @@
     else page.value = 1
   }
   function resetSearch() {
+    keyword.value = ''
+    query.value = ''
+    scope.value = ''
     status.value = ''
     type.value = ''
     search()
   }
   defineExpose({ closeCompose })
-  watch([sent, status, type, size], () => {
+  watch([sent, status, type, size, scope], () => {
     page.value = 1
     detailOpen.value = false
     void load()
@@ -349,6 +451,7 @@
     table.value?.clearSelection()
     checkedRows.value = []
   })
+  watch(listFields, () => void load())
   watch(page, load)
   watch(canRead, load, { immediate: true })
   let timer: ReturnType<typeof setInterval>
@@ -356,11 +459,13 @@
     if ((active.value || props.embedded) && !document.hidden && !busy.value) void load()
   }
   onMounted(() => {
+    if (!sent.value) visitMessages(user.info.userId)
     window.addEventListener('art-timezone-change', updateTimezone)
     timer = setInterval(refreshVisible, 30000)
     window.addEventListener('cinch-msg-changed', refreshVisible)
   })
   onActivated(() => {
+    if (!sent.value) visitMessages(user.info.userId)
     active.value = true
     void load()
   })
@@ -370,6 +475,10 @@
     loading.value = false
   })
   onBeforeUnmount(() => {
+    clearTimeout(searchTimer)
+    suggestionRun++
+    previewRun++
+
     window.removeEventListener('art-timezone-change', updateTimezone)
     active.value = false
     clearInterval(timer)
@@ -381,237 +490,288 @@
   })
 </script>
 <template>
-  <div class="msg-region space-y-5" :class="{ 'msg-fullscreen': isFullscreen }">
-    <ElCard shadow="never"
-      ><ElForm inline @submit.prevent="search"
-        ><ElFormItem v-if="!sent" :label="$t('msg.read')"
-          ><ElSelect v-model="status" :aria-label="$t('msg.read')" style="width: 240px"
-            ><ElOption
-              v-for="v in ['', 'unread', 'read']"
-              :key="v"
-              :value="v"
-              :label="$t(`msg.${v || 'allStatus'}`)" /></ElSelect></ElFormItem
-        ><ElFormItem :label="$t('msg.type')"
-          ><ElSelect v-model="type" :aria-label="$t('msg.type')" style="width: 240px"
-            ><ElOption
-              v-for="v in ['', 'system', 'notice']"
-              :key="v"
-              :value="v"
-              :label="$t(`msg.${v || 'allTypes'}`)" /></ElSelect></ElFormItem
-        ><ElFormItem
-          ><ElButton @click="resetSearch">{{ $t('system.common.reset') }}</ElButton
-          ><ElButton type="primary" native-type="submit">{{
-            $t('system.common.search')
-          }}</ElButton></ElFormItem
-        ></ElForm
-      ></ElCard
+  <div class="message-page">
+    <div
+      data-testid="message-management"
+      class="msg-region space-y-5"
+      :class="{ 'msg-fullscreen': isFullscreen }"
     >
-    <ElCard shadow="never"
-      ><div class="mb-5 flex flex-wrap items-center justify-between gap-3"
-        ><div class="flex flex-wrap items-center gap-2"
-          ><ElButton v-if="canSend" type="primary" @click="newMessage">{{
-            $t('msg.send')
-          }}</ElButton
-          ><ElButton v-if="!sent" :disabled="loading || busy" @click="readAll">{{
-            $t('msg.readAll')
-          }}</ElButton>
-          <template v-if="canRead && checkedVisible.length">
-            <ElButton
-              data-testid="message-bulk-delete"
-              v-if="canDelete"
-              type="danger"
-              plain
-              :disabled="busy || loading"
-              @click="requestBulk()"
-              >{{ $t('msg.deleteSelected') }}</ElButton
-            >
-            <ElButton
-              data-testid="message-bulk-read"
-              v-if="!sent"
-              :disabled="busy || loading"
-              @click="requestBulk(true)"
-              >{{ $t('msg.markRead') }}</ElButton
-            >
-          </template></div
-        >
-        <ResultToolbar
-          v-model:size="density"
-          v-model:visible="visible"
-          v-model:bordered="bordered"
-          v-model:striped="striped"
-          :fullscreen="embedded || isFullscreen"
-          :columns="
-            ['type', 'scope', 'published_at'].map((key) => ({
-              key,
-              title: $t(`msg.${key === 'published_at' ? 'published' : key}`)
-            }))
-          "
-          @refresh="load"
-          @fullscreen="embedded ? emit('close') : fullscreen()"
-      /></div>
-      <ElAlert v-if="!canRead" :title="$t('msg.noPermission')" type="info" /><div
-        v-else-if="error"
-        role="alert"
-        ><ElAlert :title="$t('msg.error')" type="error" /><ElButton @click="load">{{
-          $t('msg.retry')
-        }}</ElButton></div
+      <SentSummary v-if="sent" :allowed="canRead" :revision="summaryRevision" />
+      <ElCard shadow="never"
+        ><ElForm inline @submit.prevent="applyKeyword">
+          <ElFormItem v-if="sent" :label="$t('pc.msg.keyword')"
+            ><ElAutocomplete
+              v-model="keyword"
+              :aria-label="$t('pc.msg.searchMessages')"
+              :placeholder="$t('pc.msg.searchMessages')"
+              :fetch-suggestions="suggestKeyword"
+              clearable
+              style="width: 300px"
+              @blur="scheduleKeyword"
+              @select="applyKeyword"
+              @keyup.enter="applyKeyword"
+          /></ElFormItem>
+          <ElFormItem v-if="sent" :label="$t('pc.msg.scope')"
+            ><ElSelect v-model="scope" :aria-label="$t('pc.msg.scope')" style="width: 180px"
+              ><ElOption
+                v-for="value in ['', 'all', 'targeted']"
+                :key="value"
+                :value="value"
+                :label="$t(`pc.msg.${value || 'allScopes'}`)" /></ElSelect
+          ></ElFormItem>
+          <ElFormItem v-if="!sent" :label="$t('msg.read')"
+            ><ElSelect v-model="status" :aria-label="$t('msg.read')" style="width: 240px"
+              ><ElOption
+                v-for="v in ['', 'unread', 'read']"
+                :key="v"
+                :value="v"
+                :label="$t(`msg.${v || 'allStatus'}`)" /></ElSelect></ElFormItem
+          ><ElFormItem :label="$t('msg.type')"
+            ><ElSelect v-model="type" :aria-label="$t('msg.type')" style="width: 240px"
+              ><ElOption
+                v-for="v in ['', 'system', 'notice']"
+                :key="v"
+                :value="v"
+                :label="$t(`msg.${v || 'allTypes'}`)" /></ElSelect></ElFormItem
+          ><ElFormItem
+            ><ElButton @click="resetSearch">{{ $t('system.common.reset') }}</ElButton
+            ><ElButton type="primary" native-type="submit">{{
+              $t('system.common.search')
+            }}</ElButton></ElFormItem
+          ></ElForm
+        ></ElCard
       >
-
-      <ElTable
-        ref="table"
-        @selection-change="checkedRows = $event"
-        v-if="canRead && !error"
-        v-loading="loading"
-        :data="rows"
-        :size="density"
-        :border="bordered"
-        :stripe="striped"
-        row-key="id"
-        ><ElTableColumn
-          type="selection"
-          width="48"
-          :label="$t('msg.selectAll')"
-          :reserve-selection="true"
-          :selectable="() => !loading" /><ElTableColumn
-          prop="title"
-          :label="$t('msg.title')"
-          min-width="280"
-          ><template #default="{ row }"
-            ><ElButton link type="primary" class="msg-title" @click="openDetail(row)">{{
-              row.title
+      <ElCard shadow="never"
+        ><div class="mb-5 flex flex-wrap items-center justify-between gap-3"
+          ><div class="flex flex-wrap items-center gap-2"
+            ><ElButton v-if="canSend" type="primary" @click="newMessage">{{
+              $t('msg.send')
             }}</ElButton
-            ><ElTag v-if="row.expired_at && row.expired_at <= Date.now()" type="info">{{
-              $t('msg.expired')
-            }}</ElTag></template
-          ></ElTableColumn
-        >
-        <ElTableColumn v-if="visible.includes('type')" :label="$t('msg.type')" width="140"
-          ><template #default="{ row }"
-            ><ElTag type="primary">{{ $t(`msg.${row.type}`) }}</ElTag></template
-          ></ElTableColumn
-        ><ElTableColumn v-if="visible.includes('scope')" :label="$t('msg.scope')" width="150"
-          ><template #default="{ row }"
-            ><ElTag class="msg-scope">{{ $t(`msg.${row.scope}`) }}</ElTag></template
-          ></ElTableColumn
-        ><ElTableColumn
-          v-if="visible.includes('published_at')"
-          :label="$t('msg.published')"
-          width="190"
-          ><template #default="{ row }">{{
-            formatDateTime(row.published_at)
-          }}</template></ElTableColumn
-        ><ElTableColumn v-if="!sent" :label="$t('msg.read')" width="110"
-          ><template #default="{ row }"
-            ><ElTag :type="row.read_at ? 'info' : 'primary'">{{
-              $t(row.read_at ? 'msg.read' : 'msg.unread')
-            }}</ElTag></template
-          ></ElTableColumn
-        ><ElTableColumn :label="$t('msg.actions')" width="250" fixed="right"
-          ><template #default="{ row }"
-            ><ElButton link type="primary" @click="openDetail(row)">{{ $t('msg.view') }}</ElButton
             ><ElButton
-              v-if="!sent && !row.read_at"
-              link
-              type="primary"
-              :disabled="busy"
-              @click="mark(row)"
-              >{{ $t('msg.markRead') }}</ElButton
-            ><ElButton v-if="canDelete" link type="danger" @click="remove(row)">{{
-              $t(sent ? 'msg.deleteGlobal' : 'msg.delete')
-            }}</ElButton></template
-          ></ElTableColumn
-        ><template #empty><ElEmpty :description="$t('msg.empty')" /></template
-      ></ElTable>
-      <ElPagination
-        v-if="canRead"
-        class="mt-5"
-        v-model:current-page="page"
-        v-model:page-size="size"
-        :total="total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total,sizes,prev,pager,next"
-    /></ElCard>
-  </div>
-  <ElDialog v-model="detailOpen" :title="$t('msg.detail')" width="560px" align-center
-    ><div v-loading="detailLoading"
-      ><template v-if="selected"
-        ><h2 class="text-xl font-semibold">{{ selected.title }}</h2
-        ><p>{{ formatDateTime(selected.published_at) }}</p
-        ><p class="msg-content my-5">{{ selected.content }}</p
-        ><p
-          >{{ $t('msg.expiry') }}:
-          {{ selected.expired_at ? formatDateTime(selected.expired_at) : $t('msg.noExpiry') }}</p
-        ><p v-if="sent && selected.recipient_ids"
-          >{{ $t('msg.recipientIDs') }}: {{ selected.recipient_ids.join(', ') }}</p
-        ><ElButton v-if="canDelete" type="danger" class="mt-5" @click="remove(selected)">{{
-          $t(sent ? 'msg.deleteGlobal' : 'msg.delete')
+              v-if="!sent && canControl('read-all')"
+              :disabled="loading || busy"
+              @click="readAll"
+              >{{ $t('msg.readAll') }}</ElButton
+            >
+            <template v-if="canRead && checkedVisible.length">
+              <ElButton
+                data-testid="message-bulk-delete"
+                v-if="canControl('delete-selected')"
+                type="danger"
+                plain
+                :disabled="busy || loading"
+                @click="requestBulk()"
+                >{{ $t('msg.deleteSelected') }}</ElButton
+              >
+              <ElButton
+                data-testid="message-bulk-read"
+                v-if="!sent && canControl('mark-selected-read')"
+                :disabled="busy || loading"
+                @click="requestBulk(true)"
+                >{{ $t('msg.markRead') }}</ElButton
+              >
+            </template></div
+          >
+          <ElRadioGroup v-if="sent" v-model="sentView" size="small"
+            ><ElRadioButton value="split">{{ $t('pc.msg.splitView') }}</ElRadioButton
+            ><ElRadioButton value="table">{{ $t('pc.msg.tableView') }}</ElRadioButton></ElRadioGroup
+          >
+          <ResultToolbar
+            v-model:size="density"
+            v-model:visible="visible"
+            v-model:bordered="bordered"
+            v-model:striped="striped"
+            :fullscreen="embedded || isFullscreen"
+            :columns="
+              ['type', 'scope', 'published_at'].map((key) => ({
+                key,
+                title: $t(`msg.${key === 'published_at' ? 'published' : key}`)
+              }))
+            "
+            @refresh="
+              () => {
+                summaryRevision++
+                load()
+              }
+            "
+            @fullscreen="embedded ? emit('close') : fullscreen()"
+        /></div>
+        <ElAlert v-if="!canRead" :title="$t('msg.noPermission')" type="info" /><div
+          v-else-if="error"
+          role="alert"
+          ><ElAlert :title="$t('msg.error')" type="error" /><ElButton @click="load">{{
+            $t('msg.retry')
+          }}</ElButton></div
+        >
+
+        <SentWorkspace
+          v-if="sent && canRead && !error && sentView === 'split'"
+          :rows="rows"
+          :loading="loading"
+          :checked="checkedVisible.map((row) => row.id)"
+          :selected="preview"
+          :selected-id="previewId"
+          :detail-loading="previewLoading"
+          :detail-error="previewError"
+          :can-delete="canDelete"
+          :visible="visible"
+          :density="density"
+          @check="(ids) => (checkedRows = rows.filter((row) => ids.includes(row.id)))"
+          @select="selectPreview"
+          @view="openDetail"
+          @remove="remove"
+          @retry="preview && selectPreview(preview)" />
+        <ElTable
+          ref="table"
+          @selection-change="checkedRows = $event"
+          v-if="canRead && !error && (!sent || sentView === 'table')"
+          v-loading="loading"
+          :data="rows"
+          :size="density"
+          :border="bordered"
+          :stripe="striped"
+          row-key="id"
+          ><ElTableColumn
+            type="selection"
+            width="48"
+            :label="$t('msg.selectAll')"
+            :reserve-selection="true"
+            :selectable="() => !loading" /><ElTableColumn
+            prop="title"
+            :label="$t('msg.title')"
+            min-width="280"
+            ><template #default="{ row }"
+              ><ElButton link type="primary" class="msg-title" @click="openDetail(row)">{{
+                row.title
+              }}</ElButton
+              ><ElTag v-if="row.expired_at && row.expired_at <= Date.now()" type="info">{{
+                $t('msg.expired')
+              }}</ElTag></template
+            ></ElTableColumn
+          >
+          <ElTableColumn v-if="visible.includes('type')" :label="$t('msg.type')" width="140"
+            ><template #default="{ row }"
+              ><ElTag type="primary">{{ $t(`msg.${row.type}`) }}</ElTag></template
+            ></ElTableColumn
+          ><ElTableColumn v-if="visible.includes('scope')" :label="$t('msg.scope')" width="150"
+            ><template #default="{ row }"
+              ><ElTag class="msg-scope">{{ $t(`msg.${row.scope}`) }}</ElTag></template
+            ></ElTableColumn
+          ><ElTableColumn
+            v-if="visible.includes('published_at')"
+            :label="$t('msg.published')"
+            width="190"
+            ><template #default="{ row }">{{
+              formatDateTime(row.published_at)
+            }}</template></ElTableColumn
+          ><ElTableColumn v-if="!sent" :label="$t('msg.read')" width="110"
+            ><template #default="{ row }"
+              ><ElTag :type="row.read_at ? 'info' : 'primary'">{{
+                $t(row.read_at ? 'msg.read' : 'msg.unread')
+              }}</ElTag></template
+            ></ElTableColumn
+          ><ElTableColumn :label="$t('msg.actions')" width="250" fixed="right"
+            ><template #default="{ row }"
+              ><ElButton link type="primary" @click="openDetail(row)">{{ $t('msg.view') }}</ElButton
+              ><ElButton
+                v-if="!sent && !row.read_at && canControl('mark-read')"
+                link
+                type="primary"
+                :disabled="busy"
+                @click="mark(row)"
+                >{{ $t('msg.markRead') }}</ElButton
+              ><ElButton v-if="canDelete" link type="danger" @click="remove(row)">{{
+                $t(sent ? 'msg.deleteGlobal' : 'msg.delete')
+              }}</ElButton></template
+            ></ElTableColumn
+          ><template #empty><ElEmpty :description="$t('msg.empty')" /></template
+        ></ElTable>
+        <ElPagination
+          v-if="canRead"
+          class="mt-5"
+          v-model:current-page="page"
+          v-model:page-size="size"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total,sizes,prev,pager,next"
+      /></ElCard>
+    </div>
+    <ElDrawer v-model="detailOpen" :title="$t('msg.detail')" size="min(640px,100vw)"
+      ><div v-loading="detailLoading"
+        ><template v-if="selected"
+          ><h2 class="text-xl font-semibold">{{ selected.title }}</h2
+          ><p>{{ formatDateTime(selected.published_at) }}</p
+          ><p class="msg-content my-5">{{ selected.content }}</p
+          ><p
+            >{{ $t('msg.expiry') }}:
+            {{ selected.expired_at ? formatDateTime(selected.expired_at) : $t('msg.noExpiry') }}</p
+          ><p v-if="sent && selected.recipient_ids"
+            >{{ $t('msg.recipientIDs') }}: {{ selected.recipient_ids.join(', ') }}</p
+          ><ElButton v-if="canDelete" type="danger" class="mt-5" @click="remove(selected)">{{
+            $t(sent ? 'msg.deleteGlobal' : 'msg.delete')
+          }}</ElButton></template
+        ></div
+      ></ElDrawer
+    >
+    <ElDrawer
+      :model-value="compose"
+      :title="$t('msg.send')"
+      size="min(720px,100vw)"
+      :close-on-click-modal="false"
+      :before-close="
+        async (done) => {
+          if (await closeCompose()) done()
+        }
+      "
+      ><ElForm label-position="top" :disabled="busy" @submit.prevent="send">
+        <ElFormItem :label="$t('msg.title')" :error="attempted ? issues.title : ''"
+          ><ElInput v-model="form.title" :aria-label="$t('msg.title')" /></ElFormItem
+        ><ElFormItem :label="$t('msg.content')" :error="attempted ? issues.content : ''"
+          ><ElInput
+            v-model="form.content"
+            type="textarea"
+            :rows="5"
+            :aria-label="$t('msg.content')"
+        /></ElFormItem>
+        <ElFormItem :label="$t('msg.type')"
+          ><ElSelect v-model="form.type" :aria-label="$t('msg.type')"
+            ><ElOption
+              v-for="v in ['system', 'notice']"
+              :key="v"
+              :value="v"
+              :label="$t(`msg.${v}`)" /></ElSelect></ElFormItem
+        ><ElFormItem :label="$t('msg.scope')"
+          ><ElSelect v-model="form.scope" :aria-label="$t('msg.scope')"
+            ><ElOption
+              v-for="v in ['all', 'targeted']"
+              :key="v"
+              :value="v"
+              :label="$t(`msg.${v}`)" /></ElSelect></ElFormItem
+        ><ElFormItem
+          v-if="form.scope === 'targeted'"
+          :label="$t('msg.recipients')"
+          :error="attempted ? issues.recipients : ''"
+          ><AssociationEditor
+            resource="user"
+            kind="recipient"
+            :model-value="form.recipient_ids ?? []"
+            @update:model-value="form.recipient_ids = $event.map(Number)" /></ElFormItem
+        ><ElFormItem :label="$t('msg.expiry')" :error="attempted ? issues.expiry : ''"
+          ><ElDatePicker
+            :model-value="form.expired_at ? pickerValue(form.expired_at) : null"
+            type="datetime"
+            :placeholder="$t('msg.noExpiry')"
+            :aria-label="$t('msg.expiry')"
+            @update:model-value="pickerChanged" /></ElFormItem
+        ><ElAlert v-if="sendError" :title="sendError" type="error" /></ElForm
+      ><template #footer
+        ><ElButton :disabled="busy" @click="closeCompose">{{ $t('msg.cancel') }}</ElButton
+        ><ElButton :loading="busy" type="primary" @click="send">{{
+          $t('msg.send')
         }}</ElButton></template
-      ></div
-    ></ElDialog
-  >
-  <ElDialog
-    :model-value="compose"
-    :title="$t('msg.send')"
-    width="680px"
-    align-center
-    :close-on-click-modal="false"
-    :before-close="
-      async (done) => {
-        if (await closeCompose()) done()
-      }
-    "
-    ><ElForm label-position="top" :disabled="busy" @submit.prevent="send">
-      <ElFormItem :label="$t('msg.title')" :error="attempted ? issues.title : ''"
-        ><ElInput v-model="form.title" :aria-label="$t('msg.title')" /></ElFormItem
-      ><ElFormItem :label="$t('msg.content')" :error="attempted ? issues.content : ''"
-        ><ElInput v-model="form.content" type="textarea" :rows="5" :aria-label="$t('msg.content')"
-      /></ElFormItem>
-      <ElFormItem :label="$t('msg.type')"
-        ><ElSelect v-model="form.type" :aria-label="$t('msg.type')"
-          ><ElOption
-            v-for="v in ['system', 'notice']"
-            :key="v"
-            :value="v"
-            :label="$t(`msg.${v}`)" /></ElSelect></ElFormItem
-      ><ElFormItem :label="$t('msg.scope')"
-        ><ElSelect v-model="form.scope" :aria-label="$t('msg.scope')"
-          ><ElOption
-            v-for="v in ['all', 'targeted']"
-            :key="v"
-            :value="v"
-            :label="$t(`msg.${v}`)" /></ElSelect></ElFormItem
-      ><ElFormItem
-        v-if="form.scope === 'targeted'"
-        :label="$t('msg.recipients')"
-        :error="attempted ? issues.recipients : ''"
-        ><ElSelect
-          v-model="form.recipient_ids"
-          :aria-label="$t('msg.recipients')"
-          multiple
-          filterable
-          remote
-          :remote-method="searchUsers"
-          :loading="userLoading"
-          ><ElOption
-            v-for="u in users"
-            :key="u.id"
-            :value="u.id"
-            :label="u.username" /></ElSelect></ElFormItem
-      ><ElFormItem :label="$t('msg.expiry')" :error="attempted ? issues.expiry : ''"
-        ><ElDatePicker
-          :model-value="form.expired_at ? pickerValue(form.expired_at) : null"
-          type="datetime"
-          :placeholder="$t('msg.noExpiry')"
-          :aria-label="$t('msg.expiry')"
-          @update:model-value="pickerChanged" /></ElFormItem
-      ><ElAlert v-if="sendError" :title="sendError" type="error" /></ElForm
-    ><template #footer
-      ><ElButton :disabled="busy" @click="closeCompose">{{ $t('msg.cancel') }}</ElButton
-      ><ElButton :loading="busy" type="primary" @click="send">{{
-        $t('msg.send')
-      }}</ElButton></template
-    ></ElDialog
-  >
+      ></ElDrawer
+    >
+  </div>
 </template>
 <style scoped>
   .msg-fullscreen {

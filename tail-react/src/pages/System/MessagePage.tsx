@@ -1,3 +1,20 @@
+import { messageListFields } from "@/utils/admin/list-fields";
+import { messagePermissions } from "@/utils/message-permissions";
+import { useAdminNow } from "@/utils/admin/clock";
+import AssociationEditor from "./association-editor";
+import { adminDate, parseAdminDateTime } from "@/utils/admin/model";
+import { readAdminTimezone } from "@/utils/admin/timezone";
+import SentSummary from "@/pages/Messages/sent-summary";
+import SentWorkspace from "@/pages/Messages/sent-workspace";
+import MessageSearch from "@/pages/Messages/message-search";
+import InboxFeed from "@/pages/Messages/inbox-feed";
+import {
+  AdminDrawer,
+  AButton,
+  ASelect,
+  useAdminText,
+  useAdminTimezone,
+} from "./admin-ui";
 import { createPortal } from "react-dom";
 import Checkbox from "@/components/form/input/Checkbox";
 import { useState, useEffect } from "react";
@@ -5,7 +22,6 @@ import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
 import { useMessages } from "@/hooks/useMessages";
-import { msgApi } from "@/api/msg";
 import PageMeta from "@/components/common/PageMeta";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import { Modal } from "@/components/ui/modal";
@@ -15,7 +31,6 @@ import Input from "@/components/form/input/InputField";
 import TextArea from "@/components/form/input/TextArea";
 import Badge from "@/components/ui/badge/Badge";
 import SimpleSelect from "./SimpleSelect";
-import SearchableSelect from "./SearchableSelect";
 import ResultToolbar, {
   type Density,
   type TableSettings,
@@ -23,11 +38,9 @@ import ResultToolbar, {
 const surface =
   "rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900";
 function date(value: number) {
-  const d = new Date(value),
-    pad = (v: number) => String(v).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return adminDate(value, readAdminTimezone());
 }
-export default function MessagePage({
+function LegacyMessagePage({
   sent = false,
   embedded = false,
   onClose,
@@ -36,15 +49,22 @@ export default function MessagePage({
   embedded?: boolean;
   onClose?: () => void;
 }) {
+  const now = useAdminNow();
   const { t } = useTranslation(),
     auth = useAuth(),
     navigate = useNavigate(),
     tr = (key: string) => t(`msg.${key}`);
   const closeHistory = () =>
     onClose ? onClose() : navigate("/dashboard/overview");
-  const readable = !sent || auth.canButton("system.msg.read"),
-    deletable = !sent || auth.canButton("system.msg.delete");
-  const m = useMessages(sent, readable, tr, (v) => new Date(v).valueOf());
+  const { canRead: readable, canControl, canSend, canDelete: deletable } = messagePermissions(auth, sent);
+  const timezone = useAdminTimezone();
+  const [sentView, setSentView] = useState("split");
+  const [visible, setVisible] = useState(["type", "scope", "published_at"]);
+  const m = useMessages(sent, readable, tr, (v) =>
+    parseAdminDateTime(v, timezone), messageListFields(sent, visible, sentView),
+  );
+  const text = useAdminText();
+  const [summaryRevision, setSummaryRevision] = useState(0);
   const [checkedKeys, setCheckedKeys] = useState<number[]>([]);
   const checkedVisible = checkedKeys.filter((id) =>
     m.rows.some((row) => row.id === id),
@@ -62,7 +82,6 @@ export default function MessagePage({
       striped: true,
       sticky: true,
     }),
-    [visible, setVisible] = useState(["type", "scope", "published_at"]),
     [fullscreen, setFullscreen] = useState(false),
     [discard, setDiscard] = useState(false);
   const columns = ["type", "scope", "published_at"].map((key) => ({
@@ -83,15 +102,33 @@ export default function MessagePage({
       }
     >
       <div className="space-y-5">
+        {sent && <SentSummary allowed={readable} revision={summaryRevision} />}
         <div className={surface}>
           <form
             noValidate
             className="flex flex-wrap items-end gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              void m.load();
+              if (canControl("query")) void m.load();
             }}
           >
+            {sent && (
+              <>
+                {canControl("query") && <MessageSearch value={m.query} onSearch={m.setQuery} />}
+                <label className="space-y-2">
+                  <span className="text-sm">{text("msg.scope")}</span>
+                  <ASelect
+                    label={text("msg.scope")}
+                    value={m.scope}
+                    onChange={m.setScope}
+                    options={["", "all", "targeted"].map((value) => ({
+                      value,
+                      label: text(`msg.${value || "allScopes"}`),
+                    }))}
+                  />
+                </label>
+              </>
+            )}
             {!sent && (
               <div className="w-56">
                 <Label>{tr("read")}</Label>
@@ -118,30 +155,32 @@ export default function MessagePage({
                 }))}
               />
             </div>
-            <Button
+            {canControl("reset-query") && <Button
               type="button"
               variant="outline"
               onClick={() => {
                 m.setType("");
+                m.setQuery("");
+                m.setScope("");
                 m.setStatus("");
               }}
             >
               {t("common.reset")}
-            </Button>
-            <Button type="button" onClick={() => void m.load()}>
+            </Button>}
+            {canControl("query") && <Button type="button" onClick={() => void m.load()}>
               {t("common.search")}
-            </Button>
+            </Button>}
           </form>
         </div>
         <div className={surface}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              {sent && auth.canButton("system.msg.send") && (
+              {canSend && (
                 <Button type="button" size="sm" onClick={m.newMessage}>
                   {tr("send")}
                 </Button>
               )}
-              {!sent && (
+              {!sent && canControl("read-all") && (
                 <Button
                   type="button"
                   size="sm"
@@ -153,7 +192,7 @@ export default function MessagePage({
               )}
               {readable && checkedVisible.length > 0 && (
                 <>
-                  {deletable && (
+                  {canControl("delete-selected") && (
                     <Button
                       data-testid="message-bulk-delete"
                       variant="danger"
@@ -166,7 +205,7 @@ export default function MessagePage({
                       {tr("deleteSelected")}
                     </Button>
                   )}
-                  {!sent && (
+                  {!sent && canControl("mark-selected-read") && (
                     <Button
                       data-testid="message-bulk-read"
                       variant="outline"
@@ -182,8 +221,23 @@ export default function MessagePage({
                 </>
               )}
             </div>
+            <div className="ms-auto flex gap-2">
+              {["split", "table"].map((view) => (
+                <AButton
+                  key={view}
+                  active={sentView === view}
+                  onClick={() => setSentView(view)}
+                >
+                  {text(view === "split" ? "msg.splitView" : "msg.tableView")}
+                </AButton>
+              ))}
+            </div>
             <ResultToolbar
-              refresh={() => void m.load()}
+              canRefresh={canControl("refresh")}
+              refresh={() => {
+                setSummaryRevision((value) => value + 1);
+                void m.load();
+              }}
               density={density}
               setDensity={setDensity}
               fullscreen={embedded || fullscreen}
@@ -207,6 +261,18 @@ export default function MessagePage({
                 {tr("retry")}
               </Button>
             </div>
+          ) : sentView === "split" ? (
+            <SentWorkspace
+              rows={m.rows}
+              loading={m.loading}
+              checked={checkedVisible}
+              onCheck={setCheckedKeys}
+              canView={canControl("view-detail")}
+              onView={(row) => void m.openDetail(row)}
+              onDelete={deletable ? m.remove : undefined}
+              visible={visible}
+              density={density}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table
@@ -271,15 +337,16 @@ export default function MessagePage({
                         />
                       </td>
                       <td
-                        className={`max-w-80 break-words px-4 ${density === "compact" ? "py-2" : density === "loose" ? "py-6" : "py-3"}`}
+                        className={`max-w-80 px-4 break-words ${density === "compact" ? "py-2" : density === "loose" ? "py-6" : "py-3"}`}
                       >
                         <button
-                          className="text-brand-500 text-start"
+                          className="text-start text-brand-500"
+                          disabled={!canControl("view-detail")}
                           onClick={() => void m.openDetail(row)}
                         >
                           {row.title}
                         </button>
-                        {row.expired_at && row.expired_at <= Date.now() && (
+                        {row.expired_at && row.expired_at <= now && (
                           <Badge>{tr("expired")}</Badge>
                         )}
                       </td>
@@ -305,11 +372,12 @@ export default function MessagePage({
                         <div className="flex flex-wrap gap-3">
                           <button
                             className="text-brand-500"
+                            disabled={!canControl("view-detail")}
                             onClick={() => void m.openDetail(row)}
                           >
                             {tr("view")}
                           </button>
-                          {!sent && !row.read_at && (
+                          {!sent && !row.read_at && canControl("mark-read") && (
                             <button
                               className="text-brand-500"
                               disabled={m.busy}
@@ -415,13 +483,7 @@ export default function MessagePage({
       ) : (
         body
       )}
-      <Modal
-        ariaLabel={tr("detail")}
-        isOpen={m.detail}
-        onClose={m.closeDetail}
-        showCloseButton={false}
-        className="m-4 max-w-xl p-6"
-      >
+      <AdminDrawer open={m.detail} title={tr("detail")} onClose={m.closeDetail}>
         <h2 className="mb-5 text-xl font-semibold">{tr("detail")}</h2>
         {m.detailLoading ? (
           <p>{t("common.loading")}</p>
@@ -432,7 +494,7 @@ export default function MessagePage({
                 {m.selected.title}
               </h3>
               <p>{date(m.selected.published_at)}</p>
-              <p className="my-5 max-h-96 overflow-auto whitespace-pre-wrap break-words">
+              <p className="my-5 max-h-96 overflow-auto break-words whitespace-pre-wrap">
                 {m.selected.content}
               </p>
               <p>
@@ -441,10 +503,29 @@ export default function MessagePage({
                   ? date(m.selected.expired_at)
                   : tr("noExpiry")}
               </p>
-              {sent && m.selected.recipient_ids && (
-                <p>
-                  {tr("recipientIDs")}: {m.selected.recipient_ids.join(", ")}
-                </p>
+              {sent && m.selected.scope === "targeted" && (
+                <section className="mt-5 rounded-lg border p-4">
+                  <h3>
+                    {text("msg.recipients")} ·{" "}
+                    {text("msg.recipientCount", {
+                      count: m.selected.recipient_ids?.length ?? m.selected.recipients?.length ?? 0,
+                    })}
+                  </h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {m.selected.recipients?.length ? (
+                      m.selected.recipients.map((recipient) => (
+                        <span
+                          key={recipient.id}
+                          className="rounded border px-2 py-1 text-xs"
+                        >
+                          {recipient.username} · {recipient.code}
+                        </span>
+                      ))
+                    ) : (
+                      <p>{text("msg.recipientsUnavailable")}</p>
+                    )}
+                  </div>
+                </section>
               )}
             </>
           )
@@ -454,15 +535,31 @@ export default function MessagePage({
             {tr("cancel")}
           </Button>
         </div>
-      </Modal>
-      <Modal
-        ariaLabel={tr("send")}
-        isOpen={m.compose}
+      </AdminDrawer>
+      <AdminDrawer
+        open={m.compose}
+        title={tr("send")}
         onClose={closeCompose}
-        showCloseButton={false}
-        className="m-4 max-w-2xl max-h-screen overflow-auto p-6"
+        footer={
+          <div className="mt-5 flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={m.busy}
+              onClick={closeCompose}
+            >
+              {tr("cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={m.busy}
+              onClick={() => void m.send()}
+            >
+              {tr("send")}
+            </Button>
+          </div>
+        }
       >
-        <h2 className="mb-5 text-xl font-semibold">{tr("send")}</h2>
         <form
           noValidate
           onSubmit={(e) => {
@@ -526,24 +623,18 @@ export default function MessagePage({
             {m.draft.scope === "targeted" && (
               <div>
                 <Label htmlFor="msg-recipients">{tr("recipients")}</Label>
-                <SearchableSelect
-                  id="msg-recipients"
-                  name="msg-recipients"
-                  multiple
-                  value={m.draft.recipient_ids}
-                  onChange={(v) =>
-                    m.setDraft((d) => ({
-                      ...d,
-                      recipient_ids: (v as number[]) || [],
-                    }))
-                  }
-                  onSearch={async (q) =>
-                    (await msgApi.users(q)).map((u) => ({
-                      value: u.id,
-                      label: u.username,
+                <AssociationEditor
+                  resource="user"
+                  kind="recipient"
+                  value={m.draft.recipient_ids ?? []}
+                  onChange={(value) =>
+                    m.setDraft((draft) => ({
+                      ...draft,
+                      recipient_ids: value.map(Number),
                     }))
                   }
                 />
+
                 {m.attempted && m.issues.recipients && (
                   <p className="text-error-500" role="alert">
                     {m.issues.recipients}
@@ -568,25 +659,8 @@ export default function MessagePage({
               </p>
             )}
           </fieldset>
-          <div className="mt-5 flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={m.busy}
-              onClick={closeCompose}
-            >
-              {tr("cancel")}
-            </Button>
-            <Button
-              type="button"
-              disabled={m.busy}
-              onClick={() => void m.send()}
-            >
-              {tr("send")}
-            </Button>
-          </div>
         </form>
-      </Modal>
+      </AdminDrawer>
       <Modal
         ariaLabel={tr("confirm")}
         isOpen={!!m.confirmation || discard}
@@ -646,5 +720,24 @@ export default function MessagePage({
         </div>
       </Modal>
     </>
+  );
+}
+
+export default function MessagePage(props: {
+  sent?: boolean;
+  embedded?: boolean;
+  onClose?: () => void;
+}) {
+  const text = useAdminText();
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const close = () =>
+    props.onClose ? props.onClose() : navigate("/dashboard/overview");
+  if (props.sent) return <LegacyMessagePage {...props} />;
+  if (!messagePermissions(auth).canRead) return <p>{text("msg.noPermission")}</p>;
+  return (
+    <AdminDrawer bare open title={text("msg.history")} onClose={close}>
+      <InboxFeed onClose={close} />
+    </AdminDrawer>
   );
 }

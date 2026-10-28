@@ -182,6 +182,8 @@ export class RouteValidator {
    * 路径解析
    */
   private resolvePath(parent: string, child: string): string {
-    return [parent.replace(/\/$/, ''), child.replace(/^\//, '')].filter(Boolean).join('/')
+    if (child.startsWith('/')) return child
+    if (!child) return parent || '/'
+    return `${parent.replace(/\/$/, '')}/${child}`
   }
 }

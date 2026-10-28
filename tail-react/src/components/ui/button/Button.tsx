@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import type { ReactNode, KeyboardEventHandler } from "react";
 
 interface ButtonProps {
+  "aria-label"?: string;
+  "aria-keyshortcuts"?: string;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   "data-testid"?: string;
   type?: "button" | "submit" | "reset";
   children: ReactNode; // Button text or content
@@ -16,6 +19,9 @@ interface ButtonProps {
 const Button: React.FC<ButtonProps> = ({
   children,
   "data-testid": dataTestID,
+  "aria-label": ariaLabel,
+  "aria-keyshortcuts": ariaKeyShortcuts,
+  onKeyDown,
   type,
   size = "md",
   variant = "primary",
@@ -45,6 +51,9 @@ const Button: React.FC<ButtonProps> = ({
     <button
       type={type}
       data-testid={dataTestID}
+      aria-label={ariaLabel}
+      aria-keyshortcuts={ariaKeyShortcuts}
+      onKeyDown={onKeyDown}
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition ${className} ${
         sizeClasses[size]
       } ${variantClasses[variant]} ${

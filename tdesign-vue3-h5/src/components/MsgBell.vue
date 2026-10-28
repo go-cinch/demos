@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { messageAttention, visitMessages } from '../lib/message-attention';
+import { session } from '../lib/api';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { msgApi } from '../lib/msg';
@@ -19,8 +21,8 @@ async function refresh() {
   busy = true;
   const current = generation;
   try {
-    const result = await msgApi.count();
-    if (current === generation) count.value = result.count;
+    const result = await msgApi.count(session.user?.id);
+    if (current === generation) { messageAttention.update(result); count.value = messageAttention.count(session.user?.id); };
   } catch {
     if (current === generation) count.value = null;
   } finally {
@@ -31,10 +33,13 @@ async function refresh() {
     }
   }
 }
+function syncSeen() { count.value = messageAttention.count(session.user?.id); }
 let timer: ReturnType<typeof setInterval>;
 onMounted(() => {
   void refresh();
   timer = setInterval(refresh, 30000);
+  window.addEventListener('cinch-msg-seen', syncSeen);
+  window.addEventListener('storage', syncSeen);
   window.addEventListener('cinch-msg-changed', refresh);
   document.addEventListener('visibilitychange', refresh);
 });
@@ -43,6 +48,8 @@ onBeforeUnmount(() => {
   queued = false;
   generation++;
   clearInterval(timer);
+  window.removeEventListener('cinch-msg-seen', syncSeen);
+  window.removeEventListener('storage', syncSeen);
   window.removeEventListener('cinch-msg-changed', refresh);
   document.removeEventListener('visibilitychange', refresh);
 });
@@ -52,7 +59,7 @@ onBeforeUnmount(() => {
     class="icon-button msg-bell"
     :aria-label="t('app.msg.inbox')"
     :aria-description="(count ?? 0) > 0 ? t('app.msg.count', { count: count ?? 0 }) : undefined"
-    @click="router.push('/msg/inbox')"
+    @click="visitMessages(session.user?.id); router.push('/msg/inbox')"
   >
     <Icon name="notification" />
     <span

@@ -12,6 +12,7 @@ import type { AppRouteRecord } from '@/types/router'
 import { ComponentLoader } from './ComponentLoader'
 import { RouteValidator } from './RouteValidator'
 import { RouteTransformer } from './RouteTransformer'
+import { relativeRouteTree } from './catalog-navigation'
 
 export class RouteRegistry {
   private router: Router
@@ -38,7 +39,8 @@ export class RouteRegistry {
     }
 
     // 验证路由配置
-    const validationResult = this.validator.validate(menuList)
+    const registrationRoutes = relativeRouteTree(menuList)
+    const validationResult = this.validator.validate(registrationRoutes)
     if (!validationResult.valid) {
       throw new Error(`路由配置验证失败: ${validationResult.errors.join(', ')}`)
     }
@@ -46,7 +48,7 @@ export class RouteRegistry {
     // 转换并注册路由
     const removeRouteFns: (() => void)[] = []
 
-    menuList.forEach((route) => {
+    registrationRoutes.forEach((route) => {
       if (route.name && !this.router.hasRoute(route.name)) {
         const routeConfig = this.transformer.transform(route)
         const removeRouteFn = this.router.addRoute(routeConfig as RouteRecordRaw)

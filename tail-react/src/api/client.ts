@@ -1,3 +1,7 @@
+import {
+  gatewayMessage,
+  notifyRequestFailure,
+} from "@/utils/admin/request-error";
 import i18n from "@/i18n";
 
 const API_BASE = import.meta.env.VITE_GLOB_AUTH_API_URL || "/api/auth";
@@ -18,7 +22,11 @@ export class ApiError extends Error {
   data: Record<string, unknown>;
 
   constructor(status: number, data: Record<string, unknown>) {
-    super(String(data.msg || data.message || data.error || `HTTP ${status}`));
+    super(
+      status === 502
+        ? gatewayMessage()
+        : String(data.msg || data.message || data.error || `HTTP ${status}`),
+    );
     this.status = status;
     this.data = data;
   }
@@ -67,6 +75,7 @@ export async function apiRequest<T>(
     body,
     headers: {
       Accept: "application/json",
+      "X-Auth-Scope": "admin",
       "Accept-Language": i18n.language.startsWith("zh") ? "zh-CN" : "en-US",
       ...(body ? { "Content-Type": "application/json" } : {}),
       ...(auth && accessToken
@@ -82,6 +91,7 @@ export async function apiRequest<T>(
     await refreshSession();
     return apiRequest<T>(path, { ...init, body, headers, auth, retry: false });
   }
+  if (response.status === 502) notifyRequestFailure(gatewayMessage());
   throw new ApiError(
     response.status,
     data && typeof data === "object" ? data : { message: String(data || "") },
@@ -90,7 +100,7 @@ export async function apiRequest<T>(
 
 export async function refreshSession() {
   if (!refreshPromise) {
-    refreshPromise = apiRequest<LoginResult>("/auth/pub/refresh", {
+    refreshPromise = apiRequest<LoginResult>("/pub/refresh", {
       auth: false,
       retry: false,
       method: "POST",

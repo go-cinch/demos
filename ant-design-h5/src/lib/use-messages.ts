@@ -1,3 +1,5 @@
+import { messageAttention, visitMessages } from './message-attention';
+import { session } from './api';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { msgApi, msgChanged, type Msg, type MsgInput } from "./msg";
 import { useMessageFeed } from "./use-message-feed";
@@ -16,6 +18,9 @@ export function useMessages(
   parseExpiry: (value: string) => number,
   infinite = false,
 ) {
+  const attentionUser = session.user?.id;
+  useEffect(() => { if (!sent && readable) visitMessages(attentionUser); }, [sent, readable, attentionUser]);
+
   const [rows, setRows] = useState<Msg[]>([]),
     [total, setTotal] = useState(0),
     [page, setPage] = useState(1),
@@ -332,6 +337,7 @@ export function useMessages(
   };
 }
 export function useUnreadCount() {
+  const attentionUser = session.user?.id;
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     let disposed = false,
@@ -345,8 +351,8 @@ export function useUnreadCount() {
       }
       busy = true;
       try {
-        const result = await msgApi.count();
-        if (!disposed) setCount(result.count);
+        const result = await msgApi.count(attentionUser);
+        if (!disposed && result.user_id === attentionUser) { messageAttention.update(result); setCount(messageAttention.count(attentionUser)); }
       } catch {
         if (!disposed) setCount(null);
       } finally {
@@ -357,16 +363,21 @@ export function useUnreadCount() {
         }
       }
     }
+    const syncSeen = () => setCount(messageAttention.count(attentionUser));
+    window.addEventListener("cinch-msg-seen", syncSeen);
+    window.addEventListener("storage", syncSeen);
     void refresh();
     const timer = setInterval(refresh, 30000);
     window.addEventListener("cinch-msg-changed", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
+      window.removeEventListener("cinch-msg-seen", syncSeen);
+      window.removeEventListener("storage", syncSeen);
       clearInterval(timer);
       window.removeEventListener("cinch-msg-changed", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [attentionUser]);
   return count;
 }

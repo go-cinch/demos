@@ -12,31 +12,32 @@
     </div>
 
     <div class="flex-cc gap-1.5 mr-2 max-sm:mr-5">
-      <div class="color-picker-expandable relative flex-c max-sm:!hidden">
-        <div
-          class="color-dots absolute right-0 rounded-full flex-c gap-2 rounded-5 px-2.5 py-2 pr-9 pl-2.5 opacity-0"
-        >
-          <div
-            v-for="(color, index) in mainColors"
-            :key="color"
-            class="color-dot relative size-5 c-p flex-cc rounded-full opacity-0"
-            :class="{ active: color === systemThemeColor }"
-            :style="{ background: color, '--index': index }"
-            @click="changeThemeColor(color)"
-          >
-            <ArtSvgIcon v-if="color === systemThemeColor" icon="ri:check-fill" class="text-white" />
-          </div>
-        </div>
-        <div class="btn palette-btn relative z-[2] h-8 w-8 c-p flex-cc tad-300">
-          <ArtSvgIcon
-            icon="ri:palette-line"
-            class="text-xl text-g-800 transition-colors duration-300"
-          />
-        </div>
-      </div>
+      <ElPopover trigger="click" placement="bottom-end" :width="280"
+        ><template #reference
+          ><button
+            type="button"
+            class="btn palette-btn relative h-8 w-8 c-p flex-cc tad-300"
+            :aria-label="$t('auth.colorScheme')"
+            :title="$t('auth.colorScheme')"
+            ><ArtSvgIcon icon="ri:palette-line" class="text-xl text-g-800" /></button></template
+        ><div class="auth-color-grid"
+          ><button
+            v-for="(value, index) in mainColors"
+            :key="value"
+            type="button"
+            class="auth-color-choice"
+            :style="{ background: value }"
+            :aria-label="$t('auth.colorChoice', { index: index + 1 })"
+            :aria-pressed="value === systemThemeColor"
+            @click="changeThemeColor(value)"
+            ><ArtSvgIcon
+              v-if="value === systemThemeColor"
+              icon="ri:check-fill"
+              class="text-white" /></button></div
+      ></ElPopover>
       <button
         type="button"
-        class="btn h-8 w-8 c-p flex-cc tad-300"
+        class="btn h-8 w-8 c-p flex-cc tad-300 max-[1180px]:hidden"
         :aria-label="$t('auth.panelPosition')"
         :title="$t('auth.panelPosition')"
         @click="togglePanelPosition"
@@ -55,7 +56,7 @@
         <button
           type="button"
           class="btn language-btn h-8 w-8 c-p flex-cc tad-300"
-          aria-label="Language"
+          :aria-label="$t('auth.language')"
         >
           <ArtSvgIcon
             icon="ri:translate-2"
@@ -76,7 +77,9 @@
           </ElDropdownMenu>
         </template>
       </ElDropdown>
-      <div
+      <button
+        type="button"
+        :aria-label="$t(isDark ? 'auth.lightMode' : 'auth.darkMode')"
         v-if="shouldShowThemeToggle"
         class="btn theme-btn h-8 w-8 c-p flex-cc tad-300"
         @click="themeAnimation"
@@ -85,7 +88,7 @@
           :icon="isDark ? 'ri:sun-fill' : 'ri:moon-line'"
           class="text-xl text-g-800 transition-colors duration-300"
         />
-      </div>
+      </button>
     </div>
   </div>
 </template>
@@ -140,6 +143,27 @@
 </script>
 
 <style scoped>
+  .auth-color-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .auth-color-choice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .auth-color-choice[aria-pressed='true'],
+  .auth-color-choice:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 3px;
+  }
+
   .auth-mobile-title {
     max-width: min(58vw, 360px);
     overflow-wrap: anywhere;

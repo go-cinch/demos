@@ -1,109 +1,167 @@
 <script setup lang="ts">
+  import { computed, ref, watch, onBeforeUnmount } from 'vue'
   import { createSliderChallenge, verifySlider } from '@/api/auth-service'
+  import { isBadGatewayError } from '@/utils/admin/request-error'
   import { $t } from '@/locales'
-
-  const props = defineProps<{ purpose: 'login' | 'register'; username: string }>()
-  const model = defineModel<string>({ default: '' })
-
-  const rail = ref<HTMLElement>()
-  const dragging = ref(false)
-  const loading = ref(false)
-  const passed = ref(false)
-  const distance = ref(0)
-  let startX = 0
-  let startedAt = 0
-  let challengeId = ''
-  let tracks: Array<{ t: number; x: number }> = []
-
-  const maxDistance = computed(() => Math.max(0, (rail.value?.clientWidth ?? 320) - 40))
-  const progressStyle = computed(() => ({ width: `${distance.value + 40}px` }))
-  const handleStyle = computed(() => ({ transform: `translateX(${distance.value}px)` }))
-
-  async function begin(event: PointerEvent) {
-    if (passed.value || loading.value || !props.username.trim()) {
-      if (!props.username.trim()) ElMessage.warning($t('auth.usernameFirst'))
-      return
-    }
-    const handle = event.currentTarget as HTMLElement
-    try {
-      const challenge = await createSliderChallenge(props.purpose, props.username.trim())
-      challengeId = challenge.captcha_id
-      dragging.value = true
-      startX = event.clientX
-      startedAt = performance.now()
-      tracks = [{ t: 0, x: 0 }]
-      handle.setPointerCapture(event.pointerId)
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : $t('auth.verificationFailed'))
-    }
-  }
-
-  function move(event: PointerEvent) {
-    if (!dragging.value) return
-    distance.value = Math.min(maxDistance.value, Math.max(0, event.clientX - startX))
-    tracks.push({ t: Math.round(performance.now() - startedAt), x: Math.round(distance.value) })
-  }
-
-  async function end() {
-    if (!dragging.value) return
-    dragging.value = false
-    if (distance.value < maxDistance.value - 3) return reset()
-    loading.value = true
-    try {
-      const duration = Math.max(1, Math.round(performance.now() - startedAt))
-      const result = await verifySlider({
-        captcha_id: challengeId,
-        distance: Math.round(distance.value),
-        duration_ms: duration,
-        purpose: props.purpose,
-        tracks,
-        username: props.username.trim(),
-        width: Math.round(maxDistance.value)
-      })
-      model.value = result.proof
-      passed.value = true
-    } catch (error) {
-      reset()
-      ElMessage.error(error instanceof Error ? error.message : 'Verification failed')
-    } finally {
-      loading.value = false
-    }
-  }
-
-  function reset() {
+  const props = defineProps<{ purpose: 'login' | 'register'; username: string }>(),
+    model = defineModel<string>({ default: '' })
+  const rail = ref<HTMLElement>(),
+    dragging = ref(false),
+    loading = ref(false),
+    passed = ref(false),
+    distance = ref(0),
+    errorMessage = ref('')
+  let generation = 0,
+    startX = 0,
+    startedAt = 0,
+    subject = '',
+    tracks: Array<{ t: number; x: number }> = [],
+    challenge: ReturnType<typeof createSliderChallenge> | undefined
+  const maxDistance = computed(() => Math.max(0, (rail.value?.clientWidth ?? 320) - 40)),
+    progressStyle = computed(() => ({ width: `${distance.value + 40}px` })),
+    handleStyle = computed(() => ({ transform: `translateX(${distance.value}px)` }))
+  function reset(clear = true) {
+    generation++
     model.value = ''
     passed.value = false
     dragging.value = false
+    loading.value = false
     distance.value = 0
-    challengeId = ''
     tracks = []
+    challenge = undefined
+    if (clear) errorMessage.value = ''
   }
-
-  watch(() => props.username, reset)
+  function begin(event: PointerEvent) {
+    if (passed.value || loading.value) return
+    if (!props.username.trim()) {
+      errorMessage.value = $t('auth.usernameFirst')
+      return
+    }
+    event.preventDefault()
+    reset()
+    const run = ++generation
+    subject = props.username.trim()
+    startX = event.clientX
+    startedAt = performance.now()
+    tracks = [{ t: 0, x: 0 }]
+    dragging.value = true
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+    challenge = createSliderChallenge(props.purpose, subject)
+    void challenge.catch((error) => {
+      if (run === generation && isBadGatewayError(error)) errorMessage.value = $t('auth.serverLost')
+    })
+  }
+  function move(event: PointerEvent) {
+    if (!dragging.value) return
+    distance.value = Math.min(maxDistance.value, Math.max(0, event.clientX - startX))
+    if (tracks.length < 127)
+      tracks.push({ t: Math.round(performance.now() - startedAt), x: Math.round(distance.value) })
+  }
+  async function end() {
+    if (!dragging.value) return
+    dragging.value = false
+    if (distance.value < maxDistance.value - 3) {
+      reset()
+      return
+    }
+    const run = generation,
+      pending = challenge,
+      currentSubject = subject
+    if (!pending) return
+    loading.value = true
+    try {
+      const value = await pending
+      if (run !== generation) return
+      const duration = Math.max(1, Math.round(performance.now() - startedAt)),
+        width = Math.round(maxDistance.value)
+      const result = await verifySlider({
+        captcha_id: value.captcha_id,
+        distance: width,
+        duration_ms: duration,
+        purpose: props.purpose,
+        tracks: [...tracks, { t: duration, x: width }],
+        username: currentSubject,
+        width
+      })
+      if (run !== generation) return
+      model.value = result.proof
+      passed.value = true
+      errorMessage.value = ''
+    } catch (error) {
+      if (run === generation) {
+        errorMessage.value = $t(
+          isBadGatewayError(error) ? 'auth.serverLost' : 'auth.verificationFailed'
+        )
+        reset(false)
+      }
+    } finally {
+      if (run === generation) loading.value = false
+    }
+  }
+  watch(
+    () => props.username,
+    () => reset()
+  )
+  onBeforeUnmount(() => {
+    generation++
+  })
   defineExpose({ reset })
 </script>
 
 <template>
-  <div ref="rail" class="server-slider" :class="{ passed }">
-    <div class="progress" :style="progressStyle" />
-    <span class="label">{{ passed ? $t('auth.sliderPassed') : $t('auth.sliderTip') }}</span>
-    <button
-      type="button"
-      class="handle"
-      :aria-label="passed ? $t('auth.sliderPassed') : $t('auth.sliderTip')"
-      :style="handleStyle"
-      :disabled="loading || passed"
-      @pointerdown="begin"
-      @pointermove="move"
-      @pointerup="end"
-      @pointercancel="end"
-    >
-      <ArtSvgIcon :icon="passed ? 'ri:check-line' : 'ri:arrow-right-double-line'" />
-    </button>
-  </div>
+  <div class="slider-wrap"
+    ><div ref="rail" class="server-slider" :class="{ passed }" :aria-busy="loading">
+      <ElSkeleton v-if="loading" animated class="slider-skeleton"
+        ><template #template
+          ><ElSkeletonItem variant="rect" style="width: 100%; height: 100%" /></template
+      ></ElSkeleton>
+      <div class="progress" :style="progressStyle" />
+      <span class="label">{{
+        passed
+          ? $t('auth.sliderPassed')
+          : loading
+            ? $t('auth.sliderChecking')
+            : $t('auth.sliderTip')
+      }}</span>
+      <button
+        type="button"
+        class="handle"
+        :aria-label="passed ? $t('auth.sliderPassed') : $t('auth.sliderTip')"
+        :style="handleStyle"
+        :disabled="loading || passed"
+        @pointerdown="begin"
+        @pointermove="move"
+        @pointerup="end"
+        @pointercancel="end"
+      >
+        <ArtSvgIcon :icon="passed ? 'ri:check-line' : 'ri:arrow-right-double-line'" />
+      </button> </div
+    ><p v-if="errorMessage" class="slider-error" role="alert">{{ errorMessage }}</p></div
+  >
 </template>
 
 <style scoped>
+  .slider-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .slider-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.75;
+  }
+  .slider-error {
+    position: absolute;
+    top: 100%;
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-color-danger);
+  }
+
   .server-slider {
     position: relative;
     width: 100%;

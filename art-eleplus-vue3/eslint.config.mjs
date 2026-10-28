@@ -76,6 +76,12 @@ export default [
       parserOptions: { parser: tseslint.parser }
     }
   },
+  // Workbench children edit the parent-owned reactive draft in place. Keep the
+  // prop reference immutable while allowing the intentional nested draft edits.
+  {
+    files: ['src/views/system/developer/**/*.vue'],
+    rules: { 'vue/no-mutating-props': ['error', { shallowOnly: true }] }
+  },
   // 忽略文件
   {
     ignores: [

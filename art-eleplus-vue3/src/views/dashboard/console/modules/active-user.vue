@@ -36,7 +36,7 @@
   // 最近9个月
   const xAxisLabels = computed(() =>
     Array.from({ length: 9 }, (_, index) =>
-      $t('dashboardContent.common.monthNumber').replace('{number}', String(index + 1))
+      $t('dashboardContent.common.monthNumber', { number: index + 1 })
     )
   )
 

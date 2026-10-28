@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { visitMessages } from '../lib/message-attention';
+import { session } from '../lib/api';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import type { Msg } from '../lib/msg';
 import { msgApi, msgChanged } from '../lib/msg';
@@ -262,6 +264,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('cinch-msg-changed', refreshVisible);
   document.removeEventListener('visibilitychange', refreshVisible);
 });
+onMounted(() => visitMessages(session.user?.id));
 </script>
 <template>
   <section class="page message-page" data-testid="message-inbox-page" :aria-busy="loading">

@@ -1,26 +1,29 @@
+import { useAuth } from "@/context/AuthContext";
+import { messagePermissions } from "@/utils/message-permissions";
+import MessageTypeIcon from "@/components/common/MessageTypeIcon";
+import { adminDate } from "@/utils/admin/model";
+import { useSelectedTimezone, readAdminTimezone } from "@/utils/admin/timezone";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { Modal } from "@/components/ui/modal";
 import Button from "@/components/ui/button/Button";
-import Avatar from "@/components/ui/avatar/Avatar";
 import { BellAltIcon, CheckCircleIcon, CloseLineIcon } from "@/icons";
-import { useAuth } from "@/context/AuthContext";
 import { useMessages, useUnreadCount } from "@/hooks/useMessages";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import MessagePage from "@/pages/System/MessagePage";
-function date(value: number) {
-  const d = new Date(value),
-    pad = (v: number) => String(v).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+function date(value: number, zone = readAdminTimezone()) {
+  return adminDate(value, zone);
 }
 export default function NotificationDropdown() {
   const { t } = useTranslation(),
-    tr = (key: string) => t(`msg.${key}`),
-    auth = useAuth();
+    tr = (key: string) => t(`msg.${key}`);
+
+  const { canRead, canControl } = messagePermissions(useAuth());
+  const timezone = useSelectedTimezone();
   const [open, setOpen] = useState(false),
     [historyOpen, setHistoryOpen] = useState(false),
     count = useUnreadCount(),
-    m = useMessages(false, open, tr, (v) => new Date(v).valueOf());
+    m = useMessages(false, open && canRead, tr, (v) => new Date(v).valueOf());
   return (
     <div className="relative">
       <button
@@ -41,7 +44,7 @@ export default function NotificationDropdown() {
         )}
       </button>
       <Dropdown
-        className="absolute end-0 mt-2 w-max min-w-[min(18rem,calc(100vw-1.5rem))] max-w-[min(25rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-gray-200 bg-white p-0 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+        className="absolute end-0 mt-2 w-max max-w-[min(25rem,calc(100vw-1.5rem))] min-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-gray-200 bg-white p-0 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
         isOpen={open}
         onClose={() => setOpen(false)}
       >
@@ -54,7 +57,7 @@ export default function NotificationDropdown() {
             <h2 className="text-sm font-medium text-gray-800 dark:text-gray-100">
               {tr("notifications")}
             </h2>
-            <button
+            {canControl("read-all") && <button
               aria-label={tr("readAll")}
               title={tr("readAll")}
               className="flex size-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -62,7 +65,7 @@ export default function NotificationDropdown() {
               onClick={() => void m.readAll()}
             >
               <CheckCircleIcon className="size-4" />
-            </button>
+            </button>}
           </header>
           {m.error && (
             <p role="alert" className="px-4 text-sm text-error-500">
@@ -76,12 +79,12 @@ export default function NotificationDropdown() {
                 key={row.id}
               >
                 <div data-testid="notification-avatar" className="self-start">
-                  <Avatar alt={auth.user?.username || ""} size="medium" />
+                  <MessageTypeIcon type={row.type} label={tr(row.type)} />
                 </div>
                 <button
                   type="button"
                   aria-label={row.title}
-                  disabled={m.busy || m.loading}
+                  disabled={m.busy || m.loading || !canControl("view-detail")}
                   className="flex min-w-0 flex-col gap-1 text-start"
                   onClick={() => {
                     setOpen(false);
@@ -90,7 +93,7 @@ export default function NotificationDropdown() {
                 >
                   <span
                     data-testid="notification-title"
-                    className="block w-full truncate text-sm font-semibold leading-5 text-gray-800 dark:text-gray-100"
+                    className="block w-full truncate text-sm leading-5 font-semibold text-gray-800 dark:text-gray-100"
                   >
                     {row.title}
                   </span>
@@ -98,13 +101,13 @@ export default function NotificationDropdown() {
                     data-testid="notification-content"
                     className="block w-full truncate text-xs leading-5 text-gray-500 dark:text-gray-400"
                   >
-                    {row.content}
+                    {row.summary ?? row.content}
                   </span>
                   <time className="block w-full truncate text-xs leading-5 text-gray-500 dark:text-gray-400">
-                    {date(row.published_at)}
+                    {date(row.published_at, timezone)}
                   </time>
                 </button>
-                <button
+                {canControl(row.read_at ? "delete" : "mark-read") && <button
                   type="button"
                   className={
                     row.read_at
@@ -123,7 +126,7 @@ export default function NotificationDropdown() {
                   ) : (
                     <CheckCircleIcon className="size-4" />
                   )}
-                </button>
+                </button>}
               </li>
             ))}
           </ul>
@@ -133,14 +136,14 @@ export default function NotificationDropdown() {
             </p>
           )}
           <footer className="flex items-center justify-between gap-4 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
-            <button
+            {canControl("delete-selected") && <button
               className="rounded-md px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               disabled={m.busy || m.loading || !m.rows.length}
               onClick={m.clearPreview}
             >
               {tr("clear")}
-            </button>
-            <Button
+            </button>}
+            {canRead && <Button
               type="button"
               size="sm"
               onClick={() => {
@@ -149,7 +152,7 @@ export default function NotificationDropdown() {
               }}
             >
               {tr("viewAll")}
-            </Button>
+            </Button>}
           </footer>
         </section>
       </Dropdown>
@@ -167,7 +170,7 @@ export default function NotificationDropdown() {
             <p className="text-xs text-gray-500">
               {date(m.selected.published_at)}
             </p>
-            <p className="my-4 max-h-96 overflow-auto whitespace-pre-wrap break-words">
+            <p className="my-4 max-h-96 overflow-auto break-words whitespace-pre-wrap">
               {m.selected.content}
             </p>
           </>

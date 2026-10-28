@@ -9,5 +9,5 @@ export default async function SystemResourcePage({
 }) {
   const { resource } = await params;
   if (!isResourceKind(resource)) notFound();
-  return <ManagementPage resource={resource} />;
+  return <ManagementPage key={resource} resource={resource} />;
 }

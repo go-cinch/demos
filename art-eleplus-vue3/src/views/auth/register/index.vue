@@ -38,7 +38,9 @@
     confirmPassword: [
       {
         validator: (_rule, value, callback) =>
-          value === form.password ? callback() : callback(new Error($t('auth.passwordMismatch'))),
+          String(value ?? '').trim() === form.password.trim()
+            ? callback()
+            : callback(new Error($t('auth.passwordMismatch'))),
         trigger: 'blur'
       }
     ]
