@@ -1,10 +1,13 @@
 import type { JWK } from 'jose';
 
+import type { ServiceRequestConfig } from '#/api/request-types';
+
 import { $t } from '@vben/locales';
 
 import { CompactEncrypt, importJWK } from 'jose';
 
 import {
+  authMFAVerificationRequestClient,
   authPublicRequestClient,
   authRequestClient,
   authSessionRequestClient,
@@ -106,7 +109,6 @@ export namespace AuthApi {
 
   /** 登录接口返回值 */
   export interface LoginResult {
-    password_reset_required: boolean;
     access_token: string;
     expired_at: number;
     refresh_token: string;
@@ -115,12 +117,14 @@ export namespace AuthApi {
 
 type CredentialPurpose =
   | 'login'
+  | 'mfa_setup'
   | 'password_change'
   | 'password_reset'
   | 'register';
 
 const credentialTypes = {
   login: 'login+jwe',
+  mfa_setup: 'mfa-setup+jwe',
   password_change: 'password+jwe',
   password_reset: 'password-reset+jwe',
   register: 'register+jwe',
@@ -131,12 +135,12 @@ async function encryptCredential(
   payload: Record<string, unknown>,
 ) {
   const authenticated =
-    purpose === 'password_change' || purpose === 'password_reset';
+    purpose === 'password_change' || purpose === 'password_reset' || purpose === 'mfa_setup';
   const challengeClient = authenticated
     ? authRequestClient
     : authPublicRequestClient;
   const challenge = await challengeClient.post<AuthApi.CredentialChallenge>(
-    authenticated ? '/challenge' : '/pub/challenge',
+    purpose === 'mfa_setup' ? '/mfa/challenge' : authenticated ? '/challenge' : '/pub/challenge',
     { purpose },
   );
   const publicKey = await importJWK(challenge.public_key, 'RSA-OAEP-256');
@@ -288,16 +292,20 @@ export async function changePasswordApi(data: AuthApi.ChangePasswordParams) {
   if (!data.oldPassword.trim() || !data.newPassword.trim()) {
     throw new TypeError($t('app.validation.passwordChangeRequired'));
   }
-  const encrypted = await encryptCredential('password_change', {
+  const credentialPayload = {
     captcha_id: data.captchaId,
     captcha_points: data.captchaPoints,
     new_password: data.newPassword,
     old_password: data.oldPassword,
-  });
-  return authRequestClient.request('/change/pwd', {
+  };
+  const createCredential = () => encryptCredential('password_change', credentialPayload);
+  const encrypted = await createCredential();
+  const options = {
     data: encrypted,
     method: 'PATCH',
-  });
+    mfaRetryCredential: createCredential,
+  } satisfies ServiceRequestConfig;
+  return authRequestClient.request('/change/pwd', options);
 }
 
 /** Refresh an already-issued password-change point-selection challenge. */
@@ -382,3 +390,46 @@ export async function resetPasswordApi(newPassword: string) {
     },
   );
 }
+
+export interface MFAStatus {
+  password_required: boolean;
+  enabled: boolean;
+  enrollment_required: boolean;
+  sensitive_expired_at: number;
+}
+export interface MFASetup {
+  secret: string;
+  uri: string;
+  expired_at: number;
+}
+export interface MFAEnrollment extends AuthApi.LoginResult {
+  recovery_codes: string[];
+}
+export const getMFAStatusApi = () => authRequestClient.get<MFAStatus>('/mfa');
+export async function beginMFAEnrollmentApi(password?: string) {
+  const encrypted = password === undefined ? {} : await encryptCredential('mfa_setup', { password });
+  return authMFAVerificationRequestClient.post<MFASetup>('/mfa/setup', encrypted);
+}
+export const confirmMFAEnrollmentApi = (verification_code: string) =>
+  authMFAVerificationRequestClient.post<MFAEnrollment>('/mfa/confirm', { verification_code });
+/** Test a bound factor without creating a sensitive-operation grant or retrying a mutation. */
+export const testMFAApi = (verification_code: string) =>
+  authMFAVerificationRequestClient.post<{ verified: boolean }>('/mfa/test', { verification_code });
+/** Continue password-verified login on the original endpoint. */
+export const completeMFALoginApi = (ticket: string, code: string) => {
+  const config = {
+    headers: { 'X-MFA-Ticket': ticket, 'X-MFA-Code': code },
+    // Keep validation failures in the existing inline prompt.
+    _mfaRetried: true,
+  } satisfies ServiceRequestConfig;
+  return authVerificationRequestClient.post<AuthApi.LoginResult>('/pub/login', {}, config);
+};
+/** Recovery resets the old factor and returns a session restricted to enrollment. */
+export const recoverMFALoginApi = (ticket: string, recoveryCode: string) => {
+  const config = {
+    headers: { 'X-MFA-Ticket': ticket, 'X-MFA-Recovery-Code': recoveryCode },
+    _mfaRetried: true,
+  } satisfies ServiceRequestConfig;
+  return authVerificationRequestClient.post<AuthApi.LoginResult>('/pub/login', {}, config);
+};
+export const resetUserMFAApi = (id: number) => authRequestClient.post(`/mfa/reset/${id}`);

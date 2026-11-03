@@ -3,7 +3,8 @@
  */
 import type { RequestClientOptions } from '@vben/request';
 
-import { useAppConfig } from '@vben/hooks';
+import type { ServiceClientOptions } from './request-types';
+
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
@@ -15,24 +16,26 @@ import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
+import { MFACancelled, requestMFA } from '#/security/mfa-prompt';
 import { useAuthStore } from '#/store';
 
+import { rememberAuthRequirements, responseHeader } from './auth-headers';
 import { refreshTokenApi } from './core';
+import { prepareMFARetry } from './mfa-retry';
 import {
   isBadGatewayError,
   normalizeGatewayError,
   requestErrorMessage,
 } from './request-error';
 
-const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const authApiURL = import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth';
 
 // Share the window across clients so concurrent page requests produce one toast.
 const recentErrorMessages = new Map<string, number>();
 const errorMessageWindowMs = 500;
 let pendingSessionRefresh:
-  | { refreshToken: string; promise: Promise<string> }
-  | undefined;
+  | undefined
+  | { refreshToken: string; promise: Promise<string> };
 
 function showRequestErrorMessage(content: string) {
   const now = performance.now();
@@ -46,10 +49,14 @@ function showRequestErrorMessage(content: string) {
 
 function createRequestClient(
   baseURL: string,
-  options?: RequestClientOptions,
-  enableReAuthentication: boolean = true,
-  enableErrorMessage: boolean | 'gateway' = true,
+  settings: ServiceClientOptions = {},
 ) {
+  const {
+    authentication = 'refresh',
+    errorMessage: enableErrorMessage = true,
+    mfaChallenge: mfaChallengeMode = 'prompt',
+    ...options
+  } = settings;
   const client = new RequestClient({
     ...options,
     baseURL,
@@ -85,9 +92,10 @@ function createRequestClient(
     if (pendingSessionRefresh?.refreshToken === refreshToken) {
       return pendingSessionRefresh.promise;
     }
+    const isCurrentSession = useAuthStore().captureSession();
     const promise = (async () => {
       const resp = await refreshTokenApi(refreshToken);
-      if (accessStore.refreshToken !== refreshToken) {
+      if (!isCurrentSession() || accessStore.refreshToken !== refreshToken) {
         throw new Error('Refresh response belongs to an expired session');
       }
       useAuthStore().acceptSession(resp, true);
@@ -118,6 +126,13 @@ function createRequestClient(
     },
   });
 
+  client.addResponseInterceptor({
+    fulfilled: (response) => {
+      rememberAuthRequirements(response.data, response.headers);
+      return response;
+    },
+  });
+
   // 处理返回的响应数据格式
   client.addResponseInterceptor(
     defaultResponseInterceptor({
@@ -133,7 +148,7 @@ function createRequestClient(
   });
 
   // token过期的处理
-  if (enableReAuthentication) {
+  if (authentication === 'refresh') {
     client.addResponseInterceptor(
       authenticateResponseInterceptor({
         client,
@@ -147,6 +162,67 @@ function createRequestClient(
 
   client.addResponseInterceptor({
     rejected: async (error) => {
+      const headers = error?.response?.headers;
+      if (responseHeader(headers, 'X-MFA-Enrollment-Required') === 'true') {
+        await useAuthStore().requireMFAEnrollment();
+        throw error;
+      }
+      if (responseHeader(headers, 'X-MFA-Required') === 'true') {
+        if (
+          error?.response?.status !== 403 ||
+          mfaChallengeMode === 'inline' ||
+          error?.config?._mfaRetried
+        )
+          throw error;
+        const ticket = responseHeader(headers, 'X-MFA-Ticket');
+        if (
+          ticket &&
+          baseURL === authApiURL &&
+          error.config.url === '/pub/login'
+        ) {
+          return requestMFA(
+            'login',
+            ticket,
+            Number(responseHeader(headers, 'X-MFA-Expires-At')),
+          );
+        }
+        const isCurrentSession = useAuthStore().captureSession();
+        let replayed = false;
+        let result: unknown;
+        let failure: unknown;
+        await requestMFA('sensitive', undefined, undefined, async (code) => {
+          if (!isCurrentSession()) throw new MFACancelled();
+          const retry = await prepareMFARetry(error.config);
+          if (!isCurrentSession()) throw new MFACancelled();
+          retry.headers = { ...retry.headers, 'X-MFA-Code': code };
+          let verified = true;
+          try {
+            result = await client.request(error.config.url, retry);
+          } catch (cause: any) {
+            if (
+              responseHeader(cause?.response?.headers, 'X-MFA-Required') ===
+              'true'
+            )
+              throw cause;
+            // Return non-MFA failures to their caller without success feedback
+            // or offering to submit the mutation again in the MFA dialog.
+            failure = cause;
+            verified = false;
+          }
+          replayed = true;
+          return verified;
+        });
+        if (!isCurrentSession()) throw new MFACancelled();
+        if (replayed) {
+          if (failure) throw failure;
+          return result;
+        }
+        // Concurrent callers share one prompt; the first retry established the
+        // same-session fixed-window grant, so the others need no reusable code.
+        const retry = await prepareMFARetry(error.config);
+        if (!isCurrentSession()) throw new MFACancelled();
+        return client.request(error.config.url, retry);
+      }
       const isAuthInfoRequest =
         baseURL === authApiURL &&
         String(error?.config?.url ?? '').split(/[?#]/, 1)[0] === '/info';
@@ -154,6 +230,8 @@ function createRequestClient(
         window.dispatchEvent(new Event('auth-permissions-changed'));
       }
       if (
+        (error?.response?.status === 403 &&
+          responseHeader(headers, 'X-Password-Reset-Required') === 'true') ||
         error?.response?.data?.error_code === 'AUTH_PASSWORD_RESET_REQUIRED'
       ) {
         await useAuthStore().requirePasswordReset();
@@ -166,7 +244,13 @@ function createRequestClient(
   if (enableErrorMessage) {
     client.addResponseInterceptor(
       errorMessageResponseInterceptor((msg: string, error) => {
-        if (enableErrorMessage === 'gateway' && !isBadGatewayError(error)) return;
+        if (error instanceof MFACancelled) return;
+        if (
+          responseHeader(error?.response?.headers, 'X-MFA-Required') === 'true'
+        )
+          return;
+        if (enableErrorMessage === 'gateway' && !isBadGatewayError(error))
+          return;
         showRequestErrorMessage(requestErrorMessage(error, msg));
       }),
     );
@@ -174,10 +258,6 @@ function createRequestClient(
 
   return client;
 }
-
-export const requestClient = createRequestClient(apiURL, {
-  responseReturn: 'data',
-});
 
 /** Service clients share session handling while keeping independent base URLs. */
 export function createServiceRequestClient(
@@ -193,35 +273,32 @@ export const orderRequestClient = createServiceRequestClient(
   import.meta.env.VITE_GLOB_ORDER_API_URL || '/api/order',
 );
 
-/** Auth client for login/logout, where a 401 must not recursively log out. */
-export const authPublicRequestClient = createRequestClient(
-  authApiURL,
-  {
-    responseReturn: 'body',
-  },
-  false,
-);
+/** Public calls must not recursively reauthenticate on a rejected password. */
+export const authPublicRequestClient = createRequestClient(authApiURL, {
+  responseReturn: 'body',
+  authentication: 'none',
+});
 
-/** Silent public client for background checks and token-backed session calls. */
-export const authSilentPublicRequestClient = createRequestClient(
-  authApiURL,
-  {
-    responseReturn: 'body',
-  },
-  false,
-  false,
-);
+export const authSilentPublicRequestClient = createRequestClient(authApiURL, {
+  responseReturn: 'body',
+  authentication: 'none',
+  errorMessage: false,
+});
 
-/** Verification failures stay inline; an unavailable gateway must remain visible. */
-export const authVerificationRequestClient = createRequestClient(
-  authApiURL,
-  {
-    responseReturn: 'body',
-  },
-  false,
-  'gateway',
-);
+/** Field verification owns its error UI; gateway failures remain visible. */
+export const authVerificationRequestClient = createRequestClient(authApiURL, {
+  responseReturn: 'body',
+  authentication: 'none',
+  errorMessage: 'gateway',
+});
 
 export const authSessionRequestClient = authSilentPublicRequestClient;
 
-export const baseRequestClient = new RequestClient({ baseURL: apiURL });
+export const authMFAVerificationRequestClient = createRequestClient(
+  authApiURL,
+  {
+    responseReturn: 'body',
+    errorMessage: 'gateway',
+    mfaChallenge: 'inline',
+  },
+);

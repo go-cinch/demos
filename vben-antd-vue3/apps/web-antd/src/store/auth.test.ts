@@ -1,4 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia';
+import { ref } from 'vue';
+import { resetAllStores } from '@vben/stores';
+import { rememberAuthRequirements } from '#/api/auth-headers';
+import { mfaPrompt, requestMFA } from '#/security/mfa-prompt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -77,13 +81,12 @@ import {
 const pending = {
   access_token: 'pending-access',
   refresh_token: 'pending-refresh',
-  password_reset_required: true,
   expired_at: 123,
 };
+rememberAuthRequirements(pending, { 'X-Password-Reset-Required': 'true' });
 const complete = {
   access_token: 'new-access',
   refresh_token: 'new-refresh',
-  password_reset_required: false,
   expired_at: 234,
 };
 
@@ -221,6 +224,93 @@ describe('authentication session lifecycle', () => {
     await signingOut;
     expect(mocks.access.accessToken).toBe('another-account');
     expect(mocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('cancels every pending MFA operation as soon as ordinary sign-out starts', async () => {
+    const auth = useAuthStore();
+    auth.acceptSession(complete);
+    const current = auth.captureSession();
+    const verify = vi.fn();
+    const first = requestMFA('sensitive', undefined, undefined, verify);
+    const second = requestMFA('sensitive');
+    const outcomes = Promise.allSettled([first, second]);
+    let finish!: () => void;
+    mocks.logout.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    const signingOut = auth.logout();
+    expect(mfaPrompt.value).toBeUndefined();
+    expect(current()).toBe(false);
+    for (const outcome of await outcomes) {
+      expect(outcome.status).toBe('rejected');
+      if (outcome.status === 'rejected') expect(outcome.reason.message).toBe('MFA cancelled');
+    }
+    expect(verify).not.toHaveBeenCalled();
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    finish();
+    await signingOut;
+  });
+
+  it('discards a login response received after logout without resetting a newer login attempt', async () => {
+    const auth = useAuthStore();
+    vi.mocked(resetAllStores).mockImplementation(() => auth.$reset());
+    let finishOld!: (value: typeof complete) => void;
+    let finishNew!: (value: typeof complete) => void;
+    mocks.login.mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }))
+      .mockReturnValueOnce(new Promise(resolve => { finishNew = resolve; }));
+    const oldLogin = auth.authLogin({ username: 'first', password: 'password' });
+    await auth.logout();
+    const newLogin = auth.authLogin({ username: 'second', password: 'password' });
+    expect(auth.loginLoading).toBe(true);
+    finishOld({ ...complete, access_token: 'old-login-access', refresh_token: 'old-login-refresh' });
+    await oldLogin;
+    expect(mocks.access.setAccessToken).not.toHaveBeenCalled();
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.recordAccount).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+    expect(auth.loginLoading).toBe(true);
+    finishNew(complete);
+    await newLogin;
+    expect(mocks.access.accessToken).toBe('new-access');
+    expect(mocks.recordAccount).toHaveBeenCalledExactlyOnceWith('second');
+    expect(auth.loginLoading).toBe(false);
+  });
+
+  it('does not navigate back into the account if logout happens during login arrival', async () => {
+    const auth = useAuthStore();
+    vi.mocked(resetAllStores).mockImplementation(() => auth.$reset());
+    mocks.login.mockResolvedValueOnce(complete);
+    let finish!: () => void;
+    mocks.transition.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    const signingIn = auth.authLogin({ username: 'tester', password: 'password' });
+    await vi.waitFor(() => expect(mocks.transition).toHaveBeenCalledOnce());
+    await auth.logout();
+    finish();
+    await signingIn;
+    expect(mocks.router.push).not.toHaveBeenCalled();
+    expect(mocks.router.replace).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ path: '/auth/login' }));
+    expect(auth.loginEntering).toBe(false);
+  });
+
+  it('cancels every sensitive waiter before recovery sign-out and returns to login without the old destination', async () => {
+    const auth = useAuthStore();
+    auth.acceptSession(complete);
+    const isCurrentSession = auth.captureSession();
+    const verify = vi.fn();
+    const first = requestMFA('sensitive', undefined, undefined, verify);
+    const second = requestMFA('sensitive');
+    const outcomes = Promise.allSettled([first, second]);
+    let finishLogout!: () => void;
+    mocks.logout.mockReturnValue(new Promise<void>(resolve => { finishLogout = resolve; }));
+    const recovering = auth.restartLoginForMFARecovery();
+    expect(mfaPrompt.value).toBeUndefined();
+    expect(isCurrentSession()).toBe(false);
+    for (const outcome of await outcomes) {
+      expect(outcome.status).toBe('rejected');
+      if (outcome.status === 'rejected') expect(outcome.reason.message).toBe('MFA cancelled');
+    }
+    expect(verify).not.toHaveBeenCalled();
+    finishLogout();
+    await recovering;
+    expect(mocks.router.replace).toHaveBeenCalledExactlyOnceWith({ path: '/auth/login', query: {} });
   });
 
   it('ignores a failed session restoration that belongs to an earlier account', async () => {
@@ -400,6 +490,22 @@ describe('authentication session lifecycle', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it('waits for inline MFA before installing tokens or playing arrival', async () => {
+    let finish!: (result: typeof complete) => void;
+    mocks.login.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const auth = useAuthStore();
+    const loggingIn = auth.authLogin({ username: 'tester', password: 'initial' });
+    await vi.waitFor(() => expect(mocks.login).toHaveBeenCalledOnce());
+    expect(mocks.access.setAccessToken).not.toHaveBeenCalled();
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+    finish(complete);
+    await loggingIn;
+    expect(mocks.access.setAccessToken).toHaveBeenCalledWith('new-access');
+    expect(mocks.transition).toHaveBeenCalledOnce();
+    expect(mocks.router.push).toHaveBeenCalledWith('/profile');
+  });
+
   it('enters reset before fetching profile or menus', async () => {
     mocks.login.mockResolvedValue(pending);
     const auth = useAuthStore();
@@ -422,6 +528,58 @@ describe('authentication session lifecycle', () => {
     const auth = useAuthStore();
     expect(await auth.restoreSession()).toBe(true);
     expect(auth.passwordResetRequired).toBe(true);
+  });
+
+  it.each(['login', 'refresh', 'MFA confirmation'] as const)('uses a header-only password restriction after %s', async (operation) => {
+    const result = { access_token: 'pending-access', refresh_token: 'pending-refresh', expired_at: 123 };
+    rememberAuthRequirements(result, { 'X-Password-Reset-Required': 'true' });
+    const auth = useAuthStore();
+    if (operation === 'login') {
+      mocks.login.mockResolvedValue(result);
+      await auth.authLogin({ username: 'tester', password: 'initial' });
+    } else if (operation === 'refresh') {
+      mocks.access.refreshToken = 'previous-refresh';
+      mocks.refresh.mockResolvedValue(result);
+      expect(await auth.restoreSession()).toBe(true);
+    } else {
+      const enrollmentResult = ref(result);
+      expect(enrollmentResult.value).not.toBe(result);
+      await auth.completeMFAEnrollment(enrollmentResult.value);
+    }
+    expect(auth.passwordResetRequired).toBe(true);
+    expect(mocks.access.accessToken).toBe('pending-access');
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+    if (operation !== 'refresh') {
+      expect(mocks.router.replace).toHaveBeenCalledWith('/auth/reset-password');
+    }
+  });
+
+  it('clears the restriction when the replacement session has no reset header', () => {
+    const result = { ...complete };
+    rememberAuthRequirements(result, { 'x-password-reset-required': 'true' });
+    const auth = useAuthStore();
+    auth.acceptSession(result);
+    expect(auth.passwordResetRequired).toBe(true);
+    auth.acceptSession({ ...complete });
+    expect(auth.passwordResetRequired).toBe(false);
+  });
+
+  it('preserves both header restrictions through a Vue response ref and keeps MFA enrollment first', async () => {
+    const result = { access_token: 'pending-access', refresh_token: 'pending-refresh', expired_at: 123 };
+    rememberAuthRequirements(result, {
+      'x-mfa-enrollment-required': 'true',
+      'x-password-reset-required': 'true',
+    });
+    const reactiveResult = ref(result).value;
+    expect(reactiveResult).not.toBe(result);
+    const auth = useAuthStore();
+    auth.acceptSession(reactiveResult);
+    expect(auth.mfaEnrollmentRequired).toBe(true);
+    expect(auth.passwordResetRequired).toBe(true);
+    await auth.requirePasswordReset();
+    expect(mocks.router.replace).toHaveBeenCalledWith('/auth/bind-mfa');
+    expect(mocks.info).not.toHaveBeenCalled();
   });
   it('replaces both tokens before fetching profile and continues without login', async () => {
     const auth = useAuthStore();
@@ -545,6 +703,81 @@ describe('authentication session lifecycle', () => {
     arrived();
     await reset;
     expect(mocks.router.replace).toHaveBeenCalledWith('/profile');
+  });
+
+  it('waits for arrival after recovery acknowledgment before entering the system', async () => {
+    let arrived!: () => void;
+    mocks.transition.mockReturnValue(new Promise<void>(resolve => { arrived = resolve; }));
+    const auth = useAuthStore();
+    auth.acceptSession(complete);
+    expect(mocks.transition).not.toHaveBeenCalled();
+    const entering = auth.completeMFAEnrollment(complete);
+    await vi.waitFor(() => expect(mocks.transition).toHaveBeenCalledOnce());
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    arrived();
+    await entering;
+    expect(mocks.router.replace).toHaveBeenCalledWith('/profile');
+  });
+
+  it('does not enter the old account if its session changes during arrival', async () => {
+    let arrived!: () => void;
+    mocks.transition.mockReturnValue(new Promise<void>(resolve => { arrived = resolve; }));
+    const auth = useAuthStore();
+    const entering = auth.completeMFAEnrollment(complete);
+    await vi.waitFor(() => expect(mocks.transition).toHaveBeenCalledOnce());
+    auth.$reset();
+    arrived();
+    await entering;
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+  });
+
+  it('requires MFA enrollment before password reset on login', async () => {
+    const result = { ...complete };
+    rememberAuthRequirements(result, {
+      'x-mfa-enrollment-required': 'true',
+      'x-password-reset-required': 'true',
+    });
+    mocks.login.mockResolvedValue(result);
+    const auth = useAuthStore();
+    await auth.authLogin({ username: 'tester', password: 'password' });
+    expect(auth.passwordResetRequired).toBe(true);
+    expect(mocks.router.replace).toHaveBeenCalledWith('/auth/bind-mfa');
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+  });
+
+  it('keeps a recovered session on enrollment and loads business data only after binding a new factor', async () => {
+    const recovered = { ...complete, access_token: 'enrollment-only' };
+    rememberAuthRequirements(recovered, { 'X-MFA-Enrollment-Required': 'true' });
+    mocks.login.mockResolvedValue(recovered);
+    const auth = useAuthStore();
+    await auth.authLogin({ username: 'tester', password: 'password' });
+    expect(auth.mfaEnrollmentRequired).toBe(true);
+    expect(mocks.router.replace).toHaveBeenCalledWith('/auth/bind-mfa');
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+    await auth.completeMFAEnrollment(ref({ ...complete }).value);
+    expect(auth.mfaEnrollmentRequired).toBe(false);
+    expect(mocks.info).toHaveBeenCalledOnce();
+    expect(mocks.router.replace).toHaveBeenLastCalledWith('/profile');
+  });
+
+  it('continues to password reset after saving MFA recovery codes', async () => {
+    const result = { ...complete };
+    rememberAuthRequirements(result, { 'X-Password-Reset-Required': 'true' });
+    await useAuthStore().completeMFAEnrollment(result);
+    expect(mocks.router.replace).toHaveBeenCalledWith('/auth/reset-password');
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+  });
+
+  it('keeps sailing when a password reset still requires authenticator enrollment', async () => {
+    const result = { ...complete };
+    rememberAuthRequirements(result, { 'x-mfa-enrollment-required': 'true' });
+    mocks.reset.mockResolvedValue(result);
+    await useAuthStore().completePasswordReset('new-password');
+    expect(mocks.router.replace).toHaveBeenCalledWith('/auth/bind-mfa');
+    expect(mocks.transition).not.toHaveBeenCalled();
   });
 
   it('does not play arrival when profile loading fails', async () => {

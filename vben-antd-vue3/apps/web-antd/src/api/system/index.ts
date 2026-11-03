@@ -1,5 +1,7 @@
+import type { ServiceRequestConfig } from '#/api/request-types';
+
 import { authRequestClient } from '#/api/request';
-import { refreshI18nCatalog } from '#/locales';
+import { refreshI18nCatalog } from '#/locales/catalog';
 
 import { createRegistrationPasswordCredentialApi } from '../core/auth';
 
@@ -112,7 +114,7 @@ export interface UserPermissionSource {
   id: number;
   name: string;
   action_codes: string[];
-  actions: Pick<ActionRecord, 'code' | 'word' | 'config'>[];
+  actions: Pick<ActionRecord, 'code' | 'config' | 'word'>[];
 }
 
 export interface UserSummary {
@@ -254,12 +256,12 @@ export const listActionGroups = (keyword = '') =>
   });
 export const createAction = async (idempotencyKey: string, data: ActionPayload) => {
   const record = await create<ActionRecord, ActionPayload>('action', idempotencyKey, data);
-  await refreshI18nCatalog();
+  if (data.names !== undefined) await refreshI18nCatalog();
   return record;
 };
 export const updateAction = async (id: number, data: ActionPayload) => {
   const record = await update<ActionRecord, ActionPayload>('action', id, data);
-  await refreshI18nCatalog();
+  if (data.names !== undefined || data.word !== undefined) await refreshI18nCatalog();
   return record;
 };
 export const deleteActions = (ids: number[]) => remove('action', ids);
@@ -279,9 +281,8 @@ export const createUser = async (idempotencyKey: string, data: UserPayload) => {
   if (!username || !data.password) {
     throw new TypeError('Username and password are required');
   }
-  const encrypted = await createRegistrationPasswordCredentialApi(
-    data.password,
-  );
+  const password = data.password;
+  const encrypted = await createRegistrationPasswordCredentialApi(password);
   const request: CreateUserRequest = {
     action_codes: data.action_codes,
     action_bindings: data.action_bindings,
@@ -290,7 +291,11 @@ export const createUser = async (idempotencyKey: string, data: UserPayload) => {
     username,
     ...encrypted,
   };
-  return create<UserRecord, CreateUserRequest>('user', idempotencyKey, request);
+  const options = {
+    headers: { 'x-idempotent': idempotencyKey },
+    mfaRetryCredential: () => createRegistrationPasswordCredentialApi(password),
+  } satisfies ServiceRequestConfig;
+  return authRequestClient.post<UserRecord>('/user', request, options);
 };
 export const updateUser = async (id: number, data: UserPayload) => {
   const { password, ...fields } = data;
@@ -298,6 +303,11 @@ export const updateUser = async (id: number, data: UserPayload) => {
   if (password) {
     const encrypted = await createRegistrationPasswordCredentialApi(password);
     request = { ...fields, ...encrypted };
+    const options = {
+      method: 'PATCH', data: request,
+      mfaRetryCredential: () => createRegistrationPasswordCredentialApi(password),
+    } satisfies ServiceRequestConfig;
+    return authRequestClient.request<UserRecord>(`/user/${id}`, options);
   }
   return update<UserRecord, UpdateUserRequest>('user', id, request);
 };
@@ -350,6 +360,7 @@ export const updateDictionary = async (id: number, data: DictionaryPayload) => {
     id,
     data,
   );
+  // Group edits and developer publishing share this single post-save refresh.
   if (result.key === 'I18N_CATALOG') await refreshI18nCatalog();
   return result;
 };

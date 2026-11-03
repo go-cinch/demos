@@ -15,6 +15,7 @@ import { usePermissions } from '#/composables/use-permissions';
 import MessageHistory from '../../msg/history.vue';
 import ProfileBase from './base-setting.vue';
 import ProfilePasswordSetting from './password-setting.vue';
+import ProfileMFASetting from './mfa-setting.vue';
 import ProfileActivity from './profile-activity.vue';
 import ProfileMessages from './profile-messages.vue';
 
@@ -180,12 +181,18 @@ async function moveTab(event: KeyboardEvent) {
             v-if="tab === 'security'"
             role="tabpanel"
             aria-labelledby="profile-tab-security"
+            class="profile-security-stack"
           >
             <Card
-              class="profile-panel profile-security"
+              class="profile-panel profile-security-card"
               :body-style="{ padding: '28px' }"
             >
-              <h2>{{ $t('page.profile.tabs.changePassword') }}</h2>
+              <template #title>
+                <div class="security-card-title">
+                  <span class="security-card-icon"><IconifyIcon icon="lucide:lock-keyhole" /></span>
+                  <h2>{{ $t('page.profile.tabs.changePassword') }}</h2>
+                </div>
+              </template>
               <Alert
                 class="password-notice"
                 type="warning"
@@ -194,6 +201,7 @@ async function moveTab(event: KeyboardEvent) {
               />
               <ProfilePasswordSetting />
             </Card>
+            <ProfileMFASetting />
           </section>
         </div>
       </div>
@@ -322,11 +330,31 @@ async function moveTab(event: KeyboardEvent) {
   display: grid;
   gap: 22px;
 }
-.profile-security h2 {
-  margin: 0 0 20px;
-  font-size: 18px;
+.profile-security-stack {
+  display: grid;
+  gap: 24px;
+}
+.security-card-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.security-card-title h2 {
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
+.security-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.07);
+}
+.security-card-icon :deep(svg) { width: 18px; height: 18px; }
 .password-notice {
   margin-bottom: 28px;
 }
@@ -342,6 +370,12 @@ async function moveTab(event: KeyboardEvent) {
 .profile-center :deep(.profile-panel .ant-card-head-title) {
   padding-block: 18px;
 }
+.profile-center :deep(.profile-security-card .ant-card-head) {
+  min-height: 72px;
+  padding-inline: 28px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.profile-center :deep(.profile-security-card .ant-card-head-title) { padding-block: 16px; }
 .profile-center :deep(.profile-panel h2) {
   font-size: 16px;
   font-weight: 600;

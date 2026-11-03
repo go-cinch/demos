@@ -2,7 +2,7 @@
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
-import { computed, markRaw, nextTick, onActivated, ref } from 'vue';
+import { computed, markRaw, nextTick, onActivated, onDeactivated, ref, watch } from 'vue';
 
 import { AuthenticationLogin, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
@@ -10,6 +10,8 @@ import { $t } from '@vben/locales';
 import { useDebounceFn } from '@vueuse/core';
 
 import { consumeRegistrationLogin, useAuthStore } from '#/store';
+import MFALogin from '#/security/mfa-login.vue';
+import { cancelMFA, mfaPrompt } from '#/security/mfa-prompt';
 import { isValidUsername, isValidUserPassword } from '#/user-validation';
 
 import LoginAccountInput from './login-account-input.vue';
@@ -19,6 +21,14 @@ import ServerSliderCaptcha from './server-slider-captcha.vue';
 defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
+const mfaCompleting = ref(false);
+const showLoginMFA = computed(() => mfaPrompt.value?.mode === 'login' || mfaCompleting.value);
+watch(() => mfaPrompt.value?.mode, mode => { if (mode === 'login') void clearPassword(); });
+watch(() => authStore.loginLoading, loading => { if (!loading) mfaCompleting.value = false; });
+onDeactivated(() => {
+  if (mfaPrompt.value?.mode === 'login') cancelMFA();
+  mfaCompleting.value = false;
+});
 const loginFormRef = ref<{
   getFormApi: () => {
     clearValidation: (fieldName: string) => Promise<void>;
@@ -175,7 +185,10 @@ async function handleSubmit(params: Recordable<any>) {
 </script>
 
 <template>
+  <div>
+  <MFALogin v-if="showLoginMFA" :completing="mfaCompleting" @verified="mfaCompleting = true" />
   <AuthenticationLogin
+    v-show="!showLoginMFA"
     ref="loginFormRef"
     :form-schema="formSchema"
     :loading="authStore.loginLoading"
@@ -190,4 +203,5 @@ async function handleSubmit(params: Recordable<any>) {
     @submit="handleSubmit"
     @values-change="handleValuesChange"
   />
+  </div>
 </template>

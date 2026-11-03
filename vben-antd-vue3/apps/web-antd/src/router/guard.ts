@@ -61,10 +61,16 @@ function setupAccessGuard(router: Router) {
       await authStore.restoreSession();
     }
 
+    if (accessStore.accessToken && authStore.mfaEnrollmentRequired) {
+      return to.path === '/auth/bind-mfa' ? true : { path: '/auth/bind-mfa', replace: true };
+    }
     if (accessStore.accessToken && authStore.passwordResetRequired) {
       return to.path === '/auth/reset-password'
         ? true
         : { path: '/auth/reset-password', replace: true };
+    }
+    if (to.path === '/auth/bind-mfa') {
+      return accessStore.accessToken ? true : { path: LOGIN_PATH, replace: true };
     }
     if (to.path === '/auth/reset-password') {
       return {

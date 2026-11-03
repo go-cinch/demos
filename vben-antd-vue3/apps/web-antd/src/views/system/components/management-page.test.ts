@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ManagementDrawer from './management-drawer.vue';
 import ManagementPage from './management-page.vue';
+import ManagementRecordForm from './management-record-form.vue';
 import SystemResourceCards from './system-resource-cards.vue';
 
 const mock = vi.hoisted(() => ({
@@ -53,7 +54,12 @@ vi.mock('ant-design-vue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ant-design-vue')>();
   return {
     ...actual,
-    message: { ...actual.message, success: vi.fn(), error: vi.fn(), info: vi.fn() },
+    message: {
+      ...actual.message,
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+    },
   };
 });
 vi.mock('#/api', () => mock.api);
@@ -156,7 +162,13 @@ async function start(
     props: { resource },
     global: {
       renderStubDefaultSlot: true,
-      stubs: { ManagementForm: false, ManagementDrawer: false },
+      stubs: {
+        ManagementForm: false,
+        ManagementDrawer: false,
+        ManagementResults: false,
+        ManagementRecordPanel: false,
+        ManagementRecordForm: false,
+      },
     },
   });
   await flushPromises();
@@ -170,7 +182,9 @@ async function create() {
   await flushPromises();
 }
 async function save() {
-  wrapper.getComponent<ComponentPublicInstance>('[data-testid="management-save"]').vm.$emit('click');
+  wrapper
+    .getComponent<ComponentPublicInstance>('[data-testid="management-save"]')
+    .vm.$emit('click');
   await flushPromises();
 }
 
@@ -223,10 +237,9 @@ describe('management page request and editor flows', () => {
       .vm.$emit('edit', { id: 7, name: 'List preview' });
     await flushPromises();
     expect(mock.api.getSystemRecord).toHaveBeenCalledWith('role', 7);
-    const model = wrapper.getComponent<ComponentPublicInstance<{ model: Record<string, unknown> }>>('[data-testid="management-editor"]').props('model') as Record<
-      string,
-      unknown
-    >;
+    const model = wrapper
+      .getComponent(ManagementRecordForm)
+      .props('formModel') as Record<string, unknown>;
     expect(model.name).toBe('Full record');
     model.name = 'Renamed';
     await save();
@@ -247,14 +260,15 @@ describe('management page request and editor flows', () => {
       });
     await start();
     await create();
-    const model = wrapper.getComponent<ComponentPublicInstance<{ model: Record<string, unknown> }>>('[data-testid="management-editor"]').props('model') as Record<
-      string,
-      unknown
-    >;
+    const model = wrapper
+      .getComponent(ManagementRecordForm)
+      .props('formModel') as Record<string, unknown>;
     Object.assign(model, { name: 'New role', word: 'new-role' });
     await save();
     expect(wrapper.getComponent(ManagementDrawer).props('mode')).toBe('create');
-    expect(wrapper.getComponent<ComponentPublicInstance<{ model: Record<string, unknown> }>>('[data-testid="management-editor"]').props('model')).toMatchObject({
+    expect(
+      wrapper.getComponent(ManagementRecordForm).props('formModel'),
+    ).toMatchObject({
       name: 'New role',
     });
     await save();
@@ -273,10 +287,9 @@ describe('management page request and editor flows', () => {
     });
     await start();
     await create();
-    const model = wrapper.getComponent<ComponentPublicInstance<{ model: Record<string, unknown> }>>('[data-testid="management-editor"]').props('model') as Record<
-      string,
-      unknown
-    >;
+    const model = wrapper
+      .getComponent(ManagementRecordForm)
+      .props('formModel') as Record<string, unknown>;
     Object.assign(model, {
       name: 'New role',
       word: 'new-role',

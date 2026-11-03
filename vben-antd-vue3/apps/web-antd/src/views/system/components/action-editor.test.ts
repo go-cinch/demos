@@ -128,7 +128,7 @@ describe('permission resource editor', () => {
     mountEditor();
     await flushPromises();
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
-    expect(refreshI18nCatalog).toHaveBeenCalledOnce();
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
     await selectResource('admin:system:user');
     expect(wrapper.emitted('update:word')?.at(-1)).toEqual([
       'admin:read:system:user',
@@ -196,14 +196,10 @@ describe('permission resource editor', () => {
     expect(wrapper.text()).not.toContain('GET /user');
     expect(getEffectivePermissionPaths).not.toHaveBeenCalled();
   });
-  it.each(['permissions', 'translations'])(
-    'blocks submission when %s fail to load and recovers after retry',
-    async (source) => {
-      const request =
-        source === 'permissions'
-          ? vi.mocked(getPermissionCatalog)
-          : vi.mocked(refreshI18nCatalog);
-      request.mockRejectedValueOnce(new Error('offline'));
+  it(
+    'blocks submission when permissions fail to load and retries without refreshing i18n',
+    async () => {
+      vi.mocked(getPermissionCatalog).mockRejectedValueOnce(new Error('offline'));
       mountEditor();
       await flushPromises();
       expect(wrapper.text()).toContain('action-editor.catalogError');
@@ -213,7 +209,7 @@ describe('permission resource editor', () => {
       await wrapper.get('.ant-alert button').trigger('click');
       await flushPromises();
       expect(getPermissionCatalog).toHaveBeenCalledTimes(2);
-      expect(refreshI18nCatalog).toHaveBeenCalledTimes(2);
+      expect(refreshI18nCatalog).not.toHaveBeenCalled();
       expect(wrapper.find('[role="alert"]').exists()).toBe(false);
       expect(wrapper.findComponent(Tree).exists()).toBe(true);
       expect(wrapper.emitted('validity')?.at(-1)).not.toEqual([

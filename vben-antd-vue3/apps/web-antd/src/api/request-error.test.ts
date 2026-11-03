@@ -1,7 +1,7 @@
 import { message } from 'ant-design-vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { authPublicRequestClient, authRequestClient, authSilentPublicRequestClient, authVerificationRequestClient, createServiceRequestClient, orderRequestClient, requestClient } from './request';
+import { authPublicRequestClient, authRequestClient, authSilentPublicRequestClient, authVerificationRequestClient, createServiceRequestClient, orderRequestClient } from './request';
 import { isBadGatewayError } from './request-error';
 
 const state = vi.hoisted(() => ({ locale: 'zh-CN' }));
@@ -108,7 +108,7 @@ describe('gateway error handling through application clients', () => {
 
 describe('request error toast deduplication', () => {
   it('immediately shows one toast for concurrent identical errors across clients', async () => {
-    const failures = [requestClient, authRequestClient, authPublicRequestClient, authVerificationRequestClient]
+    const failures = [orderRequestClient, authRequestClient, authPublicRequestClient, authVerificationRequestClient]
       .map((client) => rejectWith(client, 502, ''));
     const results = await Promise.allSettled(failures.map(({ request }) => request));
     results.forEach((result, index) => {

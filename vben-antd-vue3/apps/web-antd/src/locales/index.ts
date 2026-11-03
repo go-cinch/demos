@@ -20,7 +20,7 @@ import { preferences } from '@vben/preferences';
 import antdEnLocale from 'ant-design-vue/es/locale/en_US';
 import antdDefaultLocale from 'ant-design-vue/es/locale/zh_CN';
 import dayjs from 'dayjs';
-import { catalogMessages, catalogDefaultLocale, refreshI18nCatalog, watchI18nCatalog, registerCatalogFallback, resolveCatalogLocale } from './catalog';
+import { catalogMessages, catalogDefaultLocale, refreshI18nCatalog, registerCatalogFallback, resolveCatalogLocale } from './catalog';
 
 const antdLocale = ref<Locale>(antdDefaultLocale);
 
@@ -44,7 +44,6 @@ async function loadMessages(lang: SupportedLanguagesType) {
   // Both inputs come from bundled files; never capture a live dictionary as fallback.
   // Application namespaces are disjoint from core namespaces.
   registerCatalogFallback(lang, { ...coreMessages, ...(appLocaleMessages?.default ?? {}) });
-  await refreshI18nCatalog();
   return catalogMessages(lang);
 }
 
@@ -113,7 +112,6 @@ async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
     defaultLocale: 'en-US',
   });
   await loadLocaleMessages(locale);
-  watchI18nCatalog();
 }
 
 function catalogLabel(kind: 'actions' | 'buttons' | 'groups' | 'menus' | 'scopes', key: string) {

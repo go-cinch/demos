@@ -7,11 +7,17 @@ import {
   authRequestClient,
   authSessionRequestClient,
   authVerificationRequestClient,
+  authMFAVerificationRequestClient,
 } from '#/api/request';
 
 import appEnglish from '../../locales/langs/en-US/app.json';
 import appChinese from '../../locales/langs/zh-CN/app.json';
 import {
+  beginMFAEnrollmentApi,
+  confirmMFAEnrollmentApi,
+  testMFAApi,
+  completeMFALoginApi,
+  recoverMFALoginApi,
   changePasswordApi,
   createSliderCaptchaChallengeApi,
   getLoginVerificationApi,
@@ -60,6 +66,7 @@ vi.mock('#/api/request', () => ({
     post: vi.fn(),
     request: vi.fn(),
   },
+  authMFAVerificationRequestClient: { post: vi.fn() },
   authSessionRequestClient: {
     post: vi.fn(),
   },
@@ -188,6 +195,34 @@ describe('changePasswordApi', () => {
         credential: 'encrypted-password-change',
       },
       method: 'PATCH',
+      mfaRetryCredential: expect.any(Function),
+    });
+  });
+
+  it('reissues the encrypted password credential after waiting for sensitive verification', async () => {
+    vi.mocked(authRequestClient.post)
+      .mockResolvedValueOnce({ challenge_id: 'initial', key_id: 'password-key', public_key: { kty: 'RSA' } })
+      .mockResolvedValueOnce({ challenge_id: 'fresh', key_id: 'password-key', public_key: { kty: 'RSA' } });
+    const data = {
+      captchaId: 'captcha-id',
+      captchaPoints: [{ x: 10, y: 20 }],
+      newPassword: 'new-password',
+      oldPassword: 'current-password',
+    };
+    await changePasswordApi(data);
+    const config = vi.mocked(authRequestClient.request).mock.calls[0]![1]!;
+    data.newPassword = 'changed-while-prompt-open';
+    const { prepareMFARetry } = await import('../mfa-retry');
+    const retry = await prepareMFARetry(config);
+    expect(authRequestClient.post).toHaveBeenCalledTimes(2);
+    expect(retry.data).toEqual({ challenge_id: 'fresh', credential: 'encrypted-password-change' });
+    expect(retry._mfaRetried).toBe(true);
+    expect(JSON.parse(new TextDecoder().decode(encryption.plaintext!))).toEqual({
+      challenge_id: 'fresh',
+      captcha_id: 'captcha-id',
+      captcha_points: [{ x: 10, y: 20 }],
+      new_password: 'new-password',
+      old_password: 'current-password',
     });
   });
 
@@ -341,7 +376,6 @@ describe('resetPasswordApi', () => {
     const tokens = {
       access_token: 'new-access',
       refresh_token: 'new-refresh',
-      password_reset_required: false,
       expired_at: 123,
     };
     vi.mocked(authPublicRequestClient.request).mockResolvedValue(tokens);
@@ -368,3 +402,45 @@ describe('resetPasswordApi', () => {
     );
   });
 });
+
+describe('MFA transport', () => {
+  it('tests a bound factor through the verification client without invoking a business request', async () => {
+    const result = { verified: true };
+    vi.mocked(authMFAVerificationRequestClient.post).mockResolvedValueOnce(result);
+    expect(await testMFAApi('123456')).toBe(result);
+    expect(authMFAVerificationRequestClient.post).toHaveBeenCalledExactlyOnceWith('/mfa/test', { verification_code: '123456' });
+    expect(authRequestClient.post).not.toHaveBeenCalled();
+    expect(authVerificationRequestClient.post).not.toHaveBeenCalled();
+  });
+
+  beforeEach(() => { vi.clearAllMocks(); });
+  it('sends enrollment passwords only inside a user-bound JWE challenge', async () => {
+    vi.mocked(authRequestClient.post).mockResolvedValue({ challenge_id: 'mfa-challenge', key_id: 'key', public_key: { kty: 'RSA' } });
+    await beginMFAEnrollmentApi('current-password');
+    expect(authRequestClient.post).toHaveBeenCalledWith('/mfa/challenge', { purpose: 'mfa_setup' });
+    expect(encryption.header?.typ).toBe('mfa-setup+jwe');
+    expect(JSON.parse(new TextDecoder().decode(encryption.plaintext!))).toEqual({ challenge_id: 'mfa-challenge', password: 'current-password' });
+    expect(authMFAVerificationRequestClient.post).toHaveBeenCalledWith('/mfa/setup', { challenge_id: 'mfa-challenge', credential: 'encrypted-password-change' });
+  });
+  it('continues login on the same endpoint using MFA headers', async () => {
+    await completeMFALoginApi('ticket', '123456');
+    expect(authVerificationRequestClient.post).toHaveBeenCalledWith('/pub/login', {}, { headers: { 'X-MFA-Ticket': 'ticket', 'X-MFA-Code': '123456' }, _mfaRetried: true });
+    await confirmMFAEnrollmentApi('654321');
+    expect(authMFAVerificationRequestClient.post).toHaveBeenCalledWith('/mfa/confirm', { verification_code: '654321' });
+  });
+  it('requests factor recovery with its dedicated header instead of verifying login with the recovery code', async () => {
+    const session = { access_token: 'enrollment-only', refresh_token: 'new-refresh', expired_at: 123 };
+    vi.mocked(authVerificationRequestClient.post).mockResolvedValue(session);
+    expect(await recoverMFALoginApi('password-verified-ticket', 'recovery-code')).toBe(session);
+    expect(authVerificationRequestClient.post).toHaveBeenCalledExactlyOnceWith('/pub/login', {}, {
+      headers: { 'X-MFA-Ticket': 'password-verified-ticket', 'X-MFA-Recovery-Code': 'recovery-code' },
+      _mfaRetried: true,
+    });
+  });
+});
+
+ it('starts password-reset enrollment without a password challenge or encrypted credential', async () => {
+   await beginMFAEnrollmentApi();
+   expect(authMFAVerificationRequestClient.post).toHaveBeenCalledWith('/mfa/setup', {});
+   expect(authRequestClient.post).not.toHaveBeenCalled();
+ });

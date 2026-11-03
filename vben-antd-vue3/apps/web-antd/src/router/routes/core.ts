@@ -47,6 +47,12 @@ const coreRoutes: RouteRecordRaw[] = [
     redirect: LOGIN_PATH,
     children: [
       {
+        name: 'BindMFA',
+        path: 'bind-mfa',
+        component: () => import('#/views/_core/authentication/bind-mfa.vue'),
+        meta: { title: 'mfa.enrollTitle' },
+      },
+      {
         name: 'ResetPassword',
         path: 'reset-password',
         component: () =>

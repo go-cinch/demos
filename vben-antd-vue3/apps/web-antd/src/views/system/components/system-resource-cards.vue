@@ -31,6 +31,7 @@ const emit = defineEmits<{
   detail: [record: SystemRecord];
   edit: [record: SystemRecord];
   remove: [record: SystemRecord];
+  resetMfa: [record: SystemRecord];
   selection: [keys: number[]];
 }>();
 
@@ -122,6 +123,7 @@ function select(id: number, checked: boolean) {
               <div><dt>{{ $t('system.fields.updatedAt') }}</dt><dd>{{ recordDate(card.record.updated_at) }}</dd></div>
             </dl>
             <div class="resource-card-actions">
+              <Button v-if="resource === 'user'" type="text" size="small" @click="emit('resetMfa', card.record)">{{ $t('mfa.reset') }}</Button>
               <Button v-if="canDetail" type="link" size="small" @click="emit('detail', card.record)">{{ $t('system-cards.details') }}</Button>
               <Button v-if="canUpdate" type="text" size="small" @click="emit('edit', card.record)">{{ $t('system.common.edit') }}</Button>
               <Button v-if="canDelete && canRemoveRecord?.(card.record) !== false" danger type="text" size="small" @click="emit('remove', card.record)">{{ $t('system.common.delete') }}</Button>

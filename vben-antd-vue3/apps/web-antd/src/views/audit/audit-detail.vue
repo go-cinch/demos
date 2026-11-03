@@ -100,6 +100,10 @@ async function copy(value: string) {
         {{ formatDateTime(event.occurred_at) }}
       </p>
       <dl class="audit-facts">
+        <template v-if="event.mfa_fingerprint">
+          <dt>{{ $t('mfa.fingerprint') }}</dt><dd class="break-all font-mono" data-testid="audit-mfa-fingerprint">{{ event.mfa_fingerprint }}</dd>
+          <dt>{{ $t('mfa.verifiedAt') }}</dt><dd>{{ formatDateTime(event.mfa_verified_at!) }}</dd>
+        </template>
         <dt>{{ $t('audit.actor') }}</dt>
         <dd>
           <Avatar :size="20" class="audit-avatar">

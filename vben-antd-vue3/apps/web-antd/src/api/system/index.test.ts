@@ -55,7 +55,7 @@ vi.mock('#/api/request', () => ({
 vi.mock('../core/auth', () => ({
   createRegistrationPasswordCredentialApi,
 }));
-vi.mock('#/locales', () => ({ refreshI18nCatalog }));
+vi.mock('#/locales/catalog', () => ({ refreshI18nCatalog }));
 
 beforeEach(() => vi.resetAllMocks());
 
@@ -172,7 +172,7 @@ describe('createUser', () => {
         role_id: 2,
         username: 'operator',
       },
-      { headers: { 'x-idempotent': 'idempotency-key' } },
+      { headers: { 'x-idempotent': 'idempotency-key' }, mfaRetryCredential: expect.any(Function) },
     );
     const requestBody = post.mock.calls[0]?.[1];
     expect(requestBody).toHaveProperty('username', 'operator');
@@ -217,6 +217,7 @@ describe('updateUser', () => {
         username: 'operator',
       },
       method: 'PATCH',
+      mfaRetryCredential: expect.any(Function),
     });
     expect(request.mock.calls[0]?.[1]?.data).not.toHaveProperty('password');
   });
@@ -357,7 +358,7 @@ describe('management resource contracts', () => {
     expect(get).toHaveBeenLastCalledWith('/action/group', { params: {} });
   });
 
-  it('refreshes translated definitions only after successful writes', async () => {
+  it('does not refresh i18n for ordinary writes or failed saves', async () => {
     const record = { id: 7, name: 'Read users' };
     post.mockResolvedValue(record);
     request.mockResolvedValue(record);
@@ -365,9 +366,37 @@ describe('management resource contracts', () => {
       createAction('action-once', { name: record.name }),
     ).resolves.toBe(record);
     await expect(
-      updateAction(7, { names: { 'en-US': 'Users' } }),
+      updateAction(7, { group: 'admin:users' }),
     ).resolves.toBe(record);
+    request.mockResolvedValue({ id: 3, key: 'OTHER_SETTINGS' });
+    await updateDictionary(3, { value: { enabled: true } });
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
+    request.mockRejectedValue(new Error('conflict'));
+    post.mockRejectedValue(new Error('conflict'));
+    await expect(updateDictionary(3, { value: {} })).rejects.toThrow('conflict');
+    await expect(updateAction(7, { names: { 'en-US': 'Users' } })).rejects.toThrow('conflict');
+    await expect(createAction('once', { names: { 'en-US': 'Users' } })).rejects.toThrow('conflict');
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
+  });
+
+  it('refreshes i18n once after each successful localized action save', async () => {
+    const record = { id: 7, name: 'Read users' };
+    let finish!: (value: typeof record) => void;
+    post.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const pending = createAction('once', { names: { 'en-US': 'Users' } });
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
+    finish(record);
+    await expect(pending).resolves.toBe(record);
+    expect(refreshI18nCatalog).toHaveBeenCalledOnce();
+
+    request.mockResolvedValue(record);
+    await updateAction(7, { names: { 'en-US': 'Operators' } });
     expect(refreshI18nCatalog).toHaveBeenCalledTimes(2);
+    await updateAction(7, { word: 'admin:read:account:operators' });
+    expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshes the shared catalog once after a successful catalog write', async () => {
     request.mockResolvedValue({ id: 3, key: 'I18N_CATALOG' });
     const update = {
       value: { locales: [] },
@@ -381,11 +410,10 @@ describe('management resource contracts', () => {
       method: 'PATCH',
       data: update,
     });
-    expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+    expect(refreshI18nCatalog).toHaveBeenCalledOnce();
     request.mockRejectedValue(new Error('conflict'));
     await expect(updateDictionary(3, update)).rejects.toThrow('conflict');
-    await expect(updateAction(7, {})).rejects.toThrow('conflict');
-    expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+    expect(refreshI18nCatalog).toHaveBeenCalledOnce();
   });
 
   it('does not create or update a user if credential encryption fails', async () => {

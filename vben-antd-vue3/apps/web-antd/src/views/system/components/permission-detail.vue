@@ -9,7 +9,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Alert, Button, Empty, Segmented, Spin } from 'ant-design-vue';
 
 import { getPermissionCatalog, listActions } from '#/api/system';
-import { $t, refreshI18nCatalog } from '#/locales';
+import { $t } from '#/locales';
 
 import PermissionResourceEditor from './permission-resource-editor.vue';
 import { actionSelection, normalizeSelection } from './permission-selection';
@@ -57,7 +57,7 @@ async function load() {
   if (!hasAssignments.value && !props.sources) { loading.value = false; return; }
   loading.value = true;
   try {
-    const [document] = await Promise.all([getPermissionCatalog('scopes,operations,resource_catalog'), refreshI18nCatalog()]);
+    const document = await getPermissionCatalog('scopes,operations,resource_catalog');
     if (current !== request) return;
     const definitions = new Map(assignedActions.value.filter((item) => item.config).map((item) => [item.code, item]));
     const codes = assignedCodes.value;

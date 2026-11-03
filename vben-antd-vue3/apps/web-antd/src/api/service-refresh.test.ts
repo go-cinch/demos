@@ -17,6 +17,7 @@ vi.mock('@vben/stores', () => ({ useAccessStore: () => session }));
 vi.mock('#/store', () => ({
   useAuthStore: () => ({
     logout: vi.fn(),
+    captureSession: () => () => true,
     acceptSession: (response: { access_token: string; refresh_token: string }) => {
       session.accessToken = response.access_token;
       session.refreshToken = response.refresh_token;
@@ -33,7 +34,7 @@ it('shares one Auth refresh when different services return 401 concurrently', as
     await gate;
     return {
       access_token: 'new-access', refresh_token: 'new-refresh',
-      expired_at: 123, password_reset_required: false,
+      expired_at: 123,
     };
   });
   const clients = [

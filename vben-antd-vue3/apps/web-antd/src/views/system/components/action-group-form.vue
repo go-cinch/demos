@@ -3,7 +3,7 @@ import type { GroupCatalog } from './action-groups';
 import type { ActionGroupDraft, PermissionGroupType } from './action-group-model';
 import { computed, onMounted, reactive, ref, useId, watch } from 'vue';
 import { Alert, Button, Form, FormItem, Input, Segmented, Spin, Switch, Tag, message } from 'ant-design-vue';
-import { $t, refreshI18nCatalog } from '#/locales';
+import { $t } from '#/locales';
 import { catalogDefaultLocale, catalogGroupNames, catalogLanguages } from '#/locales/catalog';
 import { isValidActionGroup } from './action-config';
 import { ActionGroupCatalogError, changePermissionGroup, groupNames, savePermissionGroup } from './action-groups';
@@ -25,8 +25,7 @@ const wordError = computed(() => !model.value.attempted ? ''
   : !isValidActionGroup(model.value.word.trim(), props.originalWord?.split(':')[0] || props.scope) ? 'action-editor.invalidGroupWord'
   : duplicate.value || (model.value.word.trim() !== props.originalWord && props.existingWords?.includes(model.value.word.trim())) ? 'action-editor.groupExists' : '');
 watch(() => ({ loading: loading.value, saving: saving.value, ready: languages.value.length > 0 }), (state) => emit('state', state), { immediate: true });
-onMounted(async () => {
-  if (!props.document) await refreshI18nCatalog();
+onMounted(() => {
   if (!languages.value.length) failed.value = 'groupCatalogUnavailable';
   initialNames = props.originalWord ? (props.document ? groupNames(props.document, props.originalWord) : catalogGroupNames(props.originalWord)) : {};
   // The workbench owns its persisted draft, including intentionally blank or
@@ -53,7 +52,6 @@ async function save() {
     if (error instanceof ActionGroupCatalogError && error.reason === 'groupExists') duplicate.value = true;
     else {
       failed.value = error instanceof ActionGroupCatalogError ? error.reason : props.originalWord ? 'groupUpdateFailed' : 'groupCreateFailed';
-      if (failed.value === 'groupLanguagesChanged') await refreshI18nCatalog();
     }
   } finally { saving.value = false; }
 }

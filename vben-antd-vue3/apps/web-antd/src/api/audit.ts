@@ -10,6 +10,8 @@ export type AuditPayload =
   | string
   | { [key: string]: AuditPayload };
 export interface AuditEvent {
+  mfa_fingerprint?: string;
+  mfa_verified_at?: number;
   operation: string;
   resource_type: string;
   resource_id: string;
@@ -40,7 +42,7 @@ export const auditProfileFields = {
 // payloads are needed only for operation details, not login attempts.
 export const auditDetailFields = {
   login: 'id,occurred_at,kind,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms',
-  operation: 'id,occurred_at,kind,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params',
+  operation: 'id,occurred_at,kind,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params,mfa_fingerprint,mfa_verified_at',
 } as const;
 export interface AuditBreakdown {
   name: string;

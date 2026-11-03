@@ -5,7 +5,7 @@ import type { AssignmentAction } from './permission-selection';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Alert, Button, Form, FormItemRest, Spin } from 'ant-design-vue';
 import { getPermissionCatalog, listActions } from '#/api/system';
-import { $t, refreshI18nCatalog } from '#/locales';
+import { $t } from '#/locales';
 
 import PermissionResourceEditor from './permission-resource-editor.vue';
 import { actionSelection, normalizeSelection, selectionFingerprint } from './permission-selection';
@@ -42,7 +42,7 @@ async function load() {
   loading.value = true;
   failed.value = false;
   try {
-    const [document] = await Promise.all([getPermissionCatalog('scopes,operations,resource_catalog'), refreshI18nCatalog()]);
+    const document = await getPermissionCatalog('scopes,operations,resource_catalog');
     const codes = [...new Set(props.value)];
     const actions = new Map<string, AssignmentAction>();
     // Hydrate the actual definitions in batches; role/user associations omit config.

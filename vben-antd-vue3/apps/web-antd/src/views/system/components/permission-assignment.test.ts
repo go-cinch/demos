@@ -94,6 +94,7 @@ async function update(bindings: ActionResourceBinding[]) {
 describe('resource based permission assignment', () => {
   it('hydrates definitions once without emitting a change for an untouched form', async () => {
     await start(['A', 'A']);
+    expect(api.refreshI18nCatalog).not.toHaveBeenCalled();
     expect(api.listActions).toHaveBeenCalledExactlyOnceWith({
       code: 'A,',
       f: 'id,code,word,config',

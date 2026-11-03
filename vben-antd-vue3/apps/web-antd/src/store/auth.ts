@@ -24,6 +24,8 @@ import {
   verifyLoginCaptchaApi,
 } from '#/api';
 import { $t } from '#/locales';
+import { isMFAEnrollmentRequired, isPasswordResetRequired } from '#/api/auth-headers';
+import { cancelMFA } from '#/security/mfa-prompt';
 
 import { recordLoginAccount } from './login-account-history';
 import { playLoginTransition } from './login-transition';
@@ -58,6 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
   const loginLoading = ref(false);
   const loginEntering = ref(false);
   const passwordResetRequired = ref(false);
+  const mfaEnrollmentRequired = ref(false);
   const loginCaptcha = ref<AuthApi.PointCaptchaChallenge>();
   let loginCaptchaUsername = '';
   let loginVerificationRequest = 0;
@@ -105,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 异步处理用户登录操作并获取 accessToken
     let userInfo: null | UserInfo = null;
     if (loginLoading.value) return { userInfo };
+    let loginEpoch = sessionEpoch;
     try {
       loginVerificationRequest += 1;
       loginLoading.value = true;
@@ -115,11 +119,19 @@ export const useAuthStore = defineStore('auth', () => {
         captcha_points: captcha ? params.captchaPoints : undefined,
         slider_proof: params.sliderProof,
       });
+      if (loginEpoch !== sessionEpoch) return { userInfo };
 
       // 如果成功获取到 accessToken
       if (result.access_token) {
         acceptSession(result);
+        loginEpoch = sessionEpoch;
         recordLoginAccount(String(params.username ?? ''));
+        if (mfaEnrollmentRequired.value) {
+          resetLoginVerification();
+          accessStore.setLoginExpired(false);
+          await router.replace('/auth/bind-mfa');
+          return { userInfo };
+        }
         if (passwordResetRequired.value) {
           resetLoginVerification();
           accessStore.setLoginExpired(false);
@@ -129,6 +141,7 @@ export const useAuthStore = defineStore('auth', () => {
 
         // 获取用户信息并存储到 accessStore 中
         const fetchUserInfoResult = await fetchUserInfo();
+        if (loginEpoch !== sessionEpoch) return { userInfo: null };
 
         userInfo = fetchUserInfoResult;
 
@@ -143,6 +156,7 @@ export const useAuthStore = defineStore('auth', () => {
         } else {
           loginEntering.value = true;
           await playLoginTransition();
+          if (loginEpoch !== sessionEpoch) return { userInfo: null };
           onSuccess
             ? await onSuccess?.()
             : await router.push(
@@ -161,6 +175,7 @@ export const useAuthStore = defineStore('auth', () => {
         loginCaptchaUsername = '';
       }
     } catch (error) {
+      if (loginEpoch !== sessionEpoch) return { userInfo: null };
       const failure = getLoginFailure(error);
       if (failure?.captcha_required) {
         loginCaptcha.value = failure.captcha;
@@ -169,8 +184,10 @@ export const useAuthStore = defineStore('auth', () => {
           : '';
       }
     } finally {
-      loginLoading.value = false;
-      loginEntering.value = false;
+      if (loginEpoch === sessionEpoch) {
+        loginLoading.value = false;
+        loginEntering.value = false;
+      }
     }
 
     return {
@@ -216,6 +233,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(redirect: boolean = true) {
     const epoch = ++sessionEpoch;
+    // Reject MFA waiters before the network round trip so no previous request
+    // can continue verification while this session is signing out.
+    cancelMFA();
     try {
       if (accessStore.refreshToken) {
         await logoutApi(accessStore.refreshToken);
@@ -238,6 +258,13 @@ export const useAuthStore = defineStore('auth', () => {
           }
         : {},
     });
+  }
+
+  async function restartLoginForMFARecovery() {
+    // Reject every waiting operation before sign-out starts; recovery must never
+    // resolve a sensitive-operation prompt or replay its original request.
+    cancelMFA();
+    await logout(false);
   }
 
   let userInfoFlight: { epoch: number; request: ReturnType<typeof getUserInfoApi> } | undefined;
@@ -310,10 +337,11 @@ export const useAuthStore = defineStore('auth', () => {
   function acceptSession(result: AuthApi.LoginResult, refreshCurrentSession = false) {
     if (!refreshCurrentSession) sessionEpoch += 1;
     sessionRestoreAttempted = true;
-    passwordResetRequired.value = result.password_reset_required;
+    passwordResetRequired.value = isPasswordResetRequired(result);
+    mfaEnrollmentRequired.value = isMFAEnrollmentRequired(result);
     accessStore.setRefreshToken(result.refresh_token);
     accessStore.setAccessToken(result.access_token);
-    if (passwordResetRequired.value) {
+    if (passwordResetRequired.value || mfaEnrollmentRequired.value) {
       accessStore.setIsAccessChecked(false);
       userStore.$reset();
     }
@@ -322,11 +350,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function requirePasswordReset() {
     passwordResetRequired.value = true;
     accessStore.setIsAccessChecked(false);
-    await router.replace('/auth/reset-password');
+    await router.replace(mfaEnrollmentRequired.value ? '/auth/bind-mfa' : '/auth/reset-password');
   }
 
   async function completePasswordReset(newPassword: string) {
     acceptSession(await resetPasswordApi(newPassword));
+    if (mfaEnrollmentRequired.value) { await router.replace('/auth/bind-mfa'); return; }
     accessStore.setIsAccessChecked(false);
     const info = await fetchUserInfo();
     await playLoginTransition();
@@ -334,9 +363,37 @@ export const useAuthStore = defineStore('auth', () => {
     await router.replace(info.homePath || preferences.app.defaultHomePath);
   }
 
+  async function requireMFAEnrollment() {
+    mfaEnrollmentRequired.value = true;
+    accessStore.setIsAccessChecked(false);
+    await router.replace('/auth/bind-mfa');
+  }
+
+  async function completeMFAEnrollment(result: AuthApi.LoginResult) {
+    acceptSession(result);
+    if (passwordResetRequired.value) {
+      await router.replace('/auth/reset-password');
+      return;
+    }
+    const isCurrentSession = captureSession();
+    accessStore.setIsAccessChecked(false);
+    const info = await fetchUserInfo();
+    if (!isCurrentSession()) return;
+    await playLoginTransition();
+    if (!isCurrentSession()) return;
+    await router.replace(info.homePath || preferences.app.defaultHomePath);
+  }
+
+  function captureSession() {
+    const epoch = sessionEpoch;
+    return () => epoch === sessionEpoch;
+  }
+
   function $reset() {
     sessionEpoch += 1;
     pendingRegistrationLogin = null;
+    cancelMFA();
+    mfaEnrollmentRequired.value = false;
     passwordResetRequired.value = false;
     loginLoading.value = false;
     loginEntering.value = false;
@@ -346,9 +403,13 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     acceptSession,
+    captureSession,
     authLogin,
     completePasswordReset,
     passwordResetRequired,
+    mfaEnrollmentRequired,
+    requireMFAEnrollment,
+    completeMFAEnrollment,
     requirePasswordReset,
     checkLoginVerification,
     fetchUserInfo,
@@ -356,6 +417,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginLoading,
     loginEntering,
     logout,
+    restartLoginForMFARecovery,
     refreshLoginCaptcha,
     resetLoginVerification,
     restoreSession,

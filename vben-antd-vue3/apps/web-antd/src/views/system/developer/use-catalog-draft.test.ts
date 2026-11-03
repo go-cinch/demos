@@ -10,10 +10,12 @@ import { useCatalogDraft } from './use-catalog-draft';
 const mock = vi.hoisted(() => ({
   load: vi.fn(),
   update: vi.fn(),
+  refreshI18n: vi.fn(),
   user: {} as { userInfo: { userId: string } },
   allowed: {} as { value: boolean },
   canPublish: {} as { value: boolean },
 }));
+vi.mock('#/locales/catalog', () => ({ refreshI18nCatalog: mock.refreshI18n }));
 vi.mock('@vben/stores', () => ({ useUserStore: () => mock.user }));
 vi.mock('#/composables/use-permissions', () => ({
   usePermissions: () => ({
@@ -204,6 +206,7 @@ describe('developer draft workflow', () => {
     online.messages['en-US']!.frontend = { label: 'Online' };
     mock.load.mockResolvedValue({ items: [record(online)] });
     await a.refresh();
+    expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(a.state.draft!.document.messages['en-US']!.frontend).toEqual({
       label: 'Local',
     });
@@ -218,7 +221,10 @@ describe('developer draft workflow', () => {
     const online = catalog();
     online.messages['zh-CN']!.frontend = { label: '线上' };
     mock.load.mockResolvedValue({ items: [record(online)] });
+    expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(await a.publish()).toBe(true);
+    // updateDictionary owns the refresh; publishing must not request it again.
+    expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(mock.update).toHaveBeenCalledWith(
       3,
       expect.objectContaining({
@@ -244,6 +250,7 @@ describe('developer draft workflow', () => {
     a.rebase(clone(a.state.draft!.document));
     mock.update.mockRejectedValue(new Error('network'));
     expect(await a.publish()).toBe(false);
+    expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(a.state.error).toBe('submitFailed');
     expect(a.state.draft!.document.messages['en-US']!.frontend).toEqual({
       label: 'Local',

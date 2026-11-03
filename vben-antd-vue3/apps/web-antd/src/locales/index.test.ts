@@ -6,7 +6,11 @@ import dayjs from 'dayjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { antdLocale, setupI18n, refreshI18nCatalog } from './index';
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 const englishModules = import.meta.glob<object>('./langs/en-US/*.json', {
   eager: true,
@@ -49,7 +53,9 @@ describe('application internationalization', () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => catalog }),
     );
     await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
+    expect(fetch).toHaveBeenCalledOnce();
     await loadLocaleMessages('en-US');
+    expect(fetch).toHaveBeenCalledOnce();
     expect(i18n.global.t('menus.admin:menu:system:user')).toBe(
       'Live operators',
     );
@@ -58,6 +64,20 @@ describe('application internationalization', () => {
     await refreshI18nCatalog();
     expect(i18n.global.te('menus.admin:menu:system:user', 'en-US')).toBe(false);
     expect(i18n.global.t('system.menu.users')).toBe('Users');
+  });
+
+  it('does not refresh on focus, visibility changes or elapsed time', async () => {
+    vi.stubEnv('MODE', 'development');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    vi.useFakeTimers();
+    await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
+    expect(fetch).toHaveBeenCalledOnce();
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(60_000);
+    await loadLocaleMessages('en-US');
+    await loadLocaleMessages('zh-CN');
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('keeps bilingual keys and interpolation parameters aligned', () => {

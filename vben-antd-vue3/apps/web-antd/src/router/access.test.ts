@@ -1,23 +1,27 @@
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { defineComponent } from 'vue';
 import type { RouteRecordRaw } from '@vben/types';
+
+import { defineComponent } from 'vue';
+import { createMemoryHistory, createRouter } from 'vue-router';
+
 import { describe, expect, it, vi } from 'vitest';
+
 import { generateAccess } from './access';
-vi.mock('#/api', () => ({ getAllMenusApi: vi.fn() }));
 vi.mock('#/layouts', () => ({ BasicLayout: {}, IFrameView: {} }));
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
 vi.mock('#/router/routes', () => ({ coreRouteNames: ['Root', 'PermissionForbidden', 'Login'] }));
 vi.mock('ant-design-vue', () => ({ message: { loading: vi.fn() } }));
 
+const EmptyPage = defineComponent({ render: () => null });
+
 describe('permission route rebuilding', () => {
   it('unmounts old business routes after switching permission sets and retains core routes', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [
-      { name: 'Root', path: '/', component: defineComponent({ render: () => null }), children: [{ name: 'PermissionForbidden', path: 'forbidden', component: defineComponent({ render: () => null }) }] },
-      { name: 'Login', path: '/auth/login', component: defineComponent({ render: () => null }) },
+      { name: 'Root', path: '/', component: EmptyPage, children: [{ name: 'PermissionForbidden', path: 'forbidden', component: EmptyPage }] },
+      { name: 'Login', path: '/auth/login', component: EmptyPage },
     ] });
     const routes: RouteRecordRaw[] = [
-      { name: 'SystemUser', path: '/system/user', component: defineComponent({ render: () => null }), meta: { title: 'Users', authority: ['/system/user'] } },
-      { name: 'Overview', path: '/dashboard/overview', component: defineComponent({ render: () => null }), meta: { title: 'Overview', authority: ['/dashboard/overview'] } },
+      { name: 'SystemUser', path: '/system/user', component: EmptyPage, meta: { title: 'Users', authority: ['/system/user'] } },
+      { name: 'Overview', path: '/dashboard/overview', component: EmptyPage, meta: { title: 'Overview', authority: ['/dashboard/overview'] } },
     ];
     await generateAccess({ router, roles: ['/system/user'], routes, permissionMenus: [{ menu_key: 'admin:menu:account:operators', menu_path: '/system/user', btns: [] }], navigation: [{ resource_key: 'admin:account:operators', menu_key: 'admin:menu:account:operators', menu_path: '/system/user' }] });
     expect(router.hasRoute('SystemUser')).toBe(true);

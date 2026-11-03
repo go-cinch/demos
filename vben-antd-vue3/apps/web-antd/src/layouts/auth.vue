@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
-import { useRoute } from 'vue-router';
 
 import { AuthPageLayout } from '@vben/layouts';
 import { preferences, usePreferences } from '@vben/preferences';
@@ -9,7 +8,6 @@ import { $t } from '#/locales';
 
 import AuthJourney from './auth-journey.vue';
 
-const route = useRoute();
 const { authPanelLeft, isDark } = usePreferences();
 const appName = computed(() => preferences.app.name);
 const logo = computed(() => preferences.logo.source);
@@ -27,7 +25,6 @@ const logoDark = computed(() => preferences.logo.sourceDark);
   >
     <template #illustration>
       <AuthJourney
-        :key="route.path"
         :dark="isDark"
         :form-on-left="authPanelLeft"
       />

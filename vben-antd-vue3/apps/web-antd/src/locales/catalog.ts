@@ -139,15 +139,3 @@ export async function refreshI18nCatalog() {
   });
   return pending;
 }
-
-let watching = false;
-export function watchI18nCatalog() {
-  if (watching || import.meta.env.MODE === 'test') return;
-  watching = true;
-  const refresh = () => {
-    if (document.visibilityState !== 'hidden') void refreshI18nCatalog();
-  };
-  window.addEventListener('focus', refresh);
-  document.addEventListener('visibilitychange', refresh);
-  window.setInterval(refresh, 5000);
-}

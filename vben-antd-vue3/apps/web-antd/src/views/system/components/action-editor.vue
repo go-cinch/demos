@@ -5,7 +5,7 @@ import { Alert, Button, FormItem, Input, Select, Spin, Tag } from 'ant-design-vu
 import { IconifyIcon } from '@vben/icons';
 import { $te } from '@vben/locales';
 import { getPermissionCatalog } from '#/api/system';
-import { $t, catalogLabel, refreshI18nCatalog } from '#/locales';
+import { $t, catalogLabel } from '#/locales';
 import { catalogDefaultLocale, catalogGroupOrder, catalogGroupWords, catalogLanguages } from '#/locales/catalog';
 import { actionWordPattern } from './action-config';
 import { automaticActionName } from './action-name';
@@ -148,7 +148,7 @@ async function loadCatalog() {
   loading.value = true;
   failed.value = false;
   try {
-    const [result] = await Promise.all([getPermissionCatalog(), refreshI18nCatalog()]);
+    const result = await getPermissionCatalog();
     catalog.value = result;
     if (!languages.value.length) throw new Error('Missing catalog languages');
   } catch { failed.value = true; } finally { loading.value = false; }

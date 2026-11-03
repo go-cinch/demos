@@ -161,9 +161,17 @@ async function handleSubmit(values: Recordable<any>) {
 <template>
   <ProfilePasswordSetting v-if="hasButton('admin:btn:account:profile:change-password')"
     ref="passwordSettingRef"
-    class="w-full max-w-xl"
+    class="profile-password-form w-full max-w-2xl"
     :form-schema="formSchema"
     :loading="submitting"
     @submit="handleSubmit"
   />
 </template>
+
+<style scoped>
+/* The shared horizontal form reserves a 130px label column. */
+.profile-password-form :deep(> button[type='submit']) {
+  margin-inline-start: 130px;
+  margin-top: 24px;
+}
+</style>

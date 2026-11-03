@@ -8,7 +8,7 @@ import { IconifyIcon } from '@vben/icons';
 import { Alert, Button } from 'ant-design-vue';
 
 import { vSkeleton } from '#/directives/skeleton';
-import { $t, catalogLabel, refreshI18nCatalog } from '#/locales';
+import { $t, catalogLabel } from '#/locales';
 
 import { applyGroupOrder, savePermissionGroupOrder } from './action-groups';
 
@@ -51,7 +51,7 @@ async function commit(order: string[]) {
   saving.value = true;
   failed.value = false;
   try { await (props.saveOrder ? props.saveOrder(order) : savePermissionGroupOrder(order)); }
-  catch { failed.value = true; await refreshI18nCatalog(); }
+  catch { failed.value = true; }
   finally { saving.value = false; draftOrder.value = undefined; }
 }
 function dropGroup(event: DragEvent) {
