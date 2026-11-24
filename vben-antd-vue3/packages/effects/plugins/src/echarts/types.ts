@@ -8,22 +8,21 @@ import type {
 import type {
   DatasetComponentOption,
   DataZoomComponentOption,
-  VisualMapComponentOption,
   GridComponentOption,
   LegendComponentOption,
   TitleComponentOption,
   ToolboxComponentOption,
   TooltipComponentOption,
+  VisualMapComponentOption,
 } from 'echarts/components';
 import type { ComposeOption } from 'echarts/core';
 
 export type ECOption = ComposeOption<
-  | HeatmapSeriesOption
-  | VisualMapComponentOption
   | BarSeriesOption
-  | DataZoomComponentOption
   | DatasetComponentOption
+  | DataZoomComponentOption
   | GridComponentOption
+  | HeatmapSeriesOption
   | LegendComponentOption
   | LineSeriesOption
   | PieSeriesOption
@@ -31,4 +30,5 @@ export type ECOption = ComposeOption<
   | TitleComponentOption
   | ToolboxComponentOption
   | TooltipComponentOption
+  | VisualMapComponentOption
 >;

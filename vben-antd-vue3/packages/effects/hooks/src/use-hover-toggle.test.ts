@@ -2,6 +2,7 @@ import { effectScope, nextTick } from 'vue';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../scripts/test-utils/required';
 import { useHoverToggle } from './use-hover-toggle';
 
 describe('useHoverToggle controller', () => {
@@ -22,9 +23,9 @@ describe('useHoverToggle controller', () => {
     const element = document.createElement('button');
     document.body.append(element);
     scope = effectScope();
-    const [value, controller] = scope.run(() =>
-      useHoverToggle(element, delay),
-    )!;
+    const [value, controller] = required(
+      scope.run(() => useHoverToggle(element, delay)),
+    );
     await nextTick();
     return { controller, element, value };
   }

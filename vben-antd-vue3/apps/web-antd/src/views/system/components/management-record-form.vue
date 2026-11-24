@@ -11,9 +11,11 @@ import type {
 
 import { onBeforeUnmount, ref, watch } from 'vue';
 
+import { VbenPasswordStrength } from '@vben/common-ui';
+import { $placeholder } from '@vben/locales';
+
 import { useDebounceFn } from '@vueuse/core';
 import {
-  Alert,
   AutoComplete,
   FormItem,
   Input,
@@ -46,13 +48,13 @@ const props = defineProps<{
   canUpdate: boolean;
   canCreate: boolean;
   canAssignPermissions: boolean;
+  canCreateActionGroup?: boolean;
   groups: string[];
-  editorError: string;
 }>();
 const emit = defineEmits<{
-  'editExisting': [id: number];
-  'actionValidity': [key: string];
-  'assignmentValidity': [key: string];
+  editExisting: [id: number];
+  actionValidity: [key: string];
+  assignmentValidity: [key: string];
 }>();
 const formModel = props.formModel;
 const formRef = ref<InstanceType<typeof ManagementForm>>();
@@ -102,7 +104,7 @@ const loadActionGroupOptions = useDebounceFn(
         groups.set(initialGroup.toLowerCase(), initialGroup);
       }
       const options: ActionGroupOption[] = [...groups.values()]
-        .sort((left, right) => left.localeCompare(right))
+        .toSorted((left, right) => left.localeCompare(right))
         .map((group) => ({ label: group, value: group }));
       if (query && !groups.has(query.toLowerCase())) {
         options.unshift({ isNew: true, label: query, value: query });
@@ -239,6 +241,7 @@ defineExpose({
     data-testid="management-editor"
   >
     <ActionEditor
+      :can-create-group="canCreateActionGroup"
       v-if="resource === 'action'"
       :record-id="editingRecord?.id"
       :record-scope="formModel.scope"
@@ -273,6 +276,8 @@ defineExpose({
           "
           :name="field.key"
           :html-for="`editor-${resource}-${field.key}`"
+          :data-editor-field="field.key"
+          validate-first
         >
           <AutoComplete
             v-if="field.type === 'action-group'"
@@ -283,7 +288,7 @@ defineExpose({
             :filter-option="false"
             :not-found-content="actionGroupOptionsLoading ? ' ' : null"
             :options="actionGroupOptions"
-            :placeholder="$t('system.suggestions.actionGroup')"
+            :placeholder="$placeholder('system.suggestions.actionGroup')"
             :show-action="['focus']"
             @dropdown-visible-change="handleActionGroupDropdownVisibleChange"
             @search="searchActionGroupOptions"
@@ -318,7 +323,7 @@ defineExpose({
             :disabled="submitting"
             :placeholder="
               field.placeholder ||
-              $t('system.common.enter', { field: field.label })
+              $placeholder('system.common.enter', { field: field.label })
             "
           />
           <Textarea
@@ -332,19 +337,21 @@ defineExpose({
             "
             :placeholder="
               field.placeholder ||
-              $t('system.common.enter', { field: field.label })
+              $placeholder('system.common.enter', { field: field.label })
             "
           />
-          <InputPassword
-            v-else-if="field.type === 'password'"
-            v-model:value="formModel[field.key]"
-            :id="`editor-${resource}-${field.key}`"
-            :placeholder="
-              (editingRecord && field.editPlaceholder) ||
-              field.placeholder ||
-              $t('system.common.enter', { field: field.label })
-            "
-          />
+          <template v-else-if="field.type === 'password'">
+            <InputPassword
+              v-model:value="formModel[field.key]"
+              :id="`editor-${resource}-${field.key}`"
+              :placeholder="
+                (editingRecord && field.editPlaceholder) ||
+                field.placeholder ||
+                $placeholder('system.common.enter', { field: field.label })
+              "
+            />
+            <VbenPasswordStrength :password="formModel[field.key]" />
+          </template>
           <Select
             v-else-if="field.type === 'category'"
             v-model:value="formModel[field.key]"
@@ -394,7 +401,7 @@ defineExpose({
             :filter-option="false"
             :loading="false"
             :options="roleOptions"
-            :placeholder="$t('system.suggestions.role')"
+            :placeholder="$placeholder('system.suggestions.role')"
             show-search
             @dropdown-visible-change="handleRoleDropdownVisibleChange"
             @search="searchRoleOptions"
@@ -443,18 +450,11 @@ defineExpose({
             :id="`editor-${resource}-${field.key}`"
             :placeholder="
               field.placeholder ||
-              $t('system.common.enter', { field: field.label })
+              $placeholder('system.common.enter', { field: field.label })
             "
           />
         </FormItem>
       </template>
     </SystemRecordDetail>
-    <Alert
-      v-if="editorError"
-      class="mt-5"
-      type="error"
-      show-icon
-      :message="editorError"
-    />
   </ManagementForm>
 </template>

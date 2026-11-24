@@ -13,6 +13,7 @@ import { VbenButton } from '@vben-core/shadcn-ui';
 interface Props {
   formSchema?: VbenFormSchema[];
   loading?: boolean;
+  vertical?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,13 +28,13 @@ const emit = defineEmits<{
 const [Form, formApi] = useVbenForm(
   reactive({
     commonConfig: {
-      labelWidth: 130,
+      labelWidth: 'var(--profile-security-label-width, 130px)',
       // 所有表单项
       componentProps: {
         class: 'w-full',
       },
     },
-    layout: 'horizontal',
+    layout: props.vertical ? 'vertical' : 'horizontal',
     schema: computed(() => props.formSchema),
     showDefaultActions: false,
   }),
@@ -63,5 +64,6 @@ defineExpose({
     >
       {{ $t('profile.updatePassword') }}
     </VbenButton>
+    <slot name="actions"></slot>
   </div>
 </template>

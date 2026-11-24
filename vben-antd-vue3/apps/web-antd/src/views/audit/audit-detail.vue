@@ -1,51 +1,52 @@
 <script setup lang="ts">
 import type { AuditPreview } from '#/api/audit';
+import type { LoadFailure } from '#/api/request-error';
 
 import { computed } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
-import { formatDateTime } from '@vben/utils';
+import { copyText, formatDateTime } from '@vben/utils';
 
-import {
-  Avatar,
-  Button,
-  Empty,
-  message,
-  Tag,
-  Tooltip,
-} from 'ant-design-vue';
+import { Avatar, Button, Empty, message, Tag, Tooltip } from 'ant-design-vue';
 
 import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
 import AuditParams from './audit-params.vue';
-import { clientLabel, operationLabel, successful } from './audit-utils';
+import {
+  auditOutcome,
+  clientLabel,
+  operationLabel,
+  outcomeColor,
+} from './audit-utils';
 const props = defineProps<{
   event?: AuditPreview;
   loading: boolean;
-  error: boolean;
+  error: LoadFailure;
   expanded?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
   expand: [];
   retry: [];
-  related: [field: 'path' | 'username', value: string];
+  related: [field: 'path' | 'user_id', value: string];
 }>();
-const title = computed(() =>
-  props.event
-    ? props.event.kind === 'login'
-      ? $t('audit.loginAttempt')
-      : operationLabel(props.event)
-    : $t('audit.details'),
-);
+const title = computed(() => {
+  if (props.event) {
+    if (props.event.kind === 'login' && props.event.operation !== 'logout') {
+      return $t('audit.loginAttempt');
+    }
+    return operationLabel(props.event);
+  }
+  return $t('audit.details');
+});
 async function copy(value: string) {
   try {
-    await navigator.clipboard.writeText(value);
+    await copyText(value);
     message.success($t('audit.copied'));
   } catch {
-    message.error($t('audit.copyError'));
+    message.error($t('verification.copyFailed'));
   }
 }
 </script>
@@ -59,58 +60,59 @@ async function copy(value: string) {
       <h3>{{ $t('audit.eventDetail') }}</h3>
       <div class="flex gap-1">
         <Tooltip v-if="event && !expanded" :title="$t('audit.expandDetail')">
-<Button
+          <Button
             type="text"
             size="small"
             :aria-label="$t('audit.expandDetail')"
             @click="emit('expand')"
-            >
-<IconifyIcon icon="lucide:expand" />
-</Button>
-</Tooltip><Button
+          >
+            <IconifyIcon icon="lucide:expand" />
+          </Button> </Tooltip
+        ><Button
           v-if="event || loading || error"
           type="text"
           size="small"
           :aria-label="$t('audit.closeDetail')"
           @click="emit('close')"
-          >
-<IconifyIcon icon="lucide:x" />
-</Button>
+        >
+          <IconifyIcon icon="lucide:x" />
+        </Button>
       </div>
     </div>
-    <LoadWarning v-if="error">
-<template #action>
-<Button size="small" @click="emit('retry')">
-{{
-          $t('audit.retry')
-        }}
-</Button>
-</template>
-</LoadWarning>
+    <LoadWarning
+      v-if="error"
+      :failure="error"
+      :retry-label="$t('audit.retry')"
+      retry-size="small"
+      @retry="emit('retry')"
+    />
     <div v-else-if="event" v-skeleton="loading">
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <h4 class="text-base font-semibold">{{ title }}</h4>
-        <Tag :color="successful(event) ? 'success' : 'error'">
-{{
-          $t(successful(event) ? 'audit.success' : 'audit.failure')
-        }}
-</Tag>
+        <Tag :color="outcomeColor[auditOutcome(event)]">
+          {{ $t(`audit.${auditOutcome(event)}`) }}
+        </Tag>
       </div>
       <p class="text-muted-foreground mb-5 text-xs">
         {{ formatDateTime(event.occurred_at) }}
       </p>
       <dl class="audit-facts">
-        <template v-if="event.mfa_fingerprint">
-          <dt>{{ $t('mfa.fingerprint') }}</dt><dd class="break-all font-mono" data-testid="audit-mfa-fingerprint">{{ event.mfa_fingerprint }}</dd>
-          <dt>{{ $t('mfa.verifiedAt') }}</dt><dd>{{ formatDateTime(event.mfa_verified_at!) }}</dd>
+        <template v-if="event.step_up_fingerprint">
+          <dt>{{ $t('verification.fingerprint') }}</dt>
+          <dd
+            class="break-all font-mono"
+            data-testid="audit-step-up-fingerprint"
+          >
+            {{ event.step_up_fingerprint }}
+          </dd>
+          <dt>{{ $t('verification.verifiedAt') }}</dt>
+          <dd>{{ formatDateTime(event.step_up_verified_at!) }}</dd>
         </template>
         <dt>{{ $t('audit.actor') }}</dt>
         <dd>
           <Avatar :size="20" class="audit-avatar">
-{{
-            (event.username || '?').slice(0, 1).toUpperCase()
-          }}
-</Avatar><span>{{ event.username || $t('audit.anonymous') }}</span>
+            {{ (event.username || '?').slice(0, 1).toUpperCase() }} </Avatar
+          ><span>{{ event.username || $t('audit.anonymous') }}</span>
         </dd>
         <dt>{{ $t('audit.module') }}</dt>
         <dd>
@@ -153,32 +155,34 @@ async function copy(value: string) {
       </dl>
       <p class="audit-fact-title">{{ $t('audit.request') }}</p>
       <div class="audit-code">
-        <span>{{ event.method }} {{ event.path }}</span><Button
+        <span>{{ event.method }} {{ event.path }}</span
+        ><Button
           type="text"
           size="small"
           :aria-label="$t('audit.copyPath')"
           @click="copy(event.path ?? '')"
-          >
-<IconifyIcon icon="lucide:copy" />
-</Button>
+        >
+          <IconifyIcon icon="lucide:copy" />
+        </Button>
       </div>
-      <template v-if="!successful(event)">
-<p class="audit-fact-title">{{ $t('audit.errorInfo') }}</p>
+      <template v-if="auditOutcome(event) === 'failure'">
+        <p class="audit-fact-title">{{ $t('audit.errorInfo') }}</p>
         <div class="audit-code">
           {{ event.error_code || $t('audit.requestFailed') }}
         </div>
-</template>
+      </template>
       <p class="audit-fact-title">{{ $t('audit.trace_id') }}</p>
       <div class="audit-code" data-testid="audit-trace-id">
-        <span>{{ event.trace_id || $t('audit.noTrace') }}</span><Button
+        <span>{{ event.trace_id || $t('audit.noTrace') }}</span
+        ><Button
           v-if="event.trace_id"
           type="text"
           size="small"
           :aria-label="$t('audit.copyTrace')"
           @click="copy(event.trace_id)"
-          >
-<IconifyIcon icon="lucide:copy" />
-</Button>
+        >
+          <IconifyIcon icon="lucide:copy" />
+        </Button>
       </div>
       <template v-if="expanded">
         <p class="audit-fact-title">{{ $t('audit.user_agent') }}</p>
@@ -203,18 +207,23 @@ async function copy(value: string) {
         <h4>{{ $t('audit.continue') }}</h4>
         <div class="mt-3 flex flex-wrap gap-2">
           <Button
-            :disabled="!event.username"
+            :disabled="!event.user_id"
             size="small"
-            @click="emit('related', 'username', event.username ?? '')"
-            >
-<IconifyIcon icon="lucide:user-round" class="mr-1" />{{
+            @click="
+              event.user_id && emit('related', 'user_id', String(event.user_id))
+            "
+          >
+            <IconifyIcon icon="lucide:user-round" class="mr-1" />{{
               $t('audit.sameActor')
-            }}
-</Button><Button size="small" @click="emit('related', 'path', event.path ?? '')">
-<IconifyIcon icon="lucide:link" class="mr-1" />{{
+            }} </Button
+          ><Button
+            size="small"
+            @click="emit('related', 'path', event.path ?? '')"
+          >
+            <IconifyIcon icon="lucide:link" class="mr-1" />{{
               $t('audit.samePath')
             }}
-</Button>
+          </Button>
         </div>
       </div>
     </div>
@@ -228,78 +237,90 @@ async function copy(value: string) {
 </template>
 <style scoped>
 .audit-detail {
-  padding: 18px;
   min-width: 0;
   min-height: 100%;
+  padding: 18px;
   background: hsl(var(--card));
 }
+
 .audit-detail-heading {
   display: flex;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
   margin-bottom: 20px;
 }
+
 .audit-detail-heading h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
 }
+
 .audit-facts {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 10px 8px;
   font-size: 12px;
 }
+
 .audit-facts dt {
   color: hsl(var(--muted-foreground));
 }
+
 .audit-facts dd {
   display: flex;
-  align-items: center;
   gap: 7px;
+  align-items: center;
   margin: 0;
   overflow-wrap: anywhere;
 }
+
 .audit-avatar {
-  background: color-mix(in srgb, hsl(var(--primary)) 14%, hsl(var(--card)));
   color: hsl(var(--primary));
+  background: color-mix(in srgb, hsl(var(--primary)) 14%, hsl(var(--card)));
 }
+
 .audit-fact-title {
   margin: 18px 0 6px;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
 }
+
 .audit-code {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
   gap: 8px;
+  align-items: center;
+  justify-content: space-between;
   padding: 8px 10px;
-  background: hsl(var(--muted));
-  border-radius: calc(var(--radius) * 0.625);
   font-family: ui-monospace, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
+  background: hsl(var(--muted));
+  border-radius: calc(var(--radius) * 0.625);
 }
+
 .audit-code span {
   min-width: 0;
 }
+
 .audit-payload-hint {
   margin: 18px 0 10px;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
 }
+
 .audit-follow {
-  margin-top: 20px;
-  border-top: 1px solid hsl(var(--border));
   padding-top: 16px;
+  margin-top: 20px;
   font-size: 13px;
+  border-top: 1px solid hsl(var(--border));
 }
+
 .audit-detail-empty {
   padding: 38px 0;
-  text-align: center;
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
 }
 </style>

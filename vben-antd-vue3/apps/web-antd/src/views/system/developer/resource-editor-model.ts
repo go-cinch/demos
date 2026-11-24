@@ -1,5 +1,12 @@
-import type { ResourceNode } from '#/api/system';
 import type { Catalog, EditorBuffer, ResourceEditor } from './catalog-model';
+
+import type { ResourceNode } from '#/api/system';
+
+import {
+  resourceChildren,
+  storeResourceOrder,
+} from '../components/resource-order';
+import { referencedOperations } from '../components/resource-references';
 import {
   assign,
   clone,
@@ -8,11 +15,6 @@ import {
   text,
   validate,
 } from './catalog-model';
-import { referencedOperations } from '../components/resource-references';
-import {
-  resourceChildren,
-  storeResourceOrder,
-} from '../components/resource-order';
 
 export function createResourceEditor(
   catalog: Catalog,
@@ -40,7 +42,12 @@ export function createResourceEditor(
       : siblings.length + 1,
     frontendVisible: node?.frontend_visible ?? true,
     references: clone(node?.references ?? []),
-    referenceOperations: Object.fromEntries((node?.references ?? []).map((target) => [target, clone(referencedOperations(catalog.resource_catalog, key, target))])),
+    referenceOperations: Object.fromEntries(
+      (node?.references ?? []).map((target) => [
+        target,
+        clone(referencedOperations(catalog.resource_catalog, key, target)),
+      ]),
+    ),
     zh: text(catalog, 'zh-CN', 'resources', key),
     en: text(catalog, 'en-US', 'resources', key),
     operations: node ? Object.keys(node.operations ?? {}) : [],
@@ -109,7 +116,7 @@ export function restoreResourceBuffer(
     const index = draft.entries.findIndex(
       (entry) => entry.key === buffer.original,
     );
-    if (index < 0) draft.entries.push(entry);
+    if (index === -1) draft.entries.push(entry);
     else draft.entries[index] = entry;
   } else if (buffer.kind === 'feature') {
     const feature = {
@@ -124,7 +131,7 @@ export function restoreResourceBuffer(
     const index = draft.features.findIndex(
       (item) => item.key === buffer.original,
     );
-    if (index < 0) draft.features.push(feature);
+    if (index === -1) draft.features.push(feature);
     else draft.features[index] = feature;
   }
   return draft;
@@ -145,11 +152,12 @@ export function resourceTypeChangeIssue(
   target: ResourceNode['kind'],
 ) {
   const original = catalog.resource_catalog.resources[draft.original];
-  if (!draft.parent || (original && !original.parent))
-    return 'rootTypeFixed';
+  if (!draft.parent || (original && !original.parent)) return 'rootTypeFixed';
   if (
     target === 'directory' &&
-    (draft.entries.length || draft.operations.length || draft.features.length)
+    (draft.entries.length > 0 ||
+      draft.operations.length > 0 ||
+      draft.features.length > 0)
   )
     return 'resourceTypeHasConfiguration';
   if (
@@ -159,7 +167,7 @@ export function resourceTypeChangeIssue(
     )
   )
     return 'directoryTypeHasChildren';
-  if (target === 'resource' && draft.references.length)
+  if (target === 'resource' && draft.references.length > 0)
     return 'directoryTypeHasReferences';
   return '';
 }
@@ -205,8 +213,7 @@ export function applyResourceEditor(
     fail('invalid', draft.key);
   if (
     !draft.original &&
-    (catalog.resource_catalog.resources[draft.key] ||
-      reservedKeys[draft.key])
+    (catalog.resource_catalog.resources[draft.key] || reservedKeys[draft.key])
   )
     fail('duplicate', draft.key);
   if (!draft.parent && !draft.original && draft.nodeKind !== 'directory')
@@ -222,9 +229,17 @@ export function applyResourceEditor(
   const node: ResourceNode = {
     kind: draft.nodeKind,
     sort: draft.sort,
-    ...(draft.nodeKind === 'resource' && draft.permissionScope === '*' ? { permission_scope: '*' as const } : {}),
-    ...(original?.permission_group && draft.nodeKind === 'directory' && !draft.parent ? { permission_group: original.permission_group } : {}),
-    ...(draft.nodeKind === 'directory' && !draft.parent ? { frontend_visible: draft.frontendVisible ?? true } : {}),
+    ...(draft.nodeKind === 'resource' && draft.permissionScope === '*'
+      ? { permission_scope: '*' as const }
+      : {}),
+    ...(original?.permission_group &&
+    draft.nodeKind === 'directory' &&
+    !draft.parent
+      ? { permission_group: original.permission_group }
+      : {}),
+    ...(draft.nodeKind === 'directory' && !draft.parent
+      ? { frontend_visible: draft.frontendVisible ?? true }
+      : {}),
     ...(draft.nodeKind === 'directory' && original?.child_order
       ? {
           child_order: clone(original.child_order).filter(
@@ -237,7 +252,19 @@ export function applyResourceEditor(
     ...(draft.nodeKind === 'directory'
       ? {
           references: clone(draft.references),
-          reference_operations: Object.fromEntries(draft.references.map((target) => [target, clone(draft.referenceOperations?.[target] ?? referencedOperations(catalog.resource_catalog, draft.original, target))])),
+          reference_operations: Object.fromEntries(
+            draft.references.map((target) => [
+              target,
+              clone(
+                draft.referenceOperations?.[target] ??
+                  referencedOperations(
+                    catalog.resource_catalog,
+                    draft.original,
+                    target,
+                  ),
+              ),
+            ]),
+          ),
         }
       : {}),
   };
@@ -262,7 +289,8 @@ export function applyResourceEditor(
   const previousFeatures = Object.values(original?.operations ?? {}).flatMap(
     (op) => op.button_keys,
   );
-  for (const key of previousFeatures) delete next.resource_catalog.buttons[key];
+  for (const key of previousFeatures)
+    Reflect.deleteProperty(next.resource_catalog.buttons, key);
   if (draft.nodeKind === 'resource') {
     node.entries = Object.fromEntries(
       entries.map((entry) => [
@@ -290,7 +318,9 @@ export function applyResourceEditor(
       if (next.resource_catalog.buttons[feature.key])
         fail('duplicate', feature.key);
       next.resource_catalog.buttons[feature.key] = {
-        ...(feature.permissionResource ? { permission_resource: feature.permissionResource } : {}),
+        ...(feature.permissionResource
+          ? { permission_resource: feature.permissionResource }
+          : {}),
         entry_keys: clone(feature.entryKeys ?? []),
         btn: clone(feature.buttons),
         http: clone(feature.http),
@@ -298,8 +328,10 @@ export function applyResourceEditor(
       };
     }
   }
-  if (node.entries && !Object.keys(node.entries).length) delete node.entries;
-  if (node.operations && !Object.keys(node.operations).length) delete node.operations;
+  if (node.entries && Object.keys(node.entries).length === 0)
+    delete node.entries;
+  if (node.operations && Object.keys(node.operations).length === 0)
+    delete node.operations;
   next.resource_catalog.resources[draft.key] = node;
   if (draft.position !== undefined) {
     const position = draft.position;

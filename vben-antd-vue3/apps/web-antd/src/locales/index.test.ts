@@ -5,9 +5,18 @@ import { i18n, loadLocaleMessages } from '@vben/locales';
 import dayjs from 'dayjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { antdLocale, setupI18n, refreshI18nCatalog } from './index';
+import { required } from '../../../../scripts/test-utils/required';
+
+vi.mock('#/store/system-properties', () => ({
+  loadSystemProperties: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { getCatalog } = vi.hoisted(() => ({ getCatalog: vi.fn() }));
+vi.mock('#/api/core/i18n', () => ({ getPublicI18nCatalogApi: getCatalog }));
+
+const { antdLocale, setupI18n, refreshI18nCatalog } = await import('./index');
 afterEach(() => {
-  vi.unstubAllGlobals();
+  getCatalog.mockReset();
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });
@@ -48,14 +57,11 @@ describe('application internationalization', () => {
         'zh-CN': { frontend: {} },
       },
     };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => catalog }),
-    );
+    getCatalog.mockResolvedValue(catalog);
     await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(getCatalog).toHaveBeenCalledOnce();
     await loadLocaleMessages('en-US');
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(getCatalog).toHaveBeenCalledOnce();
     expect(i18n.global.t('menus.admin:menu:system:user')).toBe(
       'Live operators',
     );
@@ -68,45 +74,49 @@ describe('application internationalization', () => {
 
   it('does not refresh on focus, visibility changes or elapsed time', async () => {
     vi.stubEnv('MODE', 'development');
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    getCatalog.mockRejectedValue(new Error('offline'));
     vi.useFakeTimers();
     await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(getCatalog).toHaveBeenCalledOnce();
     window.dispatchEvent(new Event('focus'));
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.advanceTimersByTimeAsync(60_000);
     await loadLocaleMessages('en-US');
     await loadLocaleMessages('zh-CN');
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(getCatalog).toHaveBeenCalledOnce();
   });
 
   it('keeps bilingual keys and interpolation parameters aligned', () => {
     expect(
       Object.keys(englishModules)
         .map((path) => path.replace('/en-US/', '/'))
-        .sort(),
+        .toSorted(),
     ).toEqual(
       Object.keys(chineseModules)
         .map((path) => path.replace('/zh-CN/', '/'))
-        .sort(),
+        .toSorted(),
     );
     for (const [path, english] of Object.entries(englishModules)) {
-      const chinese = chineseModules[path.replace('/en-US/', '/zh-CN/')]!;
+      const chinese = required(
+        chineseModules[path.replace('/en-US/', '/zh-CN/')],
+      );
       const en = messages(english);
       const zh = messages(chinese);
-      expect(Object.keys(en).sort(), path).toEqual(Object.keys(zh).sort());
+      expect(Object.keys(en).toSorted(), path).toEqual(
+        Object.keys(zh).toSorted(),
+      );
       for (const [key, value] of Object.entries(en)) {
         expect(zh[key]?.trim(), `${path}:${key}`).toBeTruthy();
         expect(
-          zh[key]?.match(/\{\w+\}/g)?.sort() ?? [],
+          zh[key]?.match(/\{\w+\}/g)?.toSorted() ?? [],
           `${path}:${key}`,
-        ).toEqual(value.match(/\{\w+\}/g)?.sort() ?? []);
+        ).toEqual(value.match(/\{\w+\}/g)?.toSorted() ?? []);
       }
     }
   });
 
   it('loads English fallback on a Chinese first visit and switches component locales', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    getCatalog.mockRejectedValue(new Error('offline'));
     await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
     expect(i18n.global.t('system.menu.users')).toBe('用户');
     expect(i18n.global.t('system.table.total', { count: 12 })).toBe('共 12 条');

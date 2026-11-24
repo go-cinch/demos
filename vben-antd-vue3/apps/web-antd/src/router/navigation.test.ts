@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import type { RouteRecordRaw } from '@vben/types';
+
+import { describe, expect, it } from 'vitest';
+
+import { required } from '../../../../scripts/test-utils/required';
 import { resourceNavigationRoutes } from './navigation';
 
 describe('resource navigation', () => {
@@ -43,12 +46,12 @@ describe('resource navigation', () => {
         children: [
           {
             resource_key: 'admin:audit:login',
-            menu_key: menus[1]!.menu_key,
+            menu_key: required(menus[1]).menu_key,
             menu_path: '/audit/login',
           },
           {
             resource_key: 'admin:audit:user',
-            menu_key: menus[0]!.menu_key,
+            menu_key: required(menus[0]).menu_key,
             menu_path: '/system/user',
           },
           {
@@ -80,6 +83,23 @@ describe('resource navigation', () => {
     );
     expect(result.every((page) => page.meta?.hideInMenu)).toBe(true);
   });
+  it('does not register an overview or any business routes when backend menus are empty', () => {
+    const dashboard = {
+      path: '/dashboard',
+      name: 'Dashboard',
+      children: [{ path: 'overview', name: 'Overview', component: {} }],
+    };
+    const navigation = [
+      {
+        resource_key: 'admin:dashboard:overview',
+        menu_key: 'admin:menu:dashboard:overview',
+        menu_path: '/dashboard/overview',
+      },
+    ];
+    expect(
+      resourceNavigationRoutes([...routes, dashboard], [], navigation),
+    ).toEqual([]);
+  });
   it('supports new and nested directories without static directory definitions', () => {
     const result = resourceNavigationRoutes(routes, menus, [
       {
@@ -90,7 +110,7 @@ describe('resource navigation', () => {
             children: [
               {
                 resource_key: 'admin:new:nested:user',
-                menu_key: menus[0]!.menu_key,
+                menu_key: required(menus[0]).menu_key,
                 menu_path: '/system/user',
               },
             ],

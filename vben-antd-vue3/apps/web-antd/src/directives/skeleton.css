@@ -1,5 +1,7 @@
 /* Skeletons decorate the real layout; they never contribute width or height. */
-.layout-skeleton-static { position: relative; }
+.layout-skeleton-static {
+  position: relative;
+}
 
 .layout-skeleton-shape {
   color: transparent !important;
@@ -18,7 +20,12 @@
   display: block;
   pointer-events: none;
   content: '';
-  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border)) 50%, hsl(var(--muted)) 75%);
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--border)) 50%,
+    hsl(var(--muted)) 75%
+  );
   background-size: 400% 100%;
   border-radius: calc(var(--radius) * 0.5);
   animation: layout-skeleton-wave 1.8s ease infinite;
@@ -32,18 +39,28 @@
   fill: transparent !important;
 }
 
-:is(button, td).layout-skeleton-shape::after { inset: 8px 12px; }
+:is(button, td).layout-skeleton-shape::after {
+  inset: 8px 12px;
+}
 
-.layout-skeleton { cursor: wait; }
+.layout-skeleton {
+  cursor: wait;
+}
 
 @keyframes layout-skeleton-wave {
-  from { background-position: 100% 0; }
+  from {
+    background-position: 100% 0;
+  }
 
-  to { background-position: 0 0; }
+  to {
+    background-position: 0 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .layout-skeleton-shape::after { animation: none; }
+  .layout-skeleton-shape::after {
+    animation: none;
+  }
 }
 
 /* Action loading belongs to the button component. Only explicit page/data
@@ -59,6 +76,10 @@
   transform: none !important;
 }
 
-.layout-skeleton td.layout-skeleton-shape::after { inset: 8px 12px !important; }
+.layout-skeleton td.layout-skeleton-shape::after {
+  inset: 8px 12px !important;
+}
 
-button.layout-skeleton-shape::after { inset: 6px min(12px, 15%); }
+button.layout-skeleton-shape::after {
+  inset: 6px min(12px, 15%);
+}

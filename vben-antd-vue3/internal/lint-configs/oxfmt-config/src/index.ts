@@ -104,6 +104,11 @@ const oxfmtConfig: OxfmtConfig = defineOxfmtConfig({
   //   preserveWhitespace: true,
   // },
   overrides: [
+    // Scaffold substitutes brand and logo names of varying lengths in the HTML entry.
+    {
+      files: ['apps/web-antd/index.html'],
+      options: { singleAttributePerLine: true },
+    },
     {
       files: [
         '*.json',

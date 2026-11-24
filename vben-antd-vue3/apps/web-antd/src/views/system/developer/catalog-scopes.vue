@@ -1,26 +1,30 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+
 import { IconifyIcon } from '@vben/icons';
+
 import { Button, FormItem, Input } from 'ant-design-vue';
-import type { Catalog, EditorUI } from './catalog-model';
-import { setText, text } from './catalog-model';
+
 import { $t } from '#/locales';
+
+import { useCatalogEditor } from './catalog-editor-context';
+import { setText, text } from './catalog-model';
+
 const props = defineProps<{
-  catalog: Catalog;
   disabled: boolean;
-  ui: EditorUI;
 }>();
+const { ui, catalog } = useCatalogEditor();
 const t = (key: string) => $t(`developer.${key}`);
 const error = ref('');
 const normalizeScopeIdentifier = (value: string) =>
-  value.toLowerCase().replace(/[^a-z]/g, '');
+  value.toLowerCase().replaceAll(/[^a-z]/g, '');
 
 function updateNewScope(event: Event) {
   const input = event.target as HTMLInputElement;
   const value = input.value;
   const cursor = input.selectionStart;
   const normalized = normalizeScopeIdentifier(value);
-  props.ui.newScope = normalized;
+  ui.value.newScope = normalized;
   if (value !== normalized) {
     input.value = normalized;
     if (cursor !== null) {
@@ -33,33 +37,33 @@ function updateNewScope(event: Event) {
 
 function addScope() {
   if (props.disabled) return;
-  props.ui.newScope = normalizeScopeIdentifier(props.ui.newScope);
-  if (!/^[a-z]+$/.test(props.ui.newScope)) {
+  ui.value.newScope = normalizeScopeIdentifier(ui.value.newScope);
+  if (!/^[a-z]+$/.test(ui.value.newScope)) {
     error.value = 'scopeIdentifierInvalid';
     return;
   }
-  if (props.catalog.scopes.includes(props.ui.newScope)) {
+  if (catalog.value.scopes.includes(ui.value.newScope)) {
     error.value = 'duplicate';
     return;
   }
-  props.catalog.scopes.push(props.ui.newScope);
-  props.ui.newScope = '';
+  catalog.value.scopes.push(ui.value.newScope);
+  ui.value.newScope = '';
   error.value = '';
 }
 function removeScope(scope: string) {
   if (
-    Object.keys(props.catalog.resource_catalog.resources).some((key) =>
+    Object.keys(catalog.value.resource_catalog.resources).some((key) =>
       key.startsWith(`${scope}:`),
     )
   ) {
     error.value = 'scopeInUse';
     return;
   }
-  props.catalog.scopes.splice(props.catalog.scopes.indexOf(scope), 1);
+  catalog.value.scopes.splice(catalog.value.scopes.indexOf(scope), 1);
 }
 function move(index: number, delta: number) {
   const target = index + delta;
-  const items = props.catalog.scopes;
+  const items = catalog.value.scopes;
   const first = items[index];
   const second = items[target];
   if (first !== undefined && second !== undefined) {
@@ -93,7 +97,7 @@ function move(index: number, delta: number) {
               <Input
                 :value="text(catalog, 'zh-CN', 'scopes', scope)"
                 :disabled="disabled"
-                :aria-label="scope + ' zh-CN'"
+                :aria-label="`${scope} zh-CN`"
                 @update:value="
                   (value) => setText(catalog, 'zh-CN', 'scopes', scope, value)
                 "
@@ -103,7 +107,7 @@ function move(index: number, delta: number) {
               <Input
                 :value="text(catalog, 'en-US', 'scopes', scope)"
                 :disabled="disabled"
-                :aria-label="scope + ' en-US'"
+                :aria-label="`${scope} en-US`"
                 @update:value="
                   (value) => setText(catalog, 'en-US', 'scopes', scope, value)
                 "
@@ -113,31 +117,32 @@ function move(index: number, delta: number) {
               <div class="catalog-scope-actions">
                 <Button
                   :disabled="disabled || i === 0"
-                  :aria-label="t('up') + ' ' + scope"
+                  :aria-label="`${t('up')} ${scope}`"
                   :title="t('up')"
                   @click="move(i, -1)"
                 >
-                  <template #icon
-                    ><IconifyIcon icon="lucide:arrow-up"
-                  /></template>
+                  <template #icon>
+                    <IconifyIcon icon="lucide:arrow-up" />
+                  </template>
                 </Button>
                 <Button
                   :disabled="disabled || i === catalog.scopes.length - 1"
-                  :aria-label="t('down') + ' ' + scope"
+                  :aria-label="`${t('down')} ${scope}`"
                   :title="t('down')"
                   @click="move(i, 1)"
                 >
-                  <template #icon
-                    ><IconifyIcon icon="lucide:arrow-down"
-                  /></template>
+                  <template #icon>
+                    <IconifyIcon icon="lucide:arrow-down" />
+                  </template>
                 </Button>
                 <Button
                   type="text"
                   danger
                   :disabled="disabled"
                   @click="removeScope(scope)"
-                  >{{ t('remove') }}</Button
                 >
+                  {{ t('remove') }}
+                </Button>
               </div>
             </td>
           </tr>

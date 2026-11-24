@@ -1,15 +1,29 @@
 import type { Router } from 'vue-router';
 
+import type { UserInfoWithPermissions } from '#/api/core/user';
+
+import { ref } from 'vue';
+
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useAccessStore } from '@vben/stores';
+import { browserSession } from '@vben/stores/session';
 import { startProgress, stopProgress } from '@vben/utils';
+import { userCache } from '@vben/utils/cache';
 
-import type { UserInfoWithPermissions } from '#/api/core/user';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
+import {
+  canVisitAuthenticatedPage,
+  loginDestination,
+  loginRedirectQuery,
+} from '#/store/login-destination';
+import { loadSystemProperties } from '#/store/system-properties';
 
 import { generateAccess } from './access';
+
+// A failed initial navigation has no mounted route to render its retry action.
+export const sessionRetryTarget = ref('');
 
 /**
  * 通用守卫配置
@@ -33,8 +47,12 @@ function setupCommonGuard(router: Router) {
     return true;
   });
 
-  router.onError(() => { clearTimeout(progressDeadline); stopProgress(); });
-  router.afterEach((to) => {
+  router.onError(() => {
+    clearTimeout(progressDeadline);
+    stopProgress();
+  });
+  router.afterEach((to, _from, failure) => {
+    if (!failure) sessionRetryTarget.value = '';
     clearTimeout(progressDeadline);
     // 记录页面是否加载,如果已经加载，后续的页面切换动画等效果不在重复执行
 
@@ -51,64 +69,153 @@ function setupCommonGuard(router: Router) {
  * 权限访问守卫配置
  * @param router
  */
+async function enabled(feature: 'email_enabled' | 'registration_enabled') {
+  const properties = await loadSystemProperties();
+  return properties?.[feature] === true;
+}
 function setupAccessGuard(router: Router) {
   router.beforeEach(async (to, from) => {
+    // Repair bookmarked legacy links before any login/onboarding handoff.
+    if (to.path.startsWith('/auth/') && 'redirect' in to.query) {
+      const normalized = loginRedirectQuery(to.query.redirect);
+      const query = { ...to.query, ...normalized };
+      if (!normalized.redirect) delete query.redirect;
+      if (query.redirect !== to.query.redirect) {
+        return { path: to.path, query, hash: to.hash, replace: true };
+      }
+    }
+    // The single-use email link identifies its owner independently of this browser session.
+    if (to.name === 'UnbindEmail') {
+      const properties = await loadSystemProperties();
+      return properties?.email_enabled === true
+        ? true
+        : { path: LOGIN_PATH, replace: true };
+    }
     const accessStore = useAccessStore();
-    const userStore = useUserStore();
     const authStore = useAuthStore();
 
-    if (!accessStore.accessToken) {
-      await authStore.restoreSession();
+    if (
+      !accessStore.accessToken &&
+      (await authStore.restoreSession()) === 'unavailable'
+    ) {
+      sessionRetryTarget.value = to.fullPath;
+      return false;
     }
 
-    if (accessStore.accessToken && authStore.mfaEnrollmentRequired) {
-      return to.path === '/auth/bind-mfa' ? true : { path: '/auth/bind-mfa', replace: true };
+    if (accessStore.accessToken && authStore.totpEnrollmentRequired) {
+      return to.path === '/auth/bind-totp'
+        ? true
+        : {
+            path: '/auth/bind-totp',
+            query: loginRedirectQuery(to.fullPath),
+            replace: true,
+          };
     }
     if (accessStore.accessToken && authStore.passwordResetRequired) {
       return to.path === '/auth/reset-password'
         ? true
-        : { path: '/auth/reset-password', replace: true };
+        : {
+            path: '/auth/reset-password',
+            query: loginRedirectQuery(to.fullPath),
+            replace: true,
+          };
     }
-    if (to.path === '/auth/bind-mfa') {
-      return accessStore.accessToken ? true : { path: LOGIN_PATH, replace: true };
+    let currentInfo: undefined | UserInfoWithPermissions;
+    if (accessStore.accessToken) {
+      currentInfo = await authStore.fetchUserInfo();
+      if (currentInfo.emailBindingRequired && to.path !== '/auth/bind-email') {
+        return {
+          path: '/auth/bind-email',
+          query: loginRedirectQuery(to.fullPath),
+          replace: true,
+        };
+      }
+      if (
+        to.path === '/profile' &&
+        to.query.focus === 'email' &&
+        currentInfo.email
+      ) {
+        const { focus: _focus, ...query } = to.query;
+        return { path: to.path, query, hash: to.hash, replace: true };
+      }
+      if (to.redirectedFrom?.path === '/') {
+        const home = loginDestination(currentInfo.permission);
+        if (home !== to.fullPath) return { path: home, replace: true };
+      }
+    }
+    if (to.path === '/auth/bind-email') {
+      if (!accessStore.accessToken)
+        return {
+          path: LOGIN_PATH,
+          query: loginRedirectQuery(to.fullPath),
+          replace: true,
+        };
+      if (
+        currentInfo &&
+        (currentInfo.email ||
+          (!currentInfo.emailBindingRequired &&
+            (!currentInfo.permission.profile_actions?.includes('bind_email') ||
+              !(await enabled('email_enabled')))))
+      ) {
+        return {
+          path: loginDestination(currentInfo.permission, to.query.redirect),
+          replace: true,
+        };
+      }
+      return true;
+    }
+    if (to.path === '/auth/bind-totp') {
+      if (!currentInfo)
+        return {
+          path: LOGIN_PATH,
+          query: loginRedirectQuery(to.fullPath),
+          replace: true,
+        };
+      const properties = await loadSystemProperties();
+      return properties?.totp_enabled === true &&
+        currentInfo.permission.profile_actions?.includes('enroll_totp')
+        ? true
+        : {
+            path: loginDestination(currentInfo.permission, to.query.redirect),
+            replace: true,
+          };
     }
     if (to.path === '/auth/reset-password') {
       return {
-        path: accessStore.accessToken
-          ? userStore.userInfo?.homePath || preferences.app.defaultHomePath
+        path: currentInfo
+          ? loginDestination(currentInfo.permission, to.query.redirect)
           : LOGIN_PATH,
+        ...(currentInfo ? {} : { query: loginRedirectQuery(to.fullPath) }),
         replace: true,
       };
     }
 
-    // 基本路由，这些路由不需要进入权限拦截
-    if (coreRouteNames.includes(to.name as string)) {
-      if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
-        );
+    if (to.name === 'Register' && !(await enabled('registration_enabled'))) {
+      return {
+        path: LOGIN_PATH,
+        query: loginRedirectQuery(to.query.redirect),
+        replace: true,
+      };
+    }
+    if (to.meta.ignoreAccess) {
+      if (to.path === LOGIN_PATH && currentInfo) {
+        return loginDestination(currentInfo.permission, to.query.redirect);
       }
       return true;
     }
 
     // accessToken 检查
-    if (!accessStore.accessToken) {
-      // 明确声明忽略权限访问权限，则可以访问
-      if (to.meta.ignoreAccess) {
-        return true;
-      }
-
+    if (!currentInfo) {
       // 没有访问权限，跳转登录页面
       if (to.fullPath !== LOGIN_PATH) {
         return {
           path: LOGIN_PATH,
           // 如不需要，直接删除 query
           query:
+            browserSession.detached ||
             to.fullPath === preferences.app.defaultHomePath
               ? {}
-              : { redirect: encodeURIComponent(to.fullPath) },
+              : loginRedirectQuery(to.fullPath),
           // 携带当前跳转的页面，登录后重新跳转该页面
           replace: true,
         };
@@ -116,46 +223,47 @@ function setupAccessGuard(router: Router) {
       return to;
     }
 
-    // 是否已经生成过动态路由
+    const { permission, roles } = currentInfo;
+    const resolved = router.resolve(to.fullPath);
+    // Authenticated layout fallbacks are available even with no menu grants.
+    const allowed =
+      coreRouteNames.includes(resolved.name as string) ||
+      canVisitAuthenticatedPage(permission, to.path);
+
     if (accessStore.isAccessChecked) {
-      // Re-read authorization on navigation so revoked routes cannot remain usable
-      // through a cached tab or a pasted URL. The API independently checks each call.
-      const current = await authStore.fetchUserInfo();
-      const allowed = current.permission.menus.some((menu) => menu.menu_path === to.path);
-      if (!allowed && to.path !== '/forbidden') return { path: '/forbidden', replace: true };
-      const resolved = router.resolve(to.fullPath);
-      if (allowed && resolved.name !== to.name) return { ...resolved, replace: true };
+      if (!allowed) return { path: '/forbidden', replace: true };
+      if (resolved.name !== to.name) return { ...resolved, replace: true };
       return true;
     }
 
-    // 生成路由表
-    // 当前登录用户拥有的角色标识列表
-    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
-    const userRoles = userInfo.roles ?? [];
-
     // 生成菜单和路由
+    const current = userCache.capture();
     const { accessibleMenus, accessibleRoutes } = await generateAccess({
-      roles: userRoles,
-      permissionMenus: (userInfo as UserInfoWithPermissions).permission.menus,
-      navigation: (userInfo as UserInfoWithPermissions).permission.navigation,
+      roles: roles ?? [],
+      permissionMenus: permission.menus,
+      navigation: permission.navigation,
       router,
       // 则会在菜单中显示，但是访问会被重定向到403
       routes: accessRoutes,
     });
 
+    if (!current()) return false;
     // 保存菜单信息和路由信息
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
-
-    return {
-      ...router.resolve(decodeURIComponent(redirectPath)),
-      replace: true,
-    };
+    let destination = to.fullPath;
+    if (from.path.startsWith('/auth/')) {
+      destination = loginDestination(
+        permission,
+        from.query.redirect ?? to.fullPath,
+      );
+    } else if (!allowed) {
+      // A direct navigation or reload is not a login redirect. Preserve the
+      // business permission boundary instead of silently replacing the target.
+      destination = '/forbidden';
+    }
+    return { ...router.resolve(destination), replace: true };
   });
 }
 

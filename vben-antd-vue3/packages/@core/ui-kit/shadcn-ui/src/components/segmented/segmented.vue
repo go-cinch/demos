@@ -36,7 +36,6 @@ const tabsIndicatorStyle = computed(() => {
     width: `${(100 / props.tabs.length).toFixed(0)}%`,
   };
 });
-
 </script>
 
 <template>

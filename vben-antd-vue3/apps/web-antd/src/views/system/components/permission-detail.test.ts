@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getPermissionCatalog, listActions } from '#/api/system';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import ActionResourceSelector from './action-resource-selector.vue';
 import PermissionDetail from './permission-detail.vue';
 import PermissionResourceEditor from './permission-resource-editor.vue';
@@ -117,9 +118,9 @@ describe('read-only permission details', () => {
       ).toEqual([]);
       expect(wrapper.text()).not.toContain('GET');
       expect(wrapper.text()).not.toContain('/user');
-      await wrapper
-        .findAll('[data-testid="action-scope"] button')[1]!
-        .trigger('click');
+      await required(
+        wrapper.findAll('[data-testid="action-scope"] button')[1],
+      ).trigger('click');
       expect(
         wrapper.getComponent(PermissionResourceEditor).props('scope'),
       ).toBe('h5');
@@ -162,7 +163,7 @@ describe('read-only permission details', () => {
     const wrapper = mount(PermissionDetail, { props: { codes: ['A'] } });
     try {
       await flushPromises();
-      expect(wrapper.text()).toContain('permission-display.loadError');
+      expect(wrapper.get('.load-warning button').isVisible()).toBe(true);
       expect(wrapper.text()).not.toContain('system-cards.noPermissions');
     } finally {
       wrapper.unmount();

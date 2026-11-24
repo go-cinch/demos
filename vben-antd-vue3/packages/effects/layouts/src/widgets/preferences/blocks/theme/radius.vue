@@ -5,7 +5,7 @@ defineOptions({
   name: 'PreferenceColorMode',
 });
 
-const modelValue = defineModel<string | undefined>('themeRadius', {
+const modelValue = defineModel<string | undefined>({
   default: '0.5',
 });
 
@@ -22,6 +22,7 @@ const items = [
   <ToggleGroup
     v-model="modelValue"
     class="gap-2"
+    :spacing="2"
     size="sm"
     type="single"
     variant="outline"

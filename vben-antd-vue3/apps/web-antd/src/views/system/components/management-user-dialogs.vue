@@ -8,22 +8,33 @@ import type { ManagementPermissions } from './use-management-permissions';
 
 import type { UserRecord } from '#/api';
 
-import { onDeactivated, ref } from 'vue';
+import { computed, onDeactivated, ref } from 'vue';
+
+import { $placeholder } from '@vben/locales';
+import { useUserStore } from '@vben/stores';
 
 import {
+  Alert,
+  Avatar,
   DatePicker,
   FormItem,
+  InputPassword,
   message,
   Modal,
   Select,
+  Tag,
   Textarea,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { updateUser } from '#/api';
+import { lockUserAccount, resetUserPassword, reviewUser } from '#/api';
 import { $t } from '#/locales';
+import { useAuthStore } from '#/store';
+import { isValidUserPassword } from '#/user-validation';
+import { requiredEntry } from '#/utils/required-entry';
 
 import ManagementForm from './management-form.vue';
+import { useManagementFormatting } from './use-management-formatting';
 const props = defineProps<{
   permissions: ManagementPermissions;
   refresh: () => Promise<void>;
@@ -67,18 +78,9 @@ async function submitApproval() {
     return;
   }
   approvalWarningVisible.value = false;
-  const metadata = { ...(user.metadata || {}) };
-  if (approvalDecision.value === 'approve') {
-    delete metadata.reject_register_reason;
-  } else {
-    metadata.reject_register_reason = reason;
-  }
   approvalSubmitting.value = true;
   try {
-    await updateUser(user.id, {
-      metadata,
-      status: approvalDecision.value === 'approve' ? 1 : 0,
-    });
+    await reviewUser(user.id, approvalDecision.value, reason);
     message.success(
       approvalDecision.value === 'approve'
         ? $t('system.messages.approved')
@@ -117,15 +119,12 @@ async function submitLock() {
   lockWarningVisible.value = false;
   lockSubmitting.value = true;
   try {
-    const metadata = {
-      ...(user.metadata || {}),
-      lock_expired_at:
-        lockMode.value === 'permanent' ? 0 : lockUntil.value!.valueOf(),
-    };
-    await updateUser(user.id, {
-      metadata,
-      status: 2,
-    });
+    await lockUserAccount(
+      user.id,
+      lockMode.value === 'permanent'
+        ? 0
+        : requiredEntry(lockUntil.value, 'lock expiration').valueOf(),
+    );
     message.success($t('system.messages.locked'));
     lockModalOpen.value = false;
     await refreshAll();
@@ -134,13 +133,131 @@ async function submitLock() {
   }
 }
 
+const resetTarget = ref<null | UserRecord>(null);
+const newPassword = ref('');
+const confirmation = ref('');
+const resetAttempted = ref(false);
+const resetSubmitting = ref(false);
+const { statusColor, statusLabel } = useManagementFormatting(() => 'user');
+const passwordHelp = computed(() =>
+  resetAttempted.value && !isValidUserPassword(newPassword.value)
+    ? $t('app.validation.passwordRequired')
+    : undefined,
+);
+const confirmationHelp = computed(() => {
+  if (!resetAttempted.value) return undefined;
+  if (!isValidUserPassword(confirmation.value))
+    return $t('system.validation.passwordConfirmation');
+  if (confirmation.value.trim() !== newPassword.value.trim())
+    return $t('system.validation.passwordMismatch');
+  return undefined;
+});
+
+function closeResetPassword() {
+  resetTarget.value = null;
+  newPassword.value = '';
+  confirmation.value = '';
+  resetAttempted.value = false;
+}
+
+function openResetPassword(record: Recordable<any>) {
+  if (resetSubmitting.value || !hasButtonAccess('reset-password')) return;
+  closeResetPassword();
+  resetTarget.value = record as UserRecord;
+}
+
+async function submitResetPassword() {
+  const user = resetTarget.value;
+  if (!user || resetSubmitting.value || !hasButtonAccess('reset-password'))
+    return;
+  resetAttempted.value = true;
+  if (passwordHelp.value || confirmationHelp.value) return;
+  resetSubmitting.value = true;
+  try {
+    await resetUserPassword(user.id, newPassword.value);
+    closeResetPassword();
+    message.success($t('system.messages.passwordReset'));
+    await (Number(useUserStore().userInfo?.userId) === Number(user.id)
+      ? useAuthStore().logout()
+      : refreshAll());
+  } finally {
+    resetSubmitting.value = false;
+  }
+}
+
 onDeactivated(() => {
+  closeResetPassword();
   approvalModalOpen.value = false;
   lockModalOpen.value = false;
 });
-defineExpose({ openApproval, openLock });
+defineExpose({ openApproval, openLock, openResetPassword });
 </script>
 <template>
+  <Modal
+    :open="!!resetTarget"
+    :title="buttonLabel('reset-password', 'system.user.resetPassword')"
+    :ok-text="$t('system.user.confirmReset')"
+    :confirm-loading="resetSubmitting"
+    :closable="!resetSubmitting"
+    :keyboard="!resetSubmitting"
+    :mask-closable="!resetSubmitting"
+    :cancel-button-props="{ disabled: resetSubmitting }"
+    destroy-on-close
+    @cancel="closeResetPassword"
+    @ok="submitResetPassword"
+  >
+    <div
+      v-if="resetTarget"
+      class="mb-4 flex items-center gap-3 rounded border bg-muted/40 p-3"
+    >
+      <Avatar>{{ resetTarget.username.slice(0, 1).toUpperCase() }}</Avatar>
+      <div class="min-w-0 flex-1">
+        <strong>{{ resetTarget.username }}</strong>
+        <div class="text-xs text-muted-foreground">{{ resetTarget.code }}</div>
+      </div>
+      <Tag :color="statusColor(resetTarget.status)">{{
+        statusLabel(resetTarget.status)
+      }}</Tag>
+    </div>
+    <ManagementForm :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
+      <FormItem
+        html-for="admin-reset-password"
+        :label="$t('system.fields.newPassword')"
+        required
+        :help="passwordHelp"
+        :validate-status="passwordHelp ? 'error' : undefined"
+      >
+        <InputPassword
+          id="admin-reset-password"
+          v-model:value="newPassword"
+          autocomplete="new-password"
+          :disabled="resetSubmitting"
+          @press-enter.prevent="submitResetPassword"
+        />
+      </FormItem>
+      <FormItem
+        html-for="admin-confirm-password"
+        :label="$t('system.user.confirmPassword')"
+        required
+        :help="confirmationHelp"
+        :validate-status="confirmationHelp ? 'error' : undefined"
+      >
+        <InputPassword
+          id="admin-confirm-password"
+          v-model:value="confirmation"
+          autocomplete="new-password"
+          :disabled="resetSubmitting"
+          @press-enter.prevent="submitResetPassword"
+        />
+      </FormItem>
+    </ManagementForm>
+    <Alert
+      type="info"
+      show-icon
+      :message="$t('system.user.resetConsequence')"
+    />
+  </Modal>
+
   <Modal
     v-model:open="lockModalOpen"
     :confirm-loading="lockSubmitting"
@@ -215,7 +332,7 @@ defineExpose({ openApproval, openLock });
         <Textarea
           v-model:value="rejectReason"
           :auto-size="{ minRows: 3, maxRows: 6 }"
-          :placeholder="$t('system.user.rejectionPlaceholder')"
+          :placeholder="$placeholder('system.user.rejectionPlaceholder')"
           @input="clearApprovalWarning"
         />
       </FormItem>

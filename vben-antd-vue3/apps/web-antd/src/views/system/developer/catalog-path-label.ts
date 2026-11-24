@@ -1,4 +1,5 @@
 import { $t } from '#/locales';
+import { requiredEntry } from '#/utils/required-entry';
 
 export function catalogPathLabel(path: string[]) {
   let parts = path;
@@ -9,7 +10,11 @@ export function catalogPathLabel(path: string[]) {
       ...path.slice(1),
     ];
   } else if (path[0] === 'group_defaults') {
-    parts = [$t('developer.permissionGroups'), $t('action-editor.groupIsDefault'), ...path.slice(1)];
+    parts = [
+      $t('developer.permissionGroups'),
+      $t('action-editor.groupIsDefault'),
+      ...path.slice(1),
+    ];
   } else if (
     path[0] === 'messages' &&
     path[2] === 'frontend' &&
@@ -18,7 +23,7 @@ export function catalogPathLabel(path: string[]) {
     parts = [
       $t('developer.permissionGroups'),
       $t('action-editor.groupNames'),
-      path[1]!,
+      requiredEntry(path[1], 'resource catalog entry'),
       ...path.slice(4),
     ];
   }

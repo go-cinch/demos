@@ -1,4 +1,9 @@
 {
+  "publicationChecking": "正在核对发布结果…",
+  "publicationUnknown": "发布结果待确认。",
+  "publicationRecheck": "重新核对",
+  "publicationMatched": "线上目录已与本次提交一致。",
+  "publicationDifferent": "线上目录与本次提交不同，请核对差异后再发布。",
   "frontendVisible": "前端显示",
   "frontendVisibleHint": "控制此根目录及其子菜单是否显示在侧栏中；不改变页面访问权限。发布后生效。",
   "frontendShown": "显示",
@@ -162,6 +167,8 @@
   "submit": "提交到线上",
   "restored": "已恢复上次未提交的草稿，继续编辑即可。",
   "catalogMissing": "未找到有效的 I18N_CATALOG，请先在字典管理中配置。",
+  "translationRefreshFailed": "目录已保存。翻译未刷新，请重新加载页面。",
+  "initialLoadFailed": "无法加载线上目录，请重试以创建本地草稿。",
   "loadFailed": "无法获取线上版本，本地草稿继续保留，可重试。",
   "catalogDisabled": "I18N_CATALOG 已停用，请先在字典管理中启用。",
   "validationFailed": "请先修复目录结构错误，再提交。",

@@ -52,6 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   submit: [Recordable<any>];
+  valuesChange: [Recordable<any>, string[]];
 }>();
 
 const [Form, formApi] = useVbenForm(
@@ -61,6 +62,9 @@ const [Form, formApi] = useVbenForm(
       hideRequiredMark: true,
     },
     schema: computed(() => props.formSchema),
+    handleValuesChange(values, changedFields) {
+      emit('valuesChange', { ...values }, changedFields);
+    },
     showDefaultActions: false,
   }),
 );
@@ -71,12 +75,17 @@ async function handleSubmit() {
   const { valid } = await formApi.validate();
   const values = await formApi.getValues();
   if (valid) {
-    emit('submit', values as { password: string; username: string });
+    emit('submit', { ...values });
   }
 }
 
 function goToLogin() {
-  router.push(props.loginPath);
+  const target = router.resolve(props.loginPath);
+  router.push({
+    path: target.path,
+    query: { ...router.currentRoute.value.query, ...target.query },
+    hash: target.hash,
+  });
 }
 
 defineExpose({
@@ -96,22 +105,26 @@ defineExpose({
         </slot>
       </template>
     </Title>
-    <Form class="auth-feedback-form" />
+    <Form class="auth-feedback-form" @submit="handleSubmit" />
 
-    <VbenButton
-      :class="{
-        'cursor-wait': loading,
-      }"
-      :loading="loading"
-      aria-label="register"
-      class="mt-2 w-full"
-      @click="handleSubmit"
+    <slot name="submit" :submit="handleSubmit">
+      <VbenButton
+        :class="{
+          'cursor-wait': loading,
+        }"
+        :loading="loading"
+        aria-label="register"
+        class="mt-2 w-full"
+        @click="handleSubmit"
+      >
+        <slot name="submitButtonText">
+          {{ submitButtonText || $t('authentication.signUp') }}
+        </slot>
+      </VbenButton>
+    </slot>
+    <div
+      class="mt-[22px] flex min-h-8 items-center justify-center gap-1 text-sm"
     >
-      <slot name="submitButtonText">
-        {{ submitButtonText || $t('authentication.signUp') }}
-      </slot>
-    </VbenButton>
-    <div class="mt-4 text-center text-sm">
       {{ $t('authentication.alreadyHaveAccount') }}
       <span class="vben-link text-sm font-normal" @click="goToLogin()">
         {{ $t('authentication.goToLogin') }}
@@ -121,13 +134,38 @@ defineExpose({
 </template>
 
 <style scoped>
-/* Reserve a compact feedback line before validation so controls stay in place. */
 .auth-feedback-form :deep([data-slot='form-item']) {
-  padding-bottom: 28px;
+  padding-bottom: 24px;
+  transition: padding-bottom 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
+
+.auth-feedback-form :deep([data-slot='form-item']:has([aria-invalid='true'])) {
+  padding-bottom: 48px;
+}
+
 .auth-feedback-form :deep([data-slot='form-message']) {
   position: absolute;
   margin-top: 4px;
   line-height: 20px;
+}
+
+.auth-feedback-form :deep(.slide-up-enter-active),
+.auth-feedback-form :deep(.slide-up-leave-active) {
+  transition:
+    opacity 0.3s cubic-bezier(0.645, 0.045, 0.355, 1),
+    transform 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.auth-feedback-form :deep(.slide-up-enter-from),
+.auth-feedback-form :deep(.slide-up-leave-to) {
+  transform: translateY(-5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-feedback-form :deep([data-slot='form-item']),
+  .auth-feedback-form :deep(.slide-up-enter-active),
+  .auth-feedback-form :deep(.slide-up-leave-active) {
+    transition: none;
+  }
 }
 </style>

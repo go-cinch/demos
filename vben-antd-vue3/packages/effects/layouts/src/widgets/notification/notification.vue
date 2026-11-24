@@ -86,7 +86,11 @@ defineExpose({ toggle, close });
           :aria-label="triggerLabel || $t('ui.widgets.notifications')"
           :aria-expanded="open"
         >
-          <span v-if="dot" data-testid="message-unread-dot" class="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary"></span>
+          <span
+            v-if="dot"
+            data-testid="message-unread-dot"
+            class="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary"
+          ></span>
           <Bell class="size-4" />
         </VbenIconButton>
       </div>
@@ -111,7 +115,10 @@ defineExpose({ toggle, close });
           <MailCheck class="size-4" />
         </VbenIconButton>
       </header>
-      <VbenScrollbar v-if="notifications.length > 0" class="notification-viewport">
+      <VbenScrollbar
+        v-if="notifications.length > 0"
+        class="notification-viewport"
+      >
         <ul class="flex! max-h-90 w-full flex-col">
           <template v-for="item in notifications" :key="item.id ?? item.title">
             <li
@@ -124,7 +131,11 @@ defineExpose({ toggle, close });
               <slot name="content" :item="item">
                 <div data-testid="notification-avatar" class="self-start">
                   <slot name="avatar" :item="item">
-                    <VbenAvatar :src="item.avatar" :alt="item.avatarName || item.title" :size="40" />
+                    <VbenAvatar
+                      :src="item.avatar"
+                      :alt="item.avatarName || item.title"
+                      :size="40"
+                    />
                   </slot>
                 </div>
                 <button
@@ -134,16 +145,20 @@ defineExpose({ toggle, close });
                   :disabled="disabled"
                   @click.stop="emit('onClick', item)"
                 >
-                  <span class="notification-title font-semibold" data-testid="notification-title">{{
-                    item.title
-                  }}</span>
+                  <span
+                    class="notification-title font-semibold"
+                    data-testid="notification-title"
+                    >{{ item.title }}</span
+                  >
                   <span
                     class="notification-message text-xs text-muted-foreground"
                     data-testid="notification-content"
-                    >{{ item.message }}</span>
-                  <time class="notification-date text-xs text-muted-foreground">{{
-                    item.date
-                  }}</time>
+                    >{{ item.message }}</span
+                  >
+                  <time
+                    class="notification-date text-xs text-muted-foreground"
+                    >{{ item.date }}</time
+                  >
                 </button>
                 <div class="notification-actions">
                   <slot name="action" :item="item">
@@ -154,8 +169,12 @@ defineExpose({ toggle, close });
                       class="h-6 w-6 p-0"
                       :class="{ 'text-destructive': item.isRead }"
                       :disabled="disabled"
-                      :aria-label="$t(item.isRead ? 'common.delete' : 'common.confirm')"
-                      @click.stop="item.isRead ? emit('remove', item) : emit('read', item)"
+                      :aria-label="
+                        $t(item.isRead ? 'common.delete' : 'common.confirm')
+                      "
+                      @click.stop="
+                        item.isRead ? emit('remove', item) : emit('read', item)
+                      "
                     >
                       <CircleX v-if="item.isRead" class="size-4" />
                       <CircleCheckBig v-else class="size-4" />
@@ -170,12 +189,16 @@ defineExpose({ toggle, close });
       </VbenScrollbar>
 
       <template v-else>
-        <div class="notification-empty flex-center w-full text-muted-foreground">
+        <div
+          class="notification-empty flex-center w-full text-muted-foreground"
+        >
           <slot name="empty">{{ $t('common.noData') }}</slot>
         </div>
       </template>
 
-      <footer class="flex items-center justify-between border-t border-border px-4 py-3">
+      <footer
+        class="flex items-center justify-between border-t border-border px-4 py-3"
+      >
         <VbenButton
           v-if="canClear"
           :disabled="disabled || notifications.length <= 0"
@@ -197,17 +220,19 @@ defineExpose({ toggle, close });
 .notification-row {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto;
-  align-items: center;
   gap: 12px;
+  align-items: center;
   padding: 12px;
 }
+
 .notification-copy {
   display: flex;
-  min-width: 0;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   text-align: start;
 }
+
 .notification-title,
 .notification-message,
 .notification-date {
@@ -215,9 +240,10 @@ defineExpose({ toggle, close });
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   line-height: 20px;
+  white-space: nowrap;
 }
+
 .notification-actions {
   display: flex;
   align-items: center;
@@ -261,15 +287,42 @@ defineExpose({ toggle, close });
 </style>
 
 <style scoped>
-.notification-viewport { max-height: 360px; }
-.notification-empty { min-height: 96px; padding: 24px; }
-.notification-skeleton :is(.notification-copy > *, [data-testid="notification-avatar"], .notification-actions) {
+.notification-viewport {
+  max-height: 360px;
+}
+
+.notification-empty {
+  min-height: 96px;
+  padding: 24px;
+}
+
+.notification-skeleton
+  :is(
+    .notification-copy > *,
+    [data-testid='notification-avatar'],
+    .notification-actions
+  ) {
   color: transparent !important;
-  border-radius: calc(var(--radius) * 0.5);
   background: hsl(var(--muted));
+  border-radius: calc(var(--radius) * 0.5);
   animation: notification-skeleton-pulse 1.8s ease-in-out infinite alternate;
 }
-.notification-skeleton :is([data-testid="notification-avatar"], .notification-actions) > * { visibility: hidden; }
-@keyframes notification-skeleton-pulse { to { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .notification-skeleton * { animation: none !important; } }
+
+.notification-skeleton
+  :is([data-testid='notification-avatar'], .notification-actions)
+  > * {
+  visibility: hidden;
+}
+
+@keyframes notification-skeleton-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-skeleton * {
+    animation: none !important;
+  }
+}
 </style>

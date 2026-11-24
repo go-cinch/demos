@@ -28,6 +28,7 @@ describe('audit API', () => {
         f: 'metrics',
       });
       expect(get).toHaveBeenLastCalledWith(`/audit/${kind}/summary`, {
+        suppressErrorMessage: true,
         params: { from: 100, to: 200, f: 'metrics' },
       });
       await auditApi.options(kind, { field: 'username', q: 'read' });
@@ -39,7 +40,9 @@ describe('audit API', () => {
         params: { f: auditDetailFields[kind] },
       });
       expect(auditDetailFields[kind].split(',')).not.toContain('header');
-      expect(auditDetailFields[kind].includes('request_params')).toBe(kind === 'operation');
+      expect(auditDetailFields[kind].includes('request_params')).toBe(
+        kind === 'operation',
+      );
       const blob = new Blob(['id\n9'], { type: 'text/csv' });
       get.mockResolvedValue(blob);
       await expect(auditApi.export(kind, { from: 100, to: 200 })).resolves.toBe(
@@ -48,6 +51,7 @@ describe('audit API', () => {
       expect(get).toHaveBeenLastCalledWith(`/audit/${kind}/export`, {
         params: { from: 100, to: 200 },
         responseType: 'blob',
+        suppressErrorMessage: true,
       });
     },
   );

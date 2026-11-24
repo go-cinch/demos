@@ -20,7 +20,9 @@ const props = withDefaults(
     data-slot="breadcrumb-link"
     :as="as"
     :as-child="asChild"
-    :class="cn('text-foreground hover:text-foreground transition-colors', props.class)"
+    :class="
+      cn('text-foreground hover:text-foreground transition-colors', props.class)
+    "
     style="color: hsl(var(--foreground))"
   >
     <slot></slot>

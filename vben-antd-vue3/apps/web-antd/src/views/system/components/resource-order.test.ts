@@ -57,8 +57,8 @@ describe('resource child ordering', () => {
     expect(value.resources['admin:root']?.reference_operations).toEqual({
       'admin:other:item': ['read'],
     });
-    expect(value.resources['admin:root:b']?.sort).toBe(10);
-    expect(value.resources['admin:root:a']?.sort).toBe(20);
+    expect(value.resources['admin:root:b']?.sort).toBe(0);
+    expect(value.resources['admin:root:a']?.sort).toBe(1);
     expect(value.resources['admin:other:item']?.sort).toBe(99);
   });
 

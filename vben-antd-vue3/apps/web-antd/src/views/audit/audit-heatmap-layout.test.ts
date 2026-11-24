@@ -12,12 +12,12 @@ const zone = 'Asia/Shanghai';
 describe('heatmap geometry before the summary arrives', () => {
   it('reserves 24 rolling hours, including the partial local hour', () => {
     const to = dayjs.tz('2026-10-20 21:17:23', zone).valueOf();
-    const cells = heatmapLayout(to - 86400000, to, zone);
+    const cells = heatmapLayout(to - 86_400_000, to, zone);
     expect(cells).toHaveLength(24);
     expect(cells[0]?.hour).toBe(21);
     expect(cells.at(-1)?.ended_at).toBe(to);
     expect(
-      cells.every((cell) => cell.ended_at - cell.started_at === 3600000),
+      cells.every((cell) => cell.ended_at - cell.started_at === 3_600_000),
     ).toBe(true);
   });
 

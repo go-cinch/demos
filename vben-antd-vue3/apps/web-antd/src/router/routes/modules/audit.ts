@@ -18,6 +18,8 @@ const routes: RouteRecordRaw[] = [
           title: 'menus.admin:menu:audit:login',
           icon: 'lucide:log-in',
           authority: ['/audit/login'],
+          keepAlive: true,
+          reloadOnTimezoneChange: false,
         },
       },
       {
@@ -28,6 +30,7 @@ const routes: RouteRecordRaw[] = [
           title: 'menus.admin:menu:audit:operation',
           icon: 'lucide:activity',
           authority: ['/audit/operation'],
+          reloadOnTimezoneChange: false,
         },
       },
     ],

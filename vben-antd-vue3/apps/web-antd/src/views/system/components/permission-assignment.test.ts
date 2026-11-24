@@ -5,6 +5,7 @@ import type {
 } from '#/api/system';
 
 import { flushPromises, mount } from '@vue/test-utils';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PermissionAssignment from './permission-assignment.vue';
@@ -92,6 +93,26 @@ async function update(bindings: ActionResourceBinding[]) {
 }
 
 describe('resource based permission assignment', () => {
+  it('shows available resources for a new record with no assigned codes', async () => {
+    await start([]);
+    expect(wrapper.findComponent(PermissionResourceEditor).exists()).toBe(true);
+    expect(api.listActions).not.toHaveBeenCalled();
+    expect(wrapper.emitted('update:bindings')).toBeUndefined();
+  });
+
+  it('keeps basic fields editable when permission management reads are forbidden', async () => {
+    api.getPermissionCatalog.mockRejectedValueOnce({
+      response: { status: 403 },
+    });
+    await start(['A']);
+    expect(wrapper.text()).toContain('permission-assignment.catalogForbidden');
+    expect(wrapper.findComponent(PermissionResourceEditor).exists()).toBe(
+      false,
+    );
+    expect(wrapper.emitted('update:bindings')).toBeUndefined();
+    expect(wrapper.emitted('validity')?.at(-1)).toEqual(['']);
+  });
+
   it('hydrates definitions once without emitting a change for an untouched form', async () => {
     await start(['A', 'A']);
     expect(api.refreshI18nCatalog).not.toHaveBeenCalled();
@@ -160,12 +181,12 @@ describe('resource based permission assignment', () => {
   it('distinguishes a failed lookup from revoked definitions and allows retry', async () => {
     api.listActions.mockRejectedValueOnce(new Error('offline'));
     await start();
-    expect(wrapper.text()).toContain('permission-assignment.resourceLoadError');
+    expect(wrapper.get('.load-warning button').isVisible()).toBe(true);
     expect(wrapper.emitted('update:bindings')).toBeUndefined();
     expect(wrapper.emitted('validity')?.at(-1)).toEqual([
       'permission-assignment.resourceLoadError',
     ]);
-    await wrapper.get('.ant-alert button').trigger('click');
+    await wrapper.get('.load-warning button').trigger('click');
     await flushPromises();
     expect(wrapper.emitted('validity')?.at(-1)).toEqual(['']);
     expect(wrapper.findComponent(PermissionResourceEditor).exists()).toBe(true);

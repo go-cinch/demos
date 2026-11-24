@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MsgFeedPreview } from '#/api/msg';
+import type { LoadFailure } from '#/api/request-error';
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -8,19 +9,24 @@ import { CircleCheckBig, CircleX } from '@vben/icons';
 import { Notification } from '@vben/layouts';
 import { useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
+import { userCache } from '@vben/utils/cache';
 
 import { Button, Modal } from 'ant-design-vue';
 
 import { messageAttention, visitMessages } from '#/api/message-attention';
+import { messagesChangedEvent, messageSeenEvent } from '#/api/message-events';
 import { msgApi, msgChanged, msgPreviewFields } from '#/api/msg';
+import { loadFailure } from '#/api/request-error';
+import { quietRequest } from '#/api/request-types';
 import MessageTypeIcon from '#/components/message-type-icon.vue';
-import { $t } from '#/locales';
 import { usePermissions } from '#/composables/use-permissions';
+import { $t } from '#/locales';
 import MessageHistory from '#/views/msg/history.vue';
 
 const userStore = useUserStore();
 const { hasButton, hasPage } = usePermissions();
-const canControl = (control: string) => hasButton(`admin:btn:msg:inbox:${control}`);
+const canControl = (control: string) =>
+  hasButton(`admin:btn:msg:inbox:${control}`);
 const historyOpen = ref(false);
 const historyMessageId = ref<number>();
 const historyMessageTitle = ref('');
@@ -29,15 +35,27 @@ const count = ref<null | number>(null);
 const rows = ref<MsgFeedPreview[]>([]);
 const open = ref(false);
 const loading = ref(false);
-const error = ref(false);
+const error = ref<LoadFailure>(false);
 const busy = ref(false);
 let generation = 0;
 let disposed = false;
-function syncSeen() { count.value = messageAttention.count(Number(userStore.userInfo?.userId)); }
+function syncSeen() {
+  count.value = messageAttention.count(Number(userStore.userInfo?.userId));
+}
 let timer: ReturnType<typeof setInterval>;
 
 const notifications = computed(() =>
-  (loading.value && !rows.value.length ? Array.from({ length: 4 }, (_, index) => ({ id: -index - 1, published_at: 0, read_at: null, summary: '────────────────', title: '────────', type: 'system' })) : rows.value).map((item) => ({
+  (loading.value && rows.value.length === 0
+    ? Array.from({ length: 4 }, (_, index) => ({
+        id: -index - 1,
+        published_at: 0,
+        read_at: null,
+        summary: '────────────────',
+        title: '────────',
+        type: 'system',
+      }))
+    : rows.value
+  ).map((item) => ({
     id: item.id,
     avatar: '',
     type: item.type,
@@ -48,7 +66,7 @@ const notifications = computed(() =>
   })),
 );
 
-async function refresh() {
+async function refresh(background = false) {
   if (disposed || document.hidden || busy.value) return;
   const current = ++generation;
   const loadList = open.value;
@@ -57,7 +75,12 @@ async function refresh() {
     msgApi
       .count(Number(userStore.userInfo?.userId))
       .then((result) => {
-        if (current === generation) { messageAttention.update(result); count.value = messageAttention.count(Number(userStore.userInfo?.userId)); };
+        if (current === generation) {
+          messageAttention.update(result);
+          count.value = messageAttention.count(
+            Number(userStore.userInfo?.userId),
+          );
+        }
       })
       .catch(() => {
         if (current === generation) count.value = null;
@@ -65,17 +88,21 @@ async function refresh() {
     ...(loadList
       ? [
           msgApi
-            .list(false, { f: msgPreviewFields, p: 1, s: 5 })
+            .list(
+              false,
+              { f: msgPreviewFields, p: 1, s: 5 },
+              background === true ? quietRequest : undefined,
+            )
             .then((result) => {
               if (current === generation) {
                 rows.value = result.items.slice(0, 5);
                 error.value = false;
               }
             })
-            .catch(() => {
+            .catch((requestError) => {
               if (current === generation) {
                 rows.value = [];
-                error.value = true;
+                error.value = loadFailure(requestError);
               }
             }),
         ]
@@ -83,9 +110,15 @@ async function refresh() {
   ]);
   if (current === generation) loading.value = false;
 }
+function refreshInBackground() {
+  void refresh(true);
+}
 function onOpenChange(value: boolean) {
   open.value = value;
-  if (value) { visitMessages(Number(userStore.userInfo?.userId)); void refresh(); }
+  if (value) {
+    visitMessages(Number(userStore.userInfo?.userId));
+    void refresh();
+  }
 }
 async function mutate(action: () => Promise<unknown>) {
   if (busy.value) return;
@@ -117,40 +150,53 @@ async function readAll() {
 }
 function confirmRemove(ids: number[], clear = false) {
   if (!canControl(clear ? 'delete-selected' : 'delete')) return;
+  const current = userCache.capture();
   Modal.confirm({
-    title: clear ? $t('msg.clearPreviewConfirm', { count: ids.length }) : $t('msg.deleteConfirm'),
+    title: clear
+      ? $t('msg.clearPreviewConfirm', { count: ids.length })
+      : $t('msg.deleteConfirm'),
     okText: $t('msg.confirm'),
     cancelText: $t('msg.cancel'),
     okButtonProps: { danger: true },
     onOk: () =>
       mutate(async () => {
-        for (const id of ids) await msgApi.remove(id, false);
+        for (const id of ids) {
+          if (!current()) return;
+          await msgApi.remove(id, false);
+        }
       }),
   });
 }
 function openHistory(id?: number | string) {
-  if (busy.value || loading.value || !hasPage('/msg/inbox') || (id !== undefined && !canControl('view-detail'))) return;
+  if (
+    busy.value ||
+    loading.value ||
+    !hasPage('/msg/inbox') ||
+    (id !== undefined && !canControl('view-detail'))
+  )
+    return;
   popup.value?.close();
   historyMessageId.value = id === undefined ? undefined : Number(id);
-  historyMessageTitle.value = rows.value.find((row) => row.id === historyMessageId.value)?.title ?? '';
+  historyMessageTitle.value =
+    rows.value.find((row) => row.id === historyMessageId.value)?.title ?? '';
   historyOpen.value = true;
 }
 onMounted(() => {
   void refresh();
-  timer = setInterval(refresh, 30000);
-  window.addEventListener('go-cinch-msg-seen', syncSeen);
+  timer = setInterval(refreshInBackground, 30_000);
+  window.addEventListener(messageSeenEvent, syncSeen);
   window.addEventListener('storage', syncSeen);
-  window.addEventListener('go-cinch-msg-changed', refresh);
-  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener(messagesChangedEvent, refreshInBackground);
+  document.addEventListener('visibilitychange', refreshInBackground);
 });
 onBeforeUnmount(() => {
   disposed = true;
   generation++;
   clearInterval(timer);
-  window.removeEventListener('go-cinch-msg-seen', syncSeen);
+  window.removeEventListener(messageSeenEvent, syncSeen);
   window.removeEventListener('storage', syncSeen);
-  window.removeEventListener('go-cinch-msg-changed', refresh);
-  document.removeEventListener('visibilitychange', refresh);
+  window.removeEventListener(messagesChangedEvent, refreshInBackground);
+  document.removeEventListener('visibilitychange', refreshInBackground);
 });
 </script>
 
@@ -160,7 +206,7 @@ onBeforeUnmount(() => {
     :dot="(count ?? 0) > 0"
     :notifications="notifications"
     :loading="loading"
-    :disabled="busy || loading || error"
+    :disabled="Boolean(busy || loading || error)"
     :trigger-label="$t('msg.inbox')"
     :can-mark-all="canControl('read-all')"
     :can-clear="canControl('delete-selected')"
@@ -180,8 +226,7 @@ onBeforeUnmount(() => {
     </template>
     <template #empty>
       <div v-if="error" class="flex flex-col items-center gap-2" role="alert">
-        <span>{{ $t('msg.error') }}</span>
-        <Button type="link" @click="refresh">{{ $t('msg.retry') }}</Button>
+        <Button type="link" @click="refresh()">{{ $t('msg.retry') }}</Button>
       </div>
       <span v-else>{{ $t('msg.empty') }}</span>
     </template>
@@ -195,13 +240,21 @@ onBeforeUnmount(() => {
         :disabled="busy || loading"
         :tooltip="$t(item.isRead ? 'msg.delete' : 'msg.markRead')"
         :aria-label="$t(item.isRead ? 'msg.delete' : 'msg.markRead')"
-        @click.stop="item.isRead ? confirmRemove([Number(item.id)]) : markRead(item.id)"
+        @click.stop="
+          item.isRead ? confirmRemove([Number(item.id)]) : markRead(item.id)
+        "
       >
-        <span class="sr-only">{{ $t(item.isRead ? 'msg.delete' : 'msg.markRead') }}</span>
+        <span class="sr-only">{{
+          $t(item.isRead ? 'msg.delete' : 'msg.markRead')
+        }}</span>
         <CircleX v-if="item.isRead" class="size-4" />
         <CircleCheckBig v-else class="size-4" />
       </VbenIconButton>
     </template>
   </Notification>
-  <MessageHistory v-model:open="historyOpen" v-model:message-id="historyMessageId" :message-title="historyMessageTitle" />
+  <MessageHistory
+    v-model:open="historyOpen"
+    v-model:message-id="historyMessageId"
+    :message-title="historyMessageTitle"
+  />
 </template>

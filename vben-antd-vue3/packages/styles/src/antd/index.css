@@ -54,6 +54,11 @@
   font-weight: 500;
 }
 
+/* The upload preview (9999) and settings modals can both initiate requests. */
+.ant-message.ant-message {
+  z-index: 10010;
+}
+
 .ant-message-notice-content,
 .ant-notification-notice {
   &:is(.dark *) {

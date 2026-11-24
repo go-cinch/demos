@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 
 import { LockKeyhole } from '@vben/icons';
-import { $t, useI18n } from '@vben/locales';
+import { $placeholder, $t, useI18n } from '@vben/locales';
 import { storeToRefs, useAccessStore } from '@vben/stores';
 
 import { useScrollLock } from '@vben-core/composables';
@@ -48,7 +48,7 @@ const [Form, { getFieldComponentRef, getRawValues, setFieldError, validate }] =
         {
           component: 'VbenInputPassword' as const,
           componentProps: {
-            placeholder: $t('ui.widgets.lockScreen.placeholder'),
+            placeholder: $placeholder('ui.widgets.lockScreen.placeholder'),
           },
           fieldName: 'password',
           label: $t('authentication.password'),

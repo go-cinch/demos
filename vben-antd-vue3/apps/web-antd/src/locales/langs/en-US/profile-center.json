@@ -2,6 +2,7 @@
   "overview": "Personal overview",
   "account": "Account information",
   "security": "Account security",
+  "noSecuritySettings": "No security settings are available for this account.",
   "accountId": "Account ID",
   "accountCode": "Account code",
   "permissionScope": "Permissions",
@@ -20,5 +21,16 @@
   "viewAudit": "View audit records",
   "passwordNotice": "Changing your password signs you out on all devices, including this one.",
   "openInbox": "Open inbox",
-  "activityRange": "Last 30 days · Latest {count} records"
+  "activityRange": "Last 30 days · Latest {count} records",
+  "emailVerified": "Verified",
+  "emailUnbound": "Not linked",
+  "emailBoundAt": "Linked on {time}",
+  "emailBinding": "Email binding",
+  "emailAddress": "Email address",
+  "confirmEmailBinding": "Confirm binding",
+  "incorrectEmailCode": "Incorrect code",
+  "collapse": "Collapse",
+  "bindEmail": "Bind email",
+  "next": "Next",
+  "recoverySaved": "Saved, finish"
 }

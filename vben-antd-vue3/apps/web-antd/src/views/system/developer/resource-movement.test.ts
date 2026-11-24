@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import { resourceChildren } from '../components/resource-order';
 import { fixture } from './__fixtures__/catalog';
 import {
@@ -22,7 +23,7 @@ function catalog() {
     'admin:system:role': { kind: 'resource', parent: 'admin:system', sort: 3 },
     'mini:work': { kind: 'directory', sort: 1 },
   });
-  value.messages['en-US']!.frontend = {
+  required(value.messages['en-US']).frontend = {
     resources: { 'admin:system:user': 'Users' },
     features: { 'admin:system:user:query': 'Query' },
   };
@@ -36,7 +37,7 @@ describe('resource tree movement', () => {
       expect(canMoveResource(value, 'admin:system:user', parent)).toBe(false);
     expect(canMoveResource(value, 'admin:system', 'admin:system')).toBe(false);
     // A directory cannot move beneath a target it already references.
-    value.resource_catalog.resources['admin:audit']!.references = [
+    required(value.resource_catalog.resources['admin:audit']).references = [
       'admin:system',
     ];
     expect(canMoveResource(value, 'admin:audit', 'admin:system')).toBe(false);
@@ -104,10 +105,14 @@ describe('resource tree movement', () => {
     ).toEqual({
       ...before.resource_catalog.resources['admin:audit:user'],
       // Moving a node renumbers owned siblings without replacing their content.
-      sort: 10,
+      sort: 0,
     });
     expect(
-      resourceChildren(result.document.resource_catalog, 'admin:audit', 'admin'),
+      resourceChildren(
+        result.document.resource_catalog,
+        'admin:audit',
+        'admin',
+      ),
     ).toEqual([
       { kind: 'node', key: 'admin:audit:user' },
       { kind: 'node', key: 'admin:audit:user-3' },

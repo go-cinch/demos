@@ -43,12 +43,14 @@
     "@vueuse/core": "catalog:",
     "ant-design-vue": "catalog:",
     "dayjs": "catalog:",
-    "jose": "^6.2.12",
+    "jose": "catalog:",
+    "js-beautify": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
   },
   "devDependencies": {
+    "@types/js-beautify": "catalog:",
     "@vue/test-utils": "catalog:"
   }
 }

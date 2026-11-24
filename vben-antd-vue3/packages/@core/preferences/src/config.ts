@@ -30,7 +30,7 @@ const defaultPreferences: Preferences = {
     loginExpiredMode: 'page',
     name: 'Go Cinch Admin',
     preferencesButtonPosition: 'auto',
-    timezone: 'Asia/Shanghai',
+    timezone: '',
     watermark: false,
     watermarkContent: '',
     zIndex: 200,

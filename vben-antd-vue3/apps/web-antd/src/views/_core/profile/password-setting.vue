@@ -7,8 +7,9 @@ import type { AuthApi } from '#/api';
 import { computed, markRaw, ref } from 'vue';
 
 import { ProfilePasswordSetting, z } from '@vben/common-ui';
+import { $placeholder } from '@vben/locales';
 
-import { message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import {
   changePasswordApi,
@@ -16,8 +17,8 @@ import {
   refreshPasswordChangeCaptchaApi,
   verifyPasswordChangeCaptchaApi,
 } from '#/api';
-import { $t } from '#/locales';
 import { usePermissions } from '#/composables/use-permissions';
+import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import { isValidUserPassword } from '#/user-validation';
 
@@ -29,6 +30,7 @@ interface PasswordSettingExpose {
   };
 }
 
+const emit = defineEmits<{ cancel: []; busy: [value: boolean] }>();
 const authStore = useAuthStore();
 const { hasButton } = usePermissions();
 const passwordSettingRef = ref<PasswordSettingExpose>();
@@ -42,7 +44,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('page.profile.password.oldPassword'),
       component: 'VbenInputPassword',
       componentProps: {
-        placeholder: $t('page.profile.password.oldPasswordPlaceholder'),
+        placeholder: $placeholder(
+          'page.profile.password.oldPasswordPlaceholder',
+        ),
       },
       rules: z.string().refine(isValidUserPassword, {
         message: $t('app.validation.currentPassword'),
@@ -53,8 +57,15 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('page.profile.password.newPassword'),
       component: 'VbenInputPassword',
       componentProps: {
-        passwordStrength: true,
-        placeholder: $t('page.profile.password.newPasswordPlaceholder'),
+        placeholder: $placeholder(
+          'page.profile.password.newPasswordPlaceholder',
+        ),
+      },
+      dependencies: {
+        resolve: ({ values }) => ({
+          componentProps: { passwordStrength: !!values.newPassword },
+        }),
+        triggerFields: ['newPassword'],
       },
       rules: z.string().refine(isValidUserPassword, {
         message: $t('app.validation.password'),
@@ -65,8 +76,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('page.profile.password.confirmPassword'),
       component: 'VbenInputPassword',
       componentProps: {
-        passwordStrength: true,
-        placeholder: $t('page.profile.password.confirmPasswordPlaceholder'),
+        placeholder: $placeholder(
+          'page.profile.password.confirmPasswordPlaceholder',
+        ),
       },
       dependencies: {
         rules(values) {
@@ -133,6 +145,7 @@ async function handleSubmit(values: Recordable<any>) {
   if (submitting.value) return;
   try {
     submitting.value = true;
+    emit('busy', true);
     await changePasswordApi({
       captchaId: passwordCaptcha.value?.captcha_id,
       captchaPoints: Array.isArray(values.captchaPoints)
@@ -155,23 +168,48 @@ async function handleSubmit(values: Recordable<any>) {
     // The request client displays the backend or network error message.
   } finally {
     submitting.value = false;
+    emit('busy', false);
   }
 }
 </script>
 <template>
-  <ProfilePasswordSetting v-if="hasButton('admin:btn:account:profile:change-password')"
+  <ProfilePasswordSetting
+    v-if="hasButton('admin:btn:account:profile:change-password')"
     ref="passwordSettingRef"
-    class="profile-password-form w-full max-w-2xl"
+    class="profile-password-form w-full"
+    vertical
     :form-schema="formSchema"
     :loading="submitting"
     @submit="handleSubmit"
-  />
+  >
+    <template #actions
+      ><Button type="text" :disabled="submitting" @click="emit('cancel')">{{
+        $t('common.cancel')
+      }}</Button></template
+    >
+  </ProfilePasswordSetting>
 </template>
 
 <style scoped>
-/* The shared horizontal form reserves a 130px label column. */
+/* Let validation messages grow with their field, including wrapped translations. */
+.profile-password-form :deep([data-slot='form-item']) {
+  align-items: stretch;
+  padding-bottom: 20px;
+}
+
+.profile-password-form :deep([data-slot='form-label']) {
+  min-height: 0;
+  padding-bottom: 6px;
+}
+
+.profile-password-form :deep([data-slot='form-message']) {
+  position: static;
+  margin-top: 8px;
+  line-height: 20px;
+}
+
 .profile-password-form :deep(> button[type='submit']) {
-  margin-inline-start: 130px;
-  margin-top: 24px;
+  margin-inline: 0 12px;
+  margin-top: 0;
 }
 </style>

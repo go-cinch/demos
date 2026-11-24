@@ -28,6 +28,8 @@ async function generateAccessible(
 
   // 生成路由
   const accessibleRoutes = await generateRoutes(mode, options);
+  if (options.isCurrent?.() === false)
+    throw new Error('Navigation belongs to an expired session');
 
   const root = router.getRoutes().find((item) => item.path === '/');
 

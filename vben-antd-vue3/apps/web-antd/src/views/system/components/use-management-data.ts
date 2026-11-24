@@ -10,6 +10,7 @@ import type {
 } from './management-types';
 
 import type { PageParams } from '#/api';
+import type { LoadFailure } from '#/api/request-error';
 import type { SystemSummary } from '#/api/system/insights';
 
 import {
@@ -23,6 +24,7 @@ import {
 
 import { useTimezoneStore } from '@vben/stores';
 
+import { loadFailure } from '#/api/request-error';
 import { getSystemSummary } from '#/api/system/insights';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
 export function useManagementData(options: {
@@ -39,10 +41,10 @@ export function useManagementData(options: {
   const loading = ref(false);
   const records = ref<SystemRecord[]>([]);
   const selectedRowKeys = ref<number[]>([]);
-  const loadError = ref(false);
+  const loadError = ref<LoadFailure>(false);
   const summary = ref<SystemSummary>();
   const summaryLoading = ref(false);
-  const summaryError = ref(false);
+  const summaryError = ref<LoadFailure>(false);
   const summaryDays = ref(14);
   const timezone = useTimezoneStore();
   const defaultPageSize = useDefaultPageSize();
@@ -76,10 +78,10 @@ export function useManagementData(options: {
         summary.value = result;
         options.onOverview(result);
       }
-    } catch {
+    } catch (requestError) {
       if (request === summaryRequest && active) {
         summary.value = undefined;
-        summaryError.value = true;
+        summaryError.value = loadFailure(requestError);
       }
     } finally {
       if (request === summaryRequest) summaryLoading.value = false;
@@ -94,20 +96,21 @@ export function useManagementData(options: {
       p: pageNumber,
       s: pagination.pageSize,
     };
-    for (const [key, value] of Object.entries(filters).sort(([left], [right]) =>
-      left.localeCompare(right),
+    for (const [key, value] of Object.entries(filters).toSorted(
+      ([left], [right]) => left.localeCompare(right),
     )) {
       if (key === 'groups_exact') {
         if (
           (Array.isArray(filters.groups_exact) ? filters.groups_exact : [])
-            .length
+            .length > 0
         )
           params.groups_exact = JSON.stringify(
             Array.isArray(filters.groups_exact) ? filters.groups_exact : [],
           );
       } else if (key === 'groups_all') {
         if (
-          (Array.isArray(filters.groups_all) ? filters.groups_all : []).length
+          (Array.isArray(filters.groups_all) ? filters.groups_all : []).length >
+          0
         )
           params.groups_all = JSON.stringify(
             Array.isArray(filters.groups_all) ? filters.groups_all : [],
@@ -155,14 +158,14 @@ export function useManagementData(options: {
       );
       pagination.total = result.t;
       selectedRowKeys.value = [];
-    } catch {
+    } catch (requestError) {
       if (request === listRequest && active) {
         lastLoadedQuery = '';
         records.value = [];
         pagination.total = 0;
         selectedRowKeys.value = [];
         options.clearDetails();
-        loadError.value = true;
+        loadError.value = loadFailure(requestError);
       }
     } finally {
       if (request === listRequest) {
@@ -173,8 +176,10 @@ export function useManagementData(options: {
   }
 
   function handleTableChange(value: TablePaginationConfig) {
-    pagination.current = value.current ?? 1;
-    pagination.pageSize = value.pageSize ?? pagination.pageSize;
+    const nextPageSize = value.pageSize ?? pagination.pageSize;
+    pagination.current =
+      nextPageSize === pagination.pageSize ? (value.current ?? 1) : 1;
+    pagination.pageSize = nextPageSize;
     loadData();
   }
 

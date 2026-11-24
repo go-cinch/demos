@@ -3,9 +3,9 @@ import type { VueWrapper } from '@vue/test-utils';
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick } from 'vue';
 
+import { ElInput, ElTreeSelect } from 'element-plus';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { ElInput, ElTreeSelect } from 'element-plus';
 import { COMPONENT_MAP, setupVbenForm } from '../src/config';
 import { useVbenForm } from '../src/use-vben-form';
 

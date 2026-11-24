@@ -17,6 +17,7 @@ import { useResizeObserver } from '@vueuse/core';
 
 import Table from '#/components/skeleton-table.vue';
 import { $t } from '#/locales';
+import { requiredEntry } from '#/utils/required-entry';
 
 import { memberPreview } from './system-record-format';
 import { useManagementFormatting } from './use-management-formatting';
@@ -31,7 +32,8 @@ export function useManagementTable(
   tableContainerRef: Ref<HTMLElement | undefined>,
   managementTableRef: Ref<InstanceType<typeof Table> | undefined>,
 ) {
-  const { canRead, canUpdate, canDelete, canSelectRecord } = permissions;
+  const { canRead, canResetTOTP, canUpdate, canDelete, canSelectRecord } =
+    permissions;
   const { columnValue, formatDate, formatJSON, resourceRules, statusLabel } =
     useManagementFormatting(() => props.resource);
   const tableSize = ref<TableSize>('middle');
@@ -59,7 +61,7 @@ export function useManagementTable(
             ? [
                 {
                   ...column,
-                  title: titles[key] ? $t(titles[key]!) : column.title,
+                  title: titles[key] ? $t(titles[key]) : column.title,
                 },
               ]
             : [];
@@ -76,18 +78,6 @@ export function useManagementTable(
   const showSelectionColumn = computed(() =>
     visibleColumnKeys.value.includes(selectionColumnKey),
   );
-  const allColumnsSelected = computed(() =>
-    columnOptions.value.every((column) =>
-      visibleColumnKeys.value.includes(column.value),
-    ),
-  );
-  const columnsIndeterminate = computed(
-    () =>
-      columnOptions.value.some((column) =>
-        visibleColumnKeys.value.includes(column.value),
-      ) && !allColumnsSelected.value,
-  );
-
   function adaptiveColumnValues(
     column: DisplayColumn,
     record: SystemRecord,
@@ -193,15 +183,20 @@ export function useManagementTable(
       ...(canUpdate.value ? [$t('system.common.edit')] : []),
       ...(canUpdate.value && props.resource === 'user'
         ? [
-            [
-              $t('system.user.approve'),
-              $t('system.user.lock'),
-              $t('system.user.unlock'),
-            ].sort((a, b) => b.length - a.length)[0]!,
+            requiredEntry(
+              [
+                $t('system.user.approve'),
+                $t('system.user.lock'),
+                $t('system.user.unlock'),
+              ].toSorted((a, b) => b.length - a.length)[0],
+              'field value',
+            ),
           ]
         : []),
       ...(canDelete.value ? [$t('system.common.delete')] : []),
-      ...(canRead.value && props.resource === 'user' ? [$t('mfa.reset')] : []),
+      ...(canResetTOTP.value
+        ? [permissions.buttonLabel('reset-totp', 'verification.reset')]
+        : []),
     ];
     const textWidth = labels.reduce(
       (total, label) => total + estimatedTagWidth(label, 1000) - 18 + 16,
@@ -344,24 +339,9 @@ export function useManagementTable(
       : '';
   }
 
-  function toggleAllColumns() {
-    const keys = new Set(visibleColumnKeys.value);
-    const selected = allColumnsSelected.value;
-    for (const option of columnOptions.value) {
-      if (selected) keys.delete(option.value);
-      else keys.add(option.value);
-    }
-    visibleColumnKeys.value = [...keys];
-    if (!showSelectionColumn.value) selectedRowKeys.value = [];
-  }
-
-  function toggleColumn(key: string) {
-    visibleColumnKeys.value = visibleColumnKeys.value.includes(key)
-      ? visibleColumnKeys.value.filter((item) => item !== key)
-      : [...visibleColumnKeys.value, key];
-    if (key === selectionColumnKey && !showSelectionColumn.value) {
-      selectedRowKeys.value = [];
-    }
+  function setVisibleColumns(keys: string[]) {
+    visibleColumnKeys.value = keys;
+    if (!keys.includes(selectionColumnKey)) selectedRowKeys.value = [];
   }
 
   return {
@@ -373,10 +353,7 @@ export function useManagementTable(
     rowSelection,
     tableRowClassName,
     columnOptions,
-    allColumnsSelected,
-    columnsIndeterminate,
     showSelectionColumn,
-    toggleAllColumns,
-    toggleColumn,
+    setVisibleColumns,
   };
 }

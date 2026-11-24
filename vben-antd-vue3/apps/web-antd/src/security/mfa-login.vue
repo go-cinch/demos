@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { AuthApi } from '#/api/core/auth';
+
 import {
   computed,
-  nextTick,
   onBeforeUnmount,
   onDeactivated,
   ref,
@@ -9,32 +10,44 @@ import {
   watch,
 } from 'vue';
 
-import { ArrowLeft, Check } from '@vben/icons';
+import { Button, Form } from 'ant-design-vue';
 
-import { Button, Form, Input } from 'ant-design-vue';
-
-import { completeMFALoginApi, recoverMFALoginApi } from '#/api/core/auth';
+import { completeTOTPLoginApi } from '#/api/core/auth';
 import { $t } from '#/locales';
 
-import MFACodeInput from './mfa-code-input.vue';
-import { useMFAError } from './mfa-error';
-import { cancelMFA, completeMFA, mfaPrompt } from './mfa-prompt';
+import AccountRecovery from './totp-account-recovery.vue';
+import VerificationCodeInput from './verification-code-input.vue';
+import { useVerificationError } from './verification-error';
+import {
+  cancelVerification,
+  completeVerification,
+  verificationPrompt,
+} from './verification-prompt';
 
-const props = defineProps<{ completing?: boolean }>();
-const emit = defineEmits<{ verified: [] }>();
+const props = defineProps<{
+  completing?: boolean;
+  identifier?: string;
+  loginPassword?: string;
+  emailLogin?: boolean;
+  emailEnabled?: boolean;
+}>();
+const emit = defineEmits<{ verified: []; expired: [] }>();
 const titleId = useId();
 const codeId = useId();
 const prompt = computed(() =>
-  mfaPrompt.value?.mode === 'login' ? mfaPrompt.value : undefined,
+  verificationPrompt.value?.mode === 'login'
+    ? verificationPrompt.value
+    : undefined,
 );
 const code = ref('');
-const failure = useMFAError();
+const failure = useVerificationError();
 const error = failure.message;
+const codeFailures = ref(0);
 const busy = ref(false);
 const verified = ref(false);
 const expired = ref(false);
-const useRecovery = ref(false);
-const input = ref<{ focus: () => void }>();
+const recoveryOpen = ref(false);
+let submitTimer: ReturnType<typeof setTimeout> | undefined;
 let ownedPromptId: number | undefined;
 let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -48,13 +61,17 @@ watch(
     busy.value = false;
     verified.value = false;
     expired.value = false;
-    useRecovery.value = false;
+    recoveryOpen.value = false;
+    clearTimeout(submitTimer);
     clearTimeout(expiryTimer);
     const deadline = prompt.value?.expiresAt;
     if (deadline !== undefined && Number.isFinite(deadline)) {
       expiryTimer = setTimeout(
         () => {
-          if (prompt.value?.id === id) expired.value = true;
+          if (prompt.value?.id === id) {
+            expired.value = true;
+            emit('expired');
+          }
         },
         Math.max(0, deadline - Date.now()),
       );
@@ -64,51 +81,68 @@ watch(
 );
 
 function cancel() {
+  clearTimeout(submitTimer);
   clearTimeout(expiryTimer);
-  if (prompt.value?.id === ownedPromptId) cancelMFA();
+  if (prompt.value?.id === ownedPromptId) cancelVerification();
 }
 onBeforeUnmount(cancel);
 onDeactivated(cancel);
 
-async function switchMethod() {
-  useRecovery.value = !useRecovery.value;
+function openRecovery() {
+  clearTimeout(submitTimer);
   code.value = '';
   failure.clear();
-  verified.value = false;
-  await nextTick();
-  input.value?.focus();
+  recoveryOpen.value = true;
+}
+
+function finishRecovery(id: number, session: AuthApi.LoginResult) {
+  if (prompt.value?.id !== id) return;
+  clearTimeout(expiryTimer);
+  recoveryOpen.value = false;
+  emit('verified');
+  completeVerification(id, session);
 }
 
 function updateCode(value: string) {
   if (value !== code.value) failure.clear();
   code.value = value;
+  clearTimeout(submitTimer);
+  if (value.length === 6) submitTimer = setTimeout(() => void submit(), 100);
 }
 
 async function submit() {
+  clearTimeout(submitTimer);
   const current = prompt.value;
-  if (!current?.ticket || busy.value || props.completing || expired.value)
+  if (
+    !current?.ticket ||
+    recoveryOpen.value ||
+    busy.value ||
+    props.completing ||
+    expired.value
+  )
     return;
   const value = code.value.trim();
-  if (!value || (!useRecovery.value && !/^\d{6}$/.test(value))) {
-    failure.setKey(useRecovery.value ? 'mfa.required' : 'mfa.codeRequired');
+  if (!/^\d{6}$/.test(value)) {
+    failure.setKey('verification.codeRequired');
+    codeFailures.value++;
     return;
   }
   busy.value = true;
   failure.clear();
   try {
-    const result = await (
-      useRecovery.value ? recoverMFALoginApi : completeMFALoginApi
-    )(current.ticket, value);
+    const result = await completeTOTPLoginApi(current.ticket, value);
     if (prompt.value?.id !== current.id) return;
     clearTimeout(expiryTimer);
     verified.value = true;
-    code.value = '';
     // Keep this inline step visible while the login store loads permissions
     // and plays the arrival animation; do not flash the password form again.
     emit('verified');
-    completeMFA(current.id, result);
-  } catch (cause: unknown) {
-    if (prompt.value?.id === current.id) failure.setCause(cause);
+    completeVerification(current.id, result);
+  } catch (error: unknown) {
+    if (prompt.value?.id === current.id) {
+      failure.setCause(error);
+      codeFailures.value++;
+    }
   } finally {
     if (prompt.value?.id === current.id) busy.value = false;
   }
@@ -119,52 +153,37 @@ async function submit() {
   <section
     class="mfa-login-page"
     data-testid="mfa-login-step"
-    :data-mode="useRecovery ? 'recovery' : 'totp'"
+    data-mode="totp"
     :aria-labelledby="titleId"
   >
-    <ol class="mfa-login-steps" :aria-label="$t('mfa.loginTitle')">
-      <li class="is-complete">
-        <span class="mfa-login-step-icon"><Check aria-hidden="true" /></span><span>{{ $t('mfa.loginPasswordStep') }}</span>
-      </li>
-      <li class="is-current" aria-current="step">
-        <span class="mfa-login-step-icon">2</span><span>{{ $t('mfa.loginVerificationStep') }}</span>
-      </li>
-    </ol>
-    <h1 :id="titleId">
-      {{ $t(useRecovery ? 'mfa.recoverAuthenticator' : 'mfa.loginTitle') }}
-    </h1>
-    <p v-if="useRecovery" class="mfa-login-help">
-      {{ $t('mfa.recoveryResetHelp') }}
-    </p>
+    <Button
+      type="text"
+      class="mfa-top-back"
+      :disabled="busy || completing"
+      @click="cancel"
+      >‹ {{ $t('verification.backToLogin') }}</Button
+    >
+    <h1 :id="titleId">{{ $t('verification.loginTitle') }}</h1>
     <Form layout="vertical" @submit.prevent="submit">
       <Form.Item
         :html-for="codeId"
-        :label="$t(useRecovery ? 'mfa.recoveryCode' : 'mfa.code')"
-        :help="expired ? $t('mfa.loginExpired') : error || undefined"
         :validate-status="expired || error ? 'error' : undefined"
       >
-        <Input
-          v-if="useRecovery"
+        <template #label
+          ><span class="mfa-account-label"
+            ><span>{{ $t('verification.code') }}</span
+            ><span v-if="identifier" class="mfa-account-identity"
+              >{{ $t('email-auth.account') }} <b>{{ identifier }}</b></span
+            ></span
+          ></template
+        >
+        <VerificationCodeInput
           :id="codeId"
-          ref="input"
-          :value="code"
-          @update:value="updateCode"
-          name="mfa_verification_code"
-          class="mfa-login-input"
-          :aria-label="$t('mfa.recoveryCode')"
-          :aria-invalid="expired || !!error"
-          autocomplete="off"
-          inputmode="text"
-          :maxlength="64"
-          :disabled="busy || completing || expired || !prompt"
-          autofocus
-        />
-        <MFACodeInput
-          v-else
-          :id="codeId"
-          ref="input"
           :model-value="code"
-          :label="$t('mfa.code')"
+          :label="$t('verification.code')"
+          :described-by="expired || error ? `${codeId}-error` : undefined"
+          :animation="error ? 'failure' : 'idle'"
+          :animation-attempt="codeFailures"
           :feedback="
             expired || error ? 'failure' : verified ? 'success' : 'idle'
           "
@@ -172,6 +191,13 @@ async function submit() {
           autofocus
           @update:model-value="updateCode"
         />
+        <span
+          v-if="expired || error"
+          :id="`${codeId}-error`"
+          class="sr-only"
+          role="alert"
+          >{{ expired ? $t('verification.loginExpired') : error }}</span
+        >
       </Form.Item>
       <Button
         type="primary"
@@ -180,88 +206,76 @@ async function submit() {
         class="mfa-login-submit"
         :loading="busy || completing"
         :disabled="expired || !prompt"
-        >
-{{
-          $t(useRecovery ? 'mfa.recoverAuthenticator' : 'mfa.verify')
-        }}
-</Button>
+      >
+        {{ $t('verification.verify') }}
+      </Button>
     </Form>
     <div class="mfa-login-actions">
-      <Button type="text" :disabled="busy || completing" @click="cancel">
-<span class="mfa-login-back"><ArrowLeft aria-hidden="true" />{{ $t('mfa.backToLogin') }}</span>
-</Button>
       <Button
-        type="link"
-        :disabled="busy || completing || expired"
-        @click="switchMethod"
-        >
-{{
-          $t(useRecovery ? 'mfa.useAuthenticator' : 'mfa.useRecovery')
-        }}
-</Button>
+        type="text"
+        aria-haspopup="dialog"
+        :disabled="busy || completing || expired || !prompt"
+        @click="openRecovery"
+      >
+        {{ $t('verification.authenticatorUnavailable') }}
+      </Button>
     </div>
+    <AccountRecovery
+      v-if="recoveryOpen && prompt?.ticket"
+      :key="prompt.id"
+      :expired="expired"
+      :login="{
+        id: prompt.id,
+        ticket: prompt.ticket,
+        identifier: identifier || '',
+        emailLogin: !!emailLogin,
+        password: loginPassword,
+      }"
+      @close="recoveryOpen = false"
+      @restart-login="cancel"
+      @verified="finishRecovery"
+    />
   </section>
 </template>
 
 <style scoped>
+.mfa-top-back {
+  padding: 0;
+  margin-bottom: 22px;
+  color: hsl(var(--muted-foreground));
+}
+
+.mfa-account-label {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.mfa-account-identity {
+  margin-left: auto;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  overflow-wrap: anywhere;
+}
+
+.mfa-account-identity b {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.mfa-login-page :deep(.ant-form-item-label > label) {
+  width: 100%;
+}
+
 .mfa-login-page {
   width: 100%;
   max-width: 384px;
   margin: 0 auto;
   color: hsl(var(--foreground));
 }
-.mfa-login-steps {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0;
-  margin: 0 0 30px;
-  list-style: none;
-  font-size: 12px;
-}
-.mfa-login-steps li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mfa-login-steps li:first-child {
-  flex: 1;
-}
-.mfa-login-steps li:first-child::after {
-  height: 1px;
-  flex: 1;
-  margin-left: 8px;
-  background: hsl(var(--border));
-  content: '';
-}
-.mfa-login-step-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  font-size: 12px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.is-complete .mfa-login-step-icon {
-  color: hsl(var(--success));
-  background: hsl(var(--success) / 15%);
-}
-.is-current {
-  color: hsl(var(--primary));
-}
-.is-current .mfa-login-step-icon {
-  color: hsl(var(--primary-foreground));
-  background: hsl(var(--primary));
-}
-.mfa-login-step-icon :deep(svg) {
-  display: block;
-  width: 13px;
-  height: 13px;
-}
+
 .mfa-login-page h1 {
   margin: 0 0 30px;
   font-size: 26px;
@@ -269,43 +283,26 @@ async function submit() {
   line-height: 1.4;
   letter-spacing: -0.4px;
 }
-.mfa-login-help {
-  margin: -16px 0 24px;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  line-height: 1.6;
+
+.mfa-login-page :deep(.ant-form-item) {
+  margin-bottom: 24px;
 }
-.mfa-login-input {
-  height: 49px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 14px;
+
+.mfa-login-page :deep(.ant-form-item-explain-connected + div),
+.mfa-login-page :deep(.ant-form-margin-offset) {
+  display: none;
 }
+
 .mfa-login-submit {
   height: 44px;
 }
+
 .mfa-login-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 18px;
+  margin-top: 12px;
+  text-align: center;
 }
-.mfa-login-actions :deep(.ant-btn) {
-  padding-inline: 0;
-  font-size: 12px;
-}
-.mfa-login-actions :deep(.ant-btn-text) {
+
+.mfa-login-actions button {
   color: hsl(var(--muted-foreground));
-}
-.mfa-login-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.mfa-login-back :deep(svg) {
-  display: block;
-  width: 14px;
-  height: 14px;
 }
 </style>

@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import type { CatalogNavigate, ResourceDetailTab } from './catalog-model';
+import type {
+  ResourceDestination,
+  ResourceKeyChange,
+} from './resource-movement';
+
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+
 import { IconifyIcon } from '@vben/icons';
+import { normalizePlaceholder } from '@vben/locales';
 import { preferences } from '@vben/preferences';
+
 import {
   Button,
   Collapse,
@@ -10,58 +19,51 @@ import {
   Form,
   FormItem,
   Input,
+  message,
   Modal,
   Segmented,
   Select,
-  Tag,
-  Tabs,
   TabPane,
+  Tabs,
+  Tag,
   Tree,
-  message,
 } from 'ant-design-vue';
+
 import { $t } from '#/locales';
-import type {
-  Catalog,
-  CatalogNavigate,
-  EditorUI,
-  ResourceDetailTab,
-} from './catalog-model';
-import { text } from './catalog-model';
-import groupPreview from './data/permission-groups.json';
+import { requiredEntry } from '#/utils/required-entry';
+
 import { resourceBreadcrumb } from '../components/resource-catalog';
+import { childOrderKey, resourceChildren } from '../components/resource-order';
 import {
-  supportsResourceReferences,
+  referencedOperations,
   referenceTreeKey,
   resourceReferenceTree,
-  referencedOperations,
+  supportsResourceReferences,
 } from '../components/resource-references';
+import { useCatalogEditor } from './catalog-editor-context';
+import { text } from './catalog-model';
+import groupPreview from './data/permission-groups.json';
 import {
   applyResourceEditor,
   createResourceEditor,
   ResourceEditorError,
   restoreResourceBuffer,
 } from './resource-editor-model';
-import ResourceNodeEditor from './resource-node-editor.vue';
 import ResourceFeatureMappings from './resource-feature-mappings.vue';
 import {
   canMoveResource,
-  moveResource,
   moveReference,
+  moveResource,
   resourceStep,
 } from './resource-movement';
-import type {
-  ResourceDestination,
-  ResourceKeyChange,
-} from './resource-movement';
-import { childOrderKey, resourceChildren } from '../components/resource-order';
+import ResourceNodeEditor from './resource-node-editor.vue';
 import { mergeKeyRenames } from './resource-renames';
 
 const props = defineProps<{
-  catalog: Catalog;
-  ui: EditorUI;
   disabled: boolean;
   navigate: CatalogNavigate;
 }>();
+const { ui, catalog } = useCatalogEditor();
 const t = (key: string) => $t(`developer.${key}`);
 const keyChanges = ref<ResourceKeyChange[]>([]);
 const movementVersion = ref(0);
@@ -69,15 +71,15 @@ const moveDialogOpen = ref(false);
 const moveParent = ref<string>();
 const movePending = ref(false);
 const dragKey = ref('');
-const dropPreview = ref<{
+const dropPreview = ref<null | {
   key: string;
-  mode: 'before' | 'after' | 'inside';
+  mode: 'after' | 'before' | 'inside';
   destination: ResourceDestination;
-} | null>(null);
+}>(null);
 let expandTimer: ReturnType<typeof setTimeout> | undefined;
 let expandCandidate = '';
 
-const error = ref('');
+const formError = ref('');
 const errorPath = ref('');
 const treeContainer = ref<HTMLElement>();
 const jumpTarget = ref('');
@@ -86,54 +88,64 @@ onBeforeUnmount(() => {
   clearTimeout(jumpTimeout);
   clearTimeout(expandTimer);
 });
-const resources = computed(() => props.catalog.resource_catalog.resources);
+const resources = computed(() => catalog.value.resource_catalog.resources);
 const selected = computed(() =>
-  props.ui.resource.startsWith(`${props.ui.scope}:`)
-    ? resources.value[props.ui.resource]
+  ui.value.resource.startsWith(`${ui.value.scope}:`)
+    ? resources.value[ui.value.resource]
     : undefined,
 );
 const selectedSiblings = computed(() =>
   resourceChildren(
-    props.catalog.resource_catalog,
+    catalog.value.resource_catalog,
     selected.value?.parent ?? '',
-    props.ui.scope,
+    ui.value.scope,
   ),
 );
 const selectedPosition = computed(
   () =>
     selectedSiblings.value.findIndex(
-      (item) => item.kind === 'node' && item.key === props.ui.resource,
+      (item) => item.kind === 'node' && item.key === ui.value.resource,
     ) + 1,
 );
 const label = (key: string) =>
-  text(props.catalog, preferences.app.locale, 'resources', key) ||
-  text(props.catalog, 'en-US', 'resources', key) ||
+  text(catalog.value, preferences.app.locale, 'resources', key) ||
+  text(catalog.value, 'en-US', 'resources', key) ||
   key;
-const nodeType = (key: string) =>
-  resources.value[key]?.kind === 'resource'
-    ? 'resource'
-    : resources.value[key]?.parent
-      ? 'subdirectory'
-      : 'directory';
+const nodeType = (key: string) => {
+  if (resources.value[key]?.kind === 'resource') {
+    return 'resource';
+  }
+  if (resources.value[key]?.parent) {
+    return 'subdirectory';
+  }
+  return 'directory';
+};
 const breadcrumb = (key: string) =>
-  resourceBreadcrumb(props.catalog.resource_catalog, key, label);
+  resourceBreadcrumb(catalog.value.resource_catalog, key, label);
 const moveOptions = computed(() => {
-  const key = props.ui.resource;
+  const key = ui.value.resource;
   const parent = selected.value?.parent ?? '';
   const options = Object.keys(resources.value)
-    .filter((target) => target !== parent && canMoveResource(props.catalog, key, target))
+    .filter(
+      (target) =>
+        target !== parent && canMoveResource(catalog.value, key, target),
+    )
     .map((value) => ({ value, label: breadcrumb(value) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-  if (parent && canMoveResource(props.catalog, key, ''))
+    .toSorted((a, b) => a.label.localeCompare(b.label));
+  if (parent && canMoveResource(catalog.value, key, ''))
     options.unshift({ value: '', label: t('rootDirectory') });
   return options;
 });
 const tree = computed(() =>
   resourceReferenceTree(
-    props.catalog.resource_catalog,
-    props.ui.scope,
-    props.ui.query,
+    catalog.value.resource_catalog,
+    ui.value.scope,
+    ui.value.query,
     label,
+    (key) =>
+      catalog.value.locales
+        .map(({ tag }) => text(catalog.value, tag, 'resources', key))
+        .join(' '),
   ),
 );
 const references = computed(
@@ -146,12 +158,12 @@ const references = computed(
       ),
     ),
 );
-const referenceCollection = computed(
-  () => supportsResourceReferences(selected.value),
+const referenceCollection = computed(() =>
+  supportsResourceReferences(selected.value),
 );
 const detailTab = computed<ResourceDetailTab>({
   get() {
-    const tab = props.ui.resourceTab;
+    const tab = ui.value.resourceTab;
     if (tab === 'references' && referenceCollection.value) return tab;
     if (
       (tab === 'entries' || tab === 'operations') &&
@@ -161,14 +173,14 @@ const detailTab = computed<ResourceDetailTab>({
     return 'basic';
   },
   set(value) {
-    props.ui.resourceTab = value;
+    ui.value.resourceTab = value;
   },
 });
 const upDestination = computed(() =>
-  resourceStep(props.catalog, props.ui.resource, -1),
+  resourceStep(catalog.value, ui.value.resource, -1),
 );
 const downDestination = computed(() =>
-  resourceStep(props.catalog, props.ui.resource, 1),
+  resourceStep(catalog.value, ui.value.resource, 1),
 );
 const stepHint = (direction: -1 | 1) => {
   const destination =
@@ -189,16 +201,19 @@ const referenceOwners = computed(
     ),
 );
 const dragEnabled = computed(
-  () => !props.disabled && !props.ui.resourceEditor && !props.ui.query.trim(),
+  () => !props.disabled && !ui.value.resourceEditor && !ui.value.query.trim(),
 );
 function dropDestination(
   target: string,
   position: number,
-): ResourceDestination | null {
+): null | ResourceDestination {
   const reference = references.value.get(target);
   if (reference) {
     if (position === 0) return null;
-    const parent = referenceOwners.value.get(target)!;
+    const parent = requiredEntry(
+      referenceOwners.value.get(target),
+      'resource catalog entry',
+    );
     const anchor = { kind: 'reference', key: reference } as const;
     return {
       parent,
@@ -209,13 +224,15 @@ function dropDestination(
   const parent =
     position === 0 ? target : (resources.value[target]?.parent ?? '');
   const anchor = { kind: 'node', key: target } as const;
+  let placement = {};
+  if (position < 0) {
+    placement = { before: anchor };
+  } else if (position > 0) {
+    placement = { after: anchor };
+  }
   return {
     parent,
-    ...(position < 0
-      ? { before: anchor }
-      : position > 0
-        ? { after: anchor }
-        : {}),
+    ...placement,
   };
 }
 function beginDrag(event: DragEvent, key: string) {
@@ -253,12 +270,17 @@ function pointerDestination(event: DragEvent, target: string) {
     (!owner || target === owner) &&
     resources.value[target]?.kind === 'directory' &&
     middle;
-  let position = enterDirectory ? 0 : ratio < 0.5 ? -1 : 1;
+  let position = 1;
+  if (enterDirectory) {
+    position = 0;
+  } else if (ratio < 0.5) {
+    position = -1;
+  }
   if (!enterDirectory && sameParent) {
     const order = resourceChildren(
-      props.catalog.resource_catalog,
+      catalog.value.resource_catalog,
       sourceParent,
-      props.ui.scope,
+      ui.value.scope,
     );
     const from = order.findIndex(
       (item) =>
@@ -270,7 +292,7 @@ function pointerDestination(event: DragEvent, target: string) {
         item.kind === (targetReference ? 'reference' : 'node') &&
         item.key === (targetReference ?? target),
     );
-    if (from < 0 || to < 0) return null;
+    if (from === -1 || to === -1) return null;
     // A drop onto an adjacent sibling must exchange their order, including
     // the row edge that Ant's resolver previously treated as the old gap.
     if (
@@ -285,17 +307,15 @@ function pointerDestination(event: DragEvent, target: string) {
     !destination ||
     (owner
       ? destination.parent !== owner
-      : !canMoveResource(props.catalog, source, destination.parent))
+      : !canMoveResource(catalog.value, source, destination.parent))
   )
     return null;
+  let mode: 'after' | 'before' | 'inside' = 'inside';
+  if (position < 0) mode = 'before';
+  else if (position > 0) mode = 'after';
   return {
     key: target,
-    mode:
-      position === 0
-        ? ('inside' as const)
-        : position < 0
-          ? ('before' as const)
-          : ('after' as const),
+    mode,
     destination,
   };
 }
@@ -309,10 +329,10 @@ function previewDrop(event: DragEvent, target: string) {
   if (candidate !== expandCandidate) {
     clearTimeout(expandTimer);
     expandCandidate = candidate;
-    if (candidate && !props.ui.expanded.includes(candidate))
+    if (candidate && !ui.value.expanded.includes(candidate))
       expandTimer = setTimeout(() => {
         if (expandCandidate === candidate)
-          props.ui.expanded = [...new Set([...props.ui.expanded, candidate])];
+          ui.value.expanded = [...new Set([...ui.value.expanded, candidate])];
       }, 550);
   }
 }
@@ -323,7 +343,11 @@ function commitDrop(event: DragEvent, target: string) {
   if (!preview || !dragEnabled.value) return;
   const owner = referenceOwners.value.get(key);
   if (owner)
-    reorderReference(owner, references.value.get(key)!, preview.destination);
+    reorderReference(
+      owner,
+      requiredEntry(references.value.get(key), 'resource catalog entry'),
+      preview.destination,
+    );
   else void relocate(key, preview.destination);
 }
 function reorderReference(
@@ -333,21 +357,21 @@ function reorderReference(
 ) {
   try {
     const before = resourceChildren(
-      props.catalog.resource_catalog,
+      catalog.value.resource_catalog,
       owner,
-      props.ui.scope,
+      ui.value.scope,
     )
-      .map(childOrderKey)
+      .map((item) => childOrderKey(item))
       .join('|');
-    const next = moveReference(props.catalog, owner, key, destination);
-    const after = resourceChildren(next.resource_catalog, owner, props.ui.scope)
-      .map(childOrderKey)
+    const next = moveReference(catalog.value, owner, key, destination);
+    const after = resourceChildren(next.resource_catalog, owner, ui.value.scope)
+      .map((item) => childOrderKey(item))
       .join('|');
     if (before === after) {
       message.info(t('positionUnchanged'));
       return;
     }
-    Object.assign(props.catalog, next);
+    Object.assign(catalog.value, next);
     message.success(t('referenceOrderSaved'));
   } catch {
     message.error(t('invalidMove'));
@@ -355,9 +379,9 @@ function reorderReference(
 }
 function referenceStep(owner: string, key: string, direction: -1 | 1) {
   const order = resourceChildren(
-    props.catalog.resource_catalog,
+    catalog.value.resource_catalog,
     owner,
-    props.ui.scope,
+    ui.value.scope,
   );
   const index = order.findIndex(
     (item) => item.kind === 'reference' && item.key === key,
@@ -365,8 +389,14 @@ function referenceStep(owner: string, key: string, direction: -1 | 1) {
   return order[index + direction];
 }
 function stepReference(treeKey: string, direction: -1 | 1) {
-  const owner = referenceOwners.value.get(treeKey)!;
-  const key = references.value.get(treeKey)!;
+  const owner = requiredEntry(
+    referenceOwners.value.get(treeKey),
+    'resource catalog entry',
+  );
+  const key = requiredEntry(
+    references.value.get(treeKey),
+    'resource catalog entry',
+  );
   const anchor = referenceStep(owner, key, direction);
   if (!anchor || props.disabled) return;
   reorderReference(owner, key, {
@@ -379,30 +409,41 @@ async function relocate(key: string, destination: ResourceDestination) {
   let target = '';
   await props.navigate(() => {
     try {
-      const result = moveResource(props.catalog, key, destination, props.ui.resourceRenames);
+      const result = moveResource(
+        catalog.value,
+        key,
+        destination,
+        ui.value.resourceRenames,
+      );
       if (!result.moved) {
         message.info(t('positionUnchanged'));
         return;
       }
-      props.ui.resourceRenames = mergeKeyRenames(props.ui.resourceRenames, result.resourceKeys);
-      props.ui.featureRenames = mergeKeyRenames(props.ui.featureRenames, result.featureKeys);
-      Object.assign(props.catalog, result.document);
-      props.ui.resource = result.key;
-      props.ui.expanded = [
+      ui.value.resourceRenames = mergeKeyRenames(
+        ui.value.resourceRenames,
+        result.resourceKeys,
+      );
+      ui.value.featureRenames = mergeKeyRenames(
+        ui.value.featureRenames,
+        result.featureKeys,
+      );
+      Object.assign(catalog.value, result.document);
+      ui.value.resource = result.key;
+      ui.value.expanded = [
         ...new Set(
-          props.ui.expanded.map((id) => result.resourceKeys[id] ?? id),
+          ui.value.expanded.map((id) => result.resourceKeys[id] ?? id),
         ),
       ];
       keyChanges.value = result.changes;
       movementVersion.value++;
       target = result.key;
       message.success(
-        t(result.changes.length ? 'movedWithWords' : 'orderSaved'),
+        t(result.changes.length > 0 ? 'movedWithWords' : 'orderSaved'),
       );
-    } catch (issue) {
+    } catch (error) {
       message.error(
         t(
-          issue instanceof Error && issue.message === 'identifierTooLong'
+          error instanceof Error && error.message === 'identifierTooLong'
             ? 'identifierTooLong'
             : 'invalidMove',
         ),
@@ -426,7 +467,7 @@ async function confirmMove() {
     return;
   movePending.value = true;
   try {
-    if (await relocate(props.ui.resource, { parent: moveParent.value }))
+    if (await relocate(ui.value.resource, { parent: moveParent.value }))
       moveDialogOpen.value = false;
   } finally {
     movePending.value = false;
@@ -435,40 +476,40 @@ async function confirmMove() {
 function moveStep(direction: -1 | 1) {
   const destination =
     direction < 0 ? upDestination.value : downDestination.value;
-  if (destination) void relocate(props.ui.resource, destination);
+  if (destination) void relocate(ui.value.resource, destination);
 }
 const entries = computed(() => Object.entries(selected.value?.entries ?? {}));
 watch(
-  () => props.ui.buffer,
+  () => ui.value.buffer,
   (buffer) => {
-    if (!buffer || buffer.kind === 'message' || props.ui.resourceEditor) return;
-    props.ui.resourceEditor = restoreResourceBuffer(
-      props.catalog,
-      props.ui.scope,
-      props.ui.resource,
+    if (!buffer || buffer.kind === 'message' || ui.value.resourceEditor) return;
+    ui.value.resourceEditor = restoreResourceBuffer(
+      catalog.value,
+      ui.value.scope,
+      ui.value.resource,
       buffer,
     );
-    props.ui.buffer = null;
+    ui.value.buffer = null;
   },
   { immediate: true },
 );
 watch(
   () =>
-    JSON.stringify(props.ui.resourceEditor, (key, value) =>
+    JSON.stringify(ui.value.resourceEditor, (key, value) =>
       key === 'editorTab' || key === 'editorOperation' ? undefined : value,
     ),
   () => {
-    error.value = '';
+    formError.value = '';
     errorPath.value = '';
   },
 );
 function create() {
   void props.navigate(() => {
     const parent =
-      selected.value?.kind === 'directory' ? props.ui.resource : '';
-    props.ui.resourceEditor = createResourceEditor(
-      props.catalog,
-      props.ui.scope,
+      selected.value?.kind === 'directory' ? ui.value.resource : '';
+    ui.value.resourceEditor = createResourceEditor(
+      catalog.value,
+      ui.value.scope,
       '',
       parent,
     );
@@ -480,13 +521,13 @@ function edit(
 ) {
   if (!selected.value) return;
   void props.navigate(() => {
-    props.ui.resourceEditor = createResourceEditor(
-      props.catalog,
-      props.ui.scope,
-      props.ui.resource,
+    ui.value.resourceEditor = createResourceEditor(
+      catalog.value,
+      ui.value.scope,
+      ui.value.resource,
     );
-    props.ui.resourceEditor.editorTab = section;
-    props.ui.resourceEditor.editorOperation = operation;
+    ui.value.resourceEditor.editorTab = section;
+    ui.value.resourceEditor.editorOperation = operation;
   });
 }
 function selectResource(key: string) {
@@ -495,21 +536,21 @@ function selectResource(key: string) {
     void jumpToResource(target);
     return;
   }
-  if (key === props.ui.resource && !props.ui.resourceEditor) return;
+  if (key === ui.value.resource && !ui.value.resourceEditor) return;
   void props.navigate(() => {
-    props.ui.resource = key;
+    ui.value.resource = key;
   });
 }
 async function jumpToResource(key: string) {
-  if (!resources.value[key] || !key.startsWith(`${props.ui.scope}:`)) {
+  if (!resources.value[key] || !key.startsWith(`${ui.value.scope}:`)) {
     message.error(t('invalidReference'));
     return;
   }
   if (
     !(await props.navigate(() => {
-      props.ui.resource = key;
-      props.ui.query = '';
-      const expanded = new Set(props.ui.expanded);
+      ui.value.resource = key;
+      ui.value.query = '';
+      const expanded = new Set(ui.value.expanded);
       const ancestors = new Set<string>();
       for (
         let parent = resources.value[key]?.parent;
@@ -519,7 +560,7 @@ async function jumpToResource(key: string) {
         ancestors.add(parent);
         expanded.add(parent);
       }
-      props.ui.expanded = [...expanded];
+      ui.value.expanded = [...expanded];
     }))
   )
     return;
@@ -544,45 +585,59 @@ async function jumpToResource(key: string) {
     jumpTarget.value = '';
   }, 1800);
 }
+const scopeViews = new Map<string, { query: string; resource: string }>();
 function selectScope(value: unknown) {
   const scope = String(value);
-  if (scope === props.ui.scope) return;
+  if (scope === ui.value.scope) return;
   void props.navigate(() => {
-    props.ui.scope = scope;
-    props.ui.resource = '';
+    scopeViews.set(ui.value.scope, {
+      query: ui.value.query,
+      resource: ui.value.resource,
+    });
+    const view = scopeViews.get(scope);
+    ui.value.scope = scope;
+    ui.value.resource =
+      view && resources.value[view.resource] ? view.resource : '';
+    ui.value.query = view?.query ?? '';
   });
 }
 function save() {
-  const editor = props.ui.resourceEditor;
+  const editor = ui.value.resourceEditor;
   if (!editor || props.disabled) return;
-  error.value = '';
+  formError.value = '';
   errorPath.value = '';
   try {
-    const next = applyResourceEditor(props.catalog, props.ui.scope, editor, props.ui.resourceRenames);
-    Object.assign(props.catalog, next);
-    props.ui.resource = editor.key;
-    props.ui.query = '';
-    const expanded = new Set(props.ui.expanded);
+    const next = applyResourceEditor(
+      catalog.value,
+      ui.value.scope,
+      editor,
+      ui.value.resourceRenames,
+    );
+    Object.assign(catalog.value, next);
+    ui.value.resource = editor.key;
+    ui.value.query = '';
+    const expanded = new Set(ui.value.expanded);
     for (
       let parent = editor.parent;
       parent;
       parent = resources.value[parent]?.parent ?? ''
     )
       expanded.add(parent);
-    props.ui.expanded = [...expanded];
-    props.ui.resourceTab = editor.editorTab || 'basic';
-    props.ui.resourceEditor = null;
+    ui.value.expanded = [...expanded];
+    ui.value.resourceTab = editor.editorTab || 'basic';
+    ui.value.resourceEditor = null;
     message.success(t('savedToDraft'));
-  } catch (issue) {
-    error.value = issue instanceof ResourceEditorError ? issue.code : 'invalid';
-    errorPath.value = issue instanceof ResourceEditorError ? issue.path : '';
+  } catch (error) {
+    formError.value =
+      error instanceof ResourceEditorError ? error.code : 'invalid';
+    errorPath.value = error instanceof ResourceEditorError ? error.path : '';
   }
 }
 function cancel() {
   void props.navigate(() => {});
 }
 function remove() {
-  const key = props.ui.resource;
+  const key = ui.value.resource;
   if (
     Object.values(resources.value).some((node) =>
       node.references?.includes(key),
@@ -605,14 +660,17 @@ function remove() {
       const node = resources.value[key];
       for (const binding of Object.values(node?.operations ?? {}))
         for (const feature of binding.button_keys)
-          delete props.catalog.resource_catalog.buttons[feature];
-      delete resources.value[key];
+          Reflect.deleteProperty(
+            catalog.value.resource_catalog.buttons,
+            feature,
+          );
+      Reflect.deleteProperty(resources.value, key);
       for (const node of Object.values(resources.value))
         if (node.child_order)
           node.child_order = node.child_order.filter(
             (item) => item.key !== key,
           );
-      props.ui.resource = '';
+      ui.value.resource = '';
     },
   });
 }
@@ -639,7 +697,7 @@ function remove() {
           v-model:value="moveParent"
           :options="moveOptions"
           :disabled="disabled || movePending"
-          :placeholder="t('selectMoveDirectory')"
+          :placeholder="normalizePlaceholder(t('selectMoveDirectory'))"
           :aria-label="t('parent')"
           option-filter-prop="label"
           show-search
@@ -661,7 +719,7 @@ function remove() {
   <div class="catalog-workspace">
     <aside ref="treeContainer" class="catalog-tree">
       <span class="sr-only" role="status" aria-live="polite">{{
-        jumpTarget ? t('jumpedToResource') + ' ' + breadcrumb(jumpTarget) : ''
+        jumpTarget ? `${t('jumpedToResource')} ${breadcrumb(jumpTarget)}` : ''
       }}</span>
       <div class="catalog-row">
         <h3>{{ t('resourceTree') }}</h3>
@@ -670,9 +728,10 @@ function remove() {
           :disabled="disabled"
           data-testid="add-resource-node"
           @click="create"
-          ><template #icon><IconifyIcon icon="lucide:plus" /></template
-          >{{ t('add') }}</Button
         >
+          <template #icon><IconifyIcon icon="lucide:plus" /></template
+          >{{ t('add') }}
+        </Button>
       </div>
       <Input
         v-model:value="ui.query"
@@ -691,8 +750,8 @@ function remove() {
         @expand="(keys) => (ui.expanded = keys.map(String))"
         @select="(keys) => selectResource(String(keys[0] ?? ''))"
       >
-        <template #title="{ key, title }"
-          ><span
+        <template #title="{ key, title }">
+          <span
             class="catalog-tree-title"
             :class="{
               'catalog-tree-reference': references.has(String(key)),
@@ -719,14 +778,15 @@ function remove() {
             "
             :title="
               references.has(String(key))
-                ? t('goToOriginal') +
-                  ': ' +
-                  breadcrumb(references.get(String(key))!)
+                ? `${t('goToOriginal')}: ${breadcrumb(
+                    references.get(String(key))!,
+                  )}`
                 : undefined
             "
             ><IconifyIcon
               :icon="
-                nodeType(references.get(String(key)) || String(key)) === 'resource'
+                nodeType(references.get(String(key)) || String(key)) ===
+                'resource'
                   ? 'lucide:box'
                   : nodeType(references.get(String(key)) || String(key)) ===
                       'subdirectory'
@@ -780,18 +840,17 @@ function remove() {
                 ? t('reference')
                 : t(nodeType(String(key)))
             }}</small></span
-          ></template
-        >
+          >
+        </template>
       </Tree>
       <Empty v-if="!tree.length" :description="t('empty')" />
     </aside>
     <ResourceNodeEditor
       v-if="ui.resourceEditor"
       :catalog="catalog"
-      :draft="ui.resourceEditor"
       :scope="ui.scope"
       :disabled="disabled"
-      :error="error"
+      :error="formError"
       :error-path="errorPath"
       @save="save"
       @cancel="cancel"
@@ -824,31 +883,35 @@ function remove() {
           <Button
             :disabled="disabled || !moveOptions.length"
             @click="openMoveDialog"
-            ><template #icon><IconifyIcon icon="lucide:folder-input" /></template
-            >{{ t('moveTo') }}</Button
           >
+            <template #icon><IconifyIcon icon="lucide:folder-input" /></template
+            >{{ t('moveTo') }}
+          </Button>
           <Button
             :disabled="disabled || !upDestination"
             :aria-label="t('up')"
             :title="stepHint(-1)"
             @click="moveStep(-1)"
-            ><template #icon><IconifyIcon icon="lucide:arrow-up" /></template
-          ></Button>
+          >
+            <template #icon><IconifyIcon icon="lucide:arrow-up" /></template>
+          </Button>
           <Button
             :disabled="disabled || !downDestination"
             :aria-label="t('down')"
             :title="stepHint(1)"
             @click="moveStep(1)"
-            ><template #icon><IconifyIcon icon="lucide:arrow-down" /></template
-          ></Button>
+          >
+            <template #icon><IconifyIcon icon="lucide:arrow-down" /></template>
+          </Button>
           <Button
             :disabled="disabled"
             @click="edit(detailTab === 'references' ? 'basic' : detailTab)"
-            ><template #icon><IconifyIcon icon="lucide:pencil" /></template
-            >{{ t('edit') }}</Button
-          ><Button danger :disabled="disabled" @click="remove">{{
-            t('delete')
-          }}</Button>
+          >
+            <template #icon><IconifyIcon icon="lucide:pencil" /></template
+            >{{ t('edit') }} </Button
+          ><Button danger :disabled="disabled" @click="remove">
+            {{ t('delete') }}
+          </Button>
         </div>
       </div>
       <section
@@ -868,9 +931,9 @@ function remove() {
             ><IconifyIcon icon="lucide:arrow-right" /><code
               class="catalog-word-changed"
               >{{ change.after }}</code
-            ><Tag v-if="change.numbered" color="orange">{{
-              t('conflictNumbered')
-            }}</Tag>
+            ><Tag v-if="change.numbered" color="orange">
+              {{ t('conflictNumbered') }}
+            </Tag>
           </div>
         </div>
       </section>
@@ -880,11 +943,11 @@ function remove() {
         :animated="false"
       >
         <TabPane key="basic">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:box" />{{ t('basicInfo') }}</span
-            ></template
-          >
+            >
+          </template>
           <div class="catalog-editor-section-heading">
             <h3>{{ t('basicInfo') }}</h3>
             <p>{{ t('basicInfoDescription') }}</p>
@@ -921,15 +984,34 @@ function remove() {
             </div>
             <div v-if="selected.permission_group">
               <dt>{{ t('linkedPermissionGroup') }}</dt>
-              <dd data-testid="resource-permission-group">{{ groupPreview.groups.find((group) => group.key === selected?.permission_group)?.names[preferences.app.locale as 'zh-CN' | 'en-US'] || selected.permission_group }}</dd>
+              <dd data-testid="resource-permission-group">
+                {{
+                  groupPreview.groups.find(
+                    (group) => group.key === selected?.permission_group,
+                  )?.names[preferences.app.locale as 'zh-CN' | 'en-US'] ||
+                  selected.permission_group
+                }}
+              </dd>
             </div>
             <div v-if="selected.kind === 'resource'">
               <dt>{{ t('permissionScope') }}</dt>
-              <dd data-testid="resource-permission-scope">{{ selected.permission_scope === '*' ? '*' : t('configuredScope') }}</dd>
+              <dd data-testid="resource-permission-scope">
+                {{
+                  selected.permission_scope === '*' ? '*' : t('configuredScope')
+                }}
+              </dd>
             </div>
             <div v-if="selected.kind === 'directory' && !selected.parent">
               <dt>{{ t('frontendVisible') }}</dt>
-              <dd data-testid="resource-frontend-visible">{{ t((selected.frontend_visible ?? true) ? 'frontendShown' : 'frontendHidden') }}</dd>
+              <dd data-testid="resource-frontend-visible">
+                {{
+                  t(
+                    (selected.frontend_visible ?? true)
+                      ? 'frontendShown'
+                      : 'frontendHidden',
+                  )
+                }}
+              </dd>
             </div>
           </dl>
           <p v-if="selected.kind === 'directory'" class="catalog-muted">
@@ -937,12 +1019,12 @@ function remove() {
           </p>
         </TabPane>
         <TabPane v-if="selected.kind === 'resource'" key="entries">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:panels-top-left" />{{ t('entries')
               }}<span class="catalog-count">{{ entries.length }}</span></span
-            ></template
-          >
+            >
+          </template>
           <section class="catalog-detail-section">
             <div class="catalog-section-title">
               <div class="catalog-section-identity">
@@ -959,10 +1041,10 @@ function remove() {
                   <p>{{ t('entriesDescription') }}</p>
                 </div>
               </div>
-              <Button :disabled="disabled" @click="edit('entries')"
-                ><template #icon><IconifyIcon icon="lucide:pencil" /></template
-                >{{ t('editEntry') }}</Button
-              >
+              <Button :disabled="disabled" @click="edit('entries')">
+                <template #icon><IconifyIcon icon="lucide:pencil" /></template
+                >{{ t('editEntry') }}
+              </Button>
             </div>
             <div v-if="!entries.length" class="catalog-inline-empty">
               <IconifyIcon icon="lucide:panel-top-dashed" aria-hidden="true" />
@@ -970,12 +1052,9 @@ function remove() {
                 <strong>{{ t('noEntries') }}</strong>
                 <p>{{ t('noEntriesDescription') }}</p>
               </div>
-              <Button
-                type="link"
-                :disabled="disabled"
-                @click="edit('entries')"
-                >{{ t('addEntry') }}</Button
-              >
+              <Button type="link" :disabled="disabled" @click="edit('entries')">
+                {{ t('addEntry') }}
+              </Button>
             </div>
             <div v-else class="catalog-entry-list">
               <article
@@ -1005,8 +1084,8 @@ function remove() {
           </section>
         </TabPane>
         <TabPane v-if="selected.kind === 'resource'" key="operations">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:sliders-horizontal" />{{
                 t('operations')
               }}<span class="catalog-count">{{
@@ -1014,8 +1093,8 @@ function remove() {
                   ? '*'
                   : Object.keys(selected.operations ?? {}).length
               }}</span></span
-            ></template
-          >
+            >
+          </template>
           <section class="catalog-detail-section">
             <div class="catalog-section-title">
               <div class="catalog-section-identity">
@@ -1033,14 +1112,16 @@ function remove() {
                         : Object.keys(selected.operations ?? {}).length
                     }}</span>
                   </h3>
-                  <p v-if="selected.permission_scope !== '*'">{{ t('operationsDescription') }}</p>
+                  <p v-if="selected.permission_scope !== '*'">
+                    {{ t('operationsDescription') }}
+                  </p>
                 </div>
               </div>
-              <Button :disabled="disabled" @click="edit('operations')"
-                ><template #icon
-                  ><IconifyIcon icon="lucide:settings-2" /></template
-                >{{ t('configure') }}</Button
-              >
+              <Button :disabled="disabled" @click="edit('operations')">
+                <template #icon>
+                  <IconifyIcon icon="lucide:settings-2" /> </template
+                >{{ t('configure') }}
+              </Button>
             </div>
             <div
               v-if="selected.permission_scope === '*'"
@@ -1094,7 +1175,7 @@ function remove() {
                         "
                         aria-hidden="true"
                     /></span>
-                    <strong>{{ $t('operations.' + operation) }}</strong
+                    <strong>{{ $t(`operations.${operation}`) }}</strong
                     ><code>{{ operation }}</code>
                     <span class="catalog-operation-counts"
                       >{{ binding.button_keys.length }}
@@ -1107,12 +1188,11 @@ function remove() {
                     size="small"
                     type="text"
                     :disabled="disabled"
-                    :aria-label="
-                      t('configure') + ' ' + $t('operations.' + operation)
-                    "
+                    :aria-label="`${t('configure')} ${$t(`operations.${operation}`)}`"
                     @click.stop="edit('operations', operation)"
-                    >{{ t('configure') }}</Button
                   >
+                    {{ t('configure') }}
+                  </Button>
                 </template>
                 <article
                   v-for="key in binding.button_keys"
@@ -1148,21 +1228,21 @@ function remove() {
           </section>
         </TabPane>
         <TabPane v-if="referenceCollection" key="references">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:link-2" />{{ t('references')
               }}<span class="catalog-count">{{
                 selected.references?.length ?? 0
               }}</span></span
-            ></template
-          >
+            >
+          </template>
           <section class="catalog-reference-summary">
             <div class="catalog-row">
               <h3>{{ t('references') }}</h3>
-              <Button :disabled="disabled" @click="edit()"
-                ><template #icon><IconifyIcon icon="lucide:link-2" /></template
-                >{{ t('manageReferences') }}</Button
-              >
+              <Button :disabled="disabled" @click="edit()">
+                <template #icon><IconifyIcon icon="lucide:link-2" /></template
+                >{{ t('manageReferences') }}
+              </Button>
             </div>
             <p class="catalog-muted">{{ t('referenceOwnershipHint') }}</p>
             <div class="catalog-reference-list">
@@ -1172,7 +1252,7 @@ function remove() {
                 type="button"
                 class="catalog-reference-card"
                 :disabled="!resources[key]"
-                :aria-label="t('goToOriginal') + ' ' + breadcrumb(key)"
+                :aria-label="`${t('goToOriginal')} ${breadcrumb(key)}`"
                 @click="jumpToResource(key)"
               >
                 <IconifyIcon
@@ -1184,10 +1264,19 @@ function remove() {
                   aria-hidden="true"
                 />
                 <span
-                  ><strong>{{ label(key) }}</strong
-                  > <small>{{ breadcrumb(key) }}</small>
+                  ><strong>{{ label(key) }}</strong>
+                  <small>{{ breadcrumb(key) }}</small>
                   <span class="catalog-reference-operation-tags">
-                    <Tag v-for="operation in referencedOperations(catalog.resource_catalog, ui.resource, key)" :key="operation" color="blue">{{ $t(`operations.${operation}`) }}</Tag>
+                    <Tag
+                      v-for="operation in referencedOperations(
+                        catalog.resource_catalog,
+                        ui.resource,
+                        key,
+                      )"
+                      :key="operation"
+                      color="blue"
+                      >{{ $t(`operations.${operation}`) }}</Tag
+                    >
                   </span></span
                 >
                 <IconifyIcon icon="lucide:corner-up-right" aria-hidden="true" />

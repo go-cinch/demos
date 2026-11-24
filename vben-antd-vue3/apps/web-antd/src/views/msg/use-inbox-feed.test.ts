@@ -1,9 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, reactive, ref } from 'vue';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Modal } from 'ant-design-vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messagesChangedEvent } from '#/api/message-events';
+
+import { required } from '../../../../../scripts/test-utils/required';
 import { useInboxFeed } from './use-inbox-feed';
 
 const api = vi.hoisted(() => ({
@@ -20,7 +23,7 @@ const state = vi.hoisted(() => ({
 vi.mock('#/api/msg', () => ({
   msgApi: api,
   msgPreviewFields: 'id,title,summary,type,published_at,read_at',
-  msgChanged: () => window.dispatchEvent(new Event('go-cinch-msg-changed')),
+  msgChanged: () => window.dispatchEvent(new Event(messagesChangedEvent)),
 }));
 vi.mock('#/api/message-attention', () => ({ visitMessages: vi.fn() }));
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
@@ -113,9 +116,9 @@ describe('inbox feed requests', () => {
     feed.filter.value = 'unread';
     await flushPromises();
     api.get.mockResolvedValueOnce(row(12));
-    await feed.toggle(feed.rows.value[0]!);
+    await feed.toggle(required(feed.rows.value[0]));
     expect(feed.expanded.value).toContain(12);
-    expect(feed.rows.value[0]!.read_at).not.toBeNull();
+    expect(required(feed.rows.value[0]).read_at).not.toBeNull();
     api.list.mockResolvedValueOnce(page([11, 10, 9, 8, 7, 6, 5, 4, 3, 2], 11));
     api.list.mockResolvedValueOnce(page([1], 11));
     await feed.more();
@@ -134,7 +137,7 @@ describe('inbox feed requests', () => {
           complete = resolve;
         }),
     );
-    const pending = feed.toggle(feed.rows.value[0]!);
+    const pending = feed.toggle(required(feed.rows.value[0]));
     wrapper.unmount();
     complete(row(1));
     await pending;
@@ -159,12 +162,16 @@ describe('message ID navigation', () => {
     api.list.mockResolvedValue(page([42], 1));
     api.get.mockResolvedValue(row(42));
     await start(42);
-    expect(api.list).toHaveBeenCalledWith(false, {
-      id: 42,
-      f: 'id,title,summary,type,published_at,read_at',
-      p: 1,
-      s: 10,
-    });
+    expect(api.list).toHaveBeenCalledWith(
+      false,
+      {
+        id: 42,
+        f: 'id,title,summary,type,published_at,read_at',
+        p: 1,
+        s: 10,
+      },
+      undefined,
+    );
     expect(api.get).toHaveBeenCalledExactlyOnceWith(42, false);
     expect(api.read).toHaveBeenCalledExactlyOnceWith(42);
     expect(feed.expanded.value).toEqual([42]);
@@ -192,11 +199,15 @@ describe('message ID navigation', () => {
     expect(feed.expanded.value).toEqual([]);
     expect(api.get).not.toHaveBeenCalled();
     expect(api.read).not.toHaveBeenCalled();
-    expect(api.list).toHaveBeenLastCalledWith(false, {
-      f: 'id,title,summary,type,published_at,read_at',
-      p: 1,
-      s: 10,
-    });
+    expect(api.list).toHaveBeenLastCalledWith(
+      false,
+      {
+        f: 'id,title,summary,type,published_at,read_at',
+        p: 1,
+        s: 10,
+      },
+      undefined,
+    );
   });
   it('keeps an unavailable ID as an empty filter without requesting or reading its detail', async () => {
     api.list.mockResolvedValueOnce(page([], 0));
@@ -225,11 +236,11 @@ describe('inbox actions and lifecycle', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(row(1));
     await start();
-    await feed.toggle(feed.rows.value[0]!);
+    await feed.toggle(required(feed.rows.value[0]));
     expect(feed.detailError.value).toBe(1);
     expect(feed.expanded.value).toEqual([]);
     expect(api.read).not.toHaveBeenCalled();
-    await feed.toggle(feed.rows.value[0]!);
+    await feed.toggle(required(feed.rows.value[0]));
     expect(feed.detailError.value).toBeUndefined();
     expect(feed.expanded.value).toEqual([1]);
     expect(api.read).toHaveBeenCalledExactlyOnceWith(1);
@@ -239,7 +250,7 @@ describe('inbox actions and lifecycle', () => {
     api.list.mockResolvedValue(page([1], 1));
     api.get.mockResolvedValue(row(1, 123));
     await start();
-    await feed.toggle(feed.rows.value[0]!);
+    await feed.toggle(required(feed.rows.value[0]));
     expect(api.read).not.toHaveBeenCalled();
     expect(feed.expanded.value).toEqual([1]);
   });
@@ -254,8 +265,8 @@ describe('inbox actions and lifecycle', () => {
     feed.check(1, true);
     feed.check(2, true);
     feed.confirmAction(false, [1, 2], true);
-    const options = vi.mocked(Modal.confirm).mock.calls[0]![0];
-    const onOk = options.onOk!;
+    const options = required(vi.mocked(Modal.confirm).mock.calls[0])[0];
+    const onOk = required(options.onOk);
     await expect(onOk()).rejects.toThrow('offline');
     expect(feed.selected.value).toEqual([2]);
     expect(feed.busy.value).toBe(false);
@@ -308,7 +319,7 @@ describe('inbox actions and lifecycle', () => {
     wrapper.unmount();
     const calls = api.list.mock.calls.length;
     await vi.advanceTimersByTimeAsync(60_000);
-    window.dispatchEvent(new Event('go-cinch-msg-changed'));
+    window.dispatchEvent(new Event(messagesChangedEvent));
     document.dispatchEvent(new Event('visibilitychange'));
     await flushPromises();
     expect(api.list).toHaveBeenCalledTimes(calls);

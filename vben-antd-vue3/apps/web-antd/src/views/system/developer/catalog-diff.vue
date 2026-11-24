@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import type { Catalog, Change, Conflict, Problem } from './catalog-model';
+
 import { computed, ref, watch } from 'vue';
+
+import { formatDateTime } from '@vben/utils';
+
 import {
   Alert,
   Button,
@@ -11,13 +16,12 @@ import {
   Select,
   Tag,
 } from 'ant-design-vue';
-import type {
-  Catalog,
-  Change,
-  Conflict,
-  EditorUI,
-  Problem,
-} from './catalog-model';
+
+import { $t } from '#/locales';
+
+import { pendingGroupRenames } from '../components/action-group-model';
+import { useCatalogEditor } from './catalog-editor-context';
+import CatalogJsonCompare from './catalog-json-compare.vue';
 import {
   assign,
   merge,
@@ -25,17 +29,14 @@ import {
   stable,
   validate,
 } from './catalog-model';
-import { $t } from '#/locales';
-import { formatDateTime } from '@vben/utils';
-import CatalogJsonCompare from './catalog-json-compare.vue';
 import { catalogPathLabel } from './catalog-path-label';
-import { pendingGroupRenames } from '../components/action-group-model';
 import { pendingResourceRenames } from './resource-renames';
+
 const props = defineProps<{
   base: Catalog;
   document: Catalog;
   online: Catalog;
-  ui: EditorUI;
+
   changes: Change[];
   conflicts: Conflict[];
   problems: Problem[];
@@ -44,15 +45,31 @@ const props = defineProps<{
   loading: boolean;
 }>();
 const emit = defineEmits<{ refresh: []; rebase: [Catalog]; export: [] }>();
+const { ui } = useCatalogEditor();
 const t = (key: string) => $t(`developer.${key}`);
 const groupRenames = computed(() =>
-  Object.entries(pendingGroupRenames(props.online, props.document, props.ui.groupRenames)),
+  Object.entries(
+    pendingGroupRenames(props.online, props.document, ui.value.groupRenames),
+  ),
 );
 const resourceRenames = computed(() => {
-  const renames = pendingResourceRenames(props.online, props.document, props.ui.resourceRenames, props.ui.featureRenames);
+  const renames = pendingResourceRenames(
+    props.online,
+    props.document,
+    ui.value.resourceRenames,
+    ui.value.featureRenames,
+  );
   return [
-    ...Object.entries(renames.resources).map(([from, to]) => ({ kind: 'resources', from, to })),
-    ...Object.entries(renames.features).map(([from, to]) => ({ kind: 'features', from, to })),
+    ...Object.entries(renames.resources).map(([from, to]) => ({
+      kind: 'resources',
+      from,
+      to,
+    })),
+    ...Object.entries(renames.features).map(([from, to]) => ({
+      kind: 'features',
+      from,
+      to,
+    })),
   ];
 });
 const page = ref(1);
@@ -69,25 +86,27 @@ function display(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 function actionLabel(change: Change) {
-  return t(
-    change.kind === 'added'
-      ? 'undoAdd'
-      : change.kind === 'deleted'
-        ? 'restore'
-        : 'useOnline',
-  );
+  let messageKey = 'useOnline';
+  if (change.kind === 'added') {
+    messageKey = 'undoAdd';
+  } else if (change.kind === 'deleted') {
+    messageKey = 'restore';
+  }
+  return t(messageKey);
 }
 const filtered = computed(() =>
   props.changes.filter(
     (c) =>
-      (!props.ui.diffKind || c.kind === props.ui.diffKind) &&
-      (!props.ui.diffQuery ||
-        (catalogPathLabel(c.path) +
+      (!ui.value.diffKind || c.kind === ui.value.diffKind) &&
+      (!ui.value.diffQuery ||
+        (
+          catalogPathLabel(c.path) +
           c.path.join(' / ') +
           stable(c.before) +
-          stable(c.after))
+          stable(c.after)
+        )
           .toLocaleLowerCase()
-          .includes(props.ui.diffQuery.toLocaleLowerCase())),
+          .includes(ui.value.diffQuery.toLocaleLowerCase())),
   ),
 );
 const rows = computed(() =>
@@ -101,16 +120,16 @@ watch(filtered, (changes) => {
 });
 const snapshot = computed(() => stable(props.online));
 const choice = (c: Conflict) =>
-  props.ui.resolutionSnapshot === snapshot.value
-    ? props.ui.resolutions[JSON.stringify(c.path)]
+  ui.value.resolutionSnapshot === snapshot.value
+    ? ui.value.resolutions[JSON.stringify(c.path)]
     : undefined;
 const unresolved = computed(
   () => props.conflicts.filter((c) => !choice(c)?.choice).length,
 );
 function choose(c: Conflict, mode: string) {
-  if (props.ui.resolutionSnapshot !== snapshot.value) props.ui.resolutions = {};
-  props.ui.resolutionSnapshot = snapshot.value;
-  props.ui.resolutions[JSON.stringify(c.path)] = {
+  if (ui.value.resolutionSnapshot !== snapshot.value) ui.value.resolutions = {};
+  ui.value.resolutionSnapshot = snapshot.value;
+  ui.value.resolutions[JSON.stringify(c.path)] = {
     choice: mode,
     custom:
       typeof c.after === 'string'
@@ -144,33 +163,34 @@ function applyMerge() {
     return;
   }
   emit('rebase', next);
-  props.ui.resolutions = {};
+  ui.value.resolutions = {};
   error.value = '';
   errorPath.value = '';
 }
 function locate(problem: Problem) {
   const path = problem.path;
   if (path[0] === 'locales' || path[0] === 'default_locale') {
-    props.ui.tab = 'languages';
+    ui.value.tab = 'languages';
   } else if (path[0] === 'scopes') {
-    props.ui.tab = 'scopes';
+    ui.value.tab = 'scopes';
   } else if (
     path[0] === 'group_order' ||
     (path[0] === 'messages' && path[2] === 'frontend' && path[3] === 'groups')
   ) {
-    props.ui.tab = 'groups';
+    ui.value.tab = 'groups';
   } else if (path[0] === 'messages') {
-    props.ui.tab = 'messages';
+    ui.value.tab = 'messages';
     const categoryIndex = messageCategories.includes(path[1] ?? '') ? 1 : 2;
-    props.ui.category = path[categoryIndex] === 'backend' ? 'backend' : 'frontend';
-    props.ui.messageQuery = path.slice(categoryIndex + 1).join('.');
-    props.ui.messagePage = 1;
+    ui.value.category =
+      path[categoryIndex] === 'backend' ? 'backend' : 'frontend';
+    ui.value.messageQuery = path.slice(categoryIndex + 1).join('.');
+    ui.value.messagePage = 1;
   } else if (path[1] === 'resources') {
-    props.ui.tab = 'resources';
-    props.ui.resource = path[2] ?? '';
-    props.ui.scope = props.ui.resource.split(':')[0] ?? 'admin';
+    ui.value.tab = 'resources';
+    ui.value.resource = path[2] ?? '';
+    ui.value.scope = ui.value.resource.split(':')[0] ?? 'admin';
   } else {
-    props.ui.tab = 'resources';
+    ui.value.tab = 'resources';
   }
 }
 </script>
@@ -181,9 +201,13 @@ function locate(problem: Problem) {
         <h3>{{ t('versionCompare') }}</h3>
         <p class="catalog-muted">{{ t('compareHint') }}</p>
       </div>
-      <Button data-permission-key="admin:btn:system:developer:refresh" :loading="loading" @click="emit('refresh')">{{
-        t('fetchOnline')
-      }}</Button>
+      <Button
+        data-permission-key="admin:btn:system:developer:refresh"
+        :loading="loading"
+        @click="emit('refresh')"
+      >
+        {{ t('fetchOnline') }}
+      </Button>
     </div>
     <div class="catalog-snapshots">
       <span>{{ t('localDraft') }}</span>
@@ -199,13 +223,13 @@ function locate(problem: Problem) {
     <Alert
       type="warning"
       show-icon
-      :message="t('conflictHint') + ' · ' + conflicts.length"
+      :message="`${t('conflictHint')} · ${conflicts.length}`"
     />
     <div class="catalog-row">
       <h3>{{ t('resolveConflicts') }}</h3>
-      <Tag :color="unresolved ? 'red' : 'green'"
-        >{{ t('unresolved') }} {{ unresolved }}</Tag
-      >
+      <Tag :color="unresolved ? 'red' : 'green'">
+        {{ t('unresolved') }} {{ unresolved }}
+      </Tag>
     </div>
     <article
       v-for="c in conflicts"
@@ -253,8 +277,9 @@ function locate(problem: Problem) {
         type="primary"
         :disabled="disabled || unresolved > 0"
         @click="applyMerge"
-        >{{ t('applyMerge') }}</Button
       >
+        {{ t('applyMerge') }}
+      </Button>
     </div>
   </div>
   <div class="catalog-card catalog-comparison">
@@ -268,8 +293,13 @@ function locate(problem: Problem) {
       <template #description>
         <p>{{ t('resourceIdentifierChangesHint') }}</p>
         <ul>
-          <li v-for="change in resourceRenames" :key="change.kind + change.from">
-            <span>{{ t(change.kind) }}</span><code>{{ change.from }}</code><span>→</span><code>{{ change.to }}</code>
+          <li
+            v-for="change in resourceRenames"
+            :key="change.kind + change.from"
+          >
+            <span>{{ t(change.kind) }}</span
+            ><code>{{ change.from }}</code
+            ><span>→</span><code>{{ change.to }}</code>
           </li>
         </ul>
       </template>
@@ -285,7 +315,8 @@ function locate(problem: Problem) {
         <p>{{ t('groupIdentifierChangesHint') }}</p>
         <ul>
           <li v-for="[from, to] in groupRenames" :key="from">
-            <code>{{ from }}</code><span>→</span><code>{{ to }}</code>
+            <code>{{ from }}</code
+            ><span>→</span><code>{{ to }}</code>
           </li>
         </ul>
       </template>
@@ -303,22 +334,21 @@ function locate(problem: Problem) {
         :options="
           ['', 'added', 'changed', 'deleted'].map((value) => ({
             value,
-            label:
-              t(value || 'all') +
-              ' ' +
-              (value
+            label: `${t(value || 'all')} ${
+              value
                 ? changes.filter((c) => c.kind === value).length
-                : changes.length),
+                : changes.length
+            }`,
           }))
         "
         @change="page = 1"
       />
-      <RadioGroup v-model:value="ui.jsonDiff"
-        ><RadioButton :value="false">{{ t('structuredDiff') }}</RadioButton
-        ><RadioButton :value="true">{{
-          t('jsonDiff')
-        }}</RadioButton></RadioGroup
-      >
+      <RadioGroup v-model:value="ui.jsonDiff">
+        <RadioButton :value="false">{{ t('structuredDiff') }}</RadioButton
+        ><RadioButton :value="true">
+          {{ t('jsonDiff') }}
+        </RadioButton>
+      </RadioGroup>
     </div>
     <template v-if="ui.jsonDiff">
       <p class="catalog-muted catalog-json-hint">{{ t('jsonCompareHint') }}</p>
@@ -352,7 +382,8 @@ function locate(problem: Problem) {
                   ? 'red'
                   : 'blue'
             "
-            >{{ t(c.kind) }}</Tag
+          >
+            {{ t(c.kind) }} </Tag
           ><code class="catalog-path" :title="c.path.join(' / ')">{{
             catalogPathLabel(c.path)
           }}</code>
@@ -363,8 +394,9 @@ function locate(problem: Problem) {
           type="link"
           :disabled="disabled || !!ui.buffer"
           @click="assign(document, c.path, c.before)"
-          >{{ actionLabel(c) }}</Button
         >
+          {{ actionLabel(c) }}
+        </Button>
       </div>
       <Empty
         v-if="!filtered.length"
@@ -384,10 +416,10 @@ function locate(problem: Problem) {
   <div class="catalog-card">
     <div class="catalog-row">
       <h3>{{ t('validation') }}</h3>
-      <Tag :color="problems.some((p) => !p.warning) ? 'red' : 'green'"
-        >{{ t('errors') }} {{ problems.filter((p) => !p.warning).length }} ·
-        {{ t('warnings') }} {{ problems.filter((p) => p.warning).length }}</Tag
-      >
+      <Tag :color="problems.some((p) => !p.warning) ? 'red' : 'green'">
+        {{ t('errors') }} {{ problems.filter((p) => !p.warning).length }} ·
+        {{ t('warnings') }} {{ problems.filter((p) => p.warning).length }}
+      </Tag>
     </div>
     <p class="catalog-muted">{{ t('validationHint') }}</p>
     <div

@@ -3,7 +3,7 @@ import type { Recordable } from '@vben/types';
 
 import { computed, reactive } from 'vue';
 
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 
 import { useVbenForm, z } from '@vben-core/form-ui';
 import { useVbenModal } from '@vben-core/popup-ui';
@@ -38,7 +38,7 @@ const [Form, { resetForm, validate, getValues, getFieldComponentRef }] =
         {
           component: 'VbenInputPassword' as const,
           componentProps: {
-            placeholder: $t('ui.widgets.lockScreen.placeholder'),
+            placeholder: $placeholder('ui.widgets.lockScreen.placeholder'),
           },
           fieldName: 'lockScreenPassword',
           formFieldProps: { validateOn: ['change'] as const },

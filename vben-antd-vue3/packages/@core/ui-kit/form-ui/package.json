@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@vue/test-utils": "catalog:",
-    "unplugin-vue": "catalog:",
-    "element-plus": "catalog:"
+    "element-plus": "catalog:",
+    "unplugin-vue": "catalog:"
   }
 }

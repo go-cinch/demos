@@ -38,27 +38,31 @@ const formatted = computed(() => {
   min-width: 0;
   margin-top: 14px;
 }
+
 .audit-params h4 {
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
 }
+
 .audit-params pre,
 .audit-params p {
-  margin: 0;
   padding: 10px;
-  border-radius: calc(var(--radius) * 0.625);
-  background: hsl(var(--muted));
+  margin: 0;
   font-size: 12px;
+  background: hsl(var(--muted));
+  border-radius: calc(var(--radius) * 0.625);
 }
+
 .audit-params pre {
   max-height: 240px;
   overflow: auto;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
   font-family: ui-monospace, monospace;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
+
 .audit-params pre:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;

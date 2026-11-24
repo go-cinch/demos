@@ -162,7 +162,27 @@
     },
     "timezone": {
       "setTimezone": "Set Timezone",
-      "setSuccess": "Timezone set successfully"
+      "setSuccess": "Timezone set successfully",
+      "save": "Save",
+      "search": "Search city, timezone or UTC offset",
+      "region": "Timezone region",
+      "common": "Common timezones",
+      "offset": "Current UTC offset",
+      "selected": "Selected timezone",
+      "dst": "Offsets adjust for daylight saving time",
+      "loading": "Loading timezones",
+      "loadFailed": "Could not load timezones",
+      "retry": "Retry",
+      "empty": "No matching timezones",
+      "regions": {
+        "All": "All",
+        "Asia": "Asia",
+        "Europe": "Europe",
+        "Americas": "Americas",
+        "Oceania": "Oceania",
+        "Africa": "Africa",
+        "Other": "Other"
+      }
     }
   }
 }

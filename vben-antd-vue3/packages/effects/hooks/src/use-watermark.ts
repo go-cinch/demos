@@ -2,9 +2,7 @@ import type { Watermark, WatermarkOptions } from 'watermark-js-plus';
 
 import { nextTick, onUnmounted, readonly, ref } from 'vue';
 
-const watermark = ref<Watermark>();
-const unmountedHooked = ref<boolean>(false);
-const cachedOptions = ref<Partial<WatermarkOptions>>({
+const defaults: Partial<WatermarkOptions> = {
   advancedStyle: {
     colorStops: [
       {
@@ -35,11 +33,16 @@ const cachedOptions = ref<Partial<WatermarkOptions>>({
   layout: 'grid',
   rotate: 30,
   width: 160,
-});
+};
 
 export function useWatermark() {
+  const watermark = ref<Watermark>();
+  const cachedOptions = ref({ ...defaults });
+  let revision = 0;
   async function initWatermark(options: Partial<WatermarkOptions>) {
+    const current = ++revision;
     const { Watermark } = await import('watermark-js-plus');
+    if (revision !== current) return;
 
     cachedOptions.value = {
       ...cachedOptions.value,
@@ -62,19 +65,15 @@ export function useWatermark() {
   }
 
   function destroyWatermark() {
+    revision++;
+    cachedOptions.value.content = '';
     if (watermark.value) {
       watermark.value.destroy();
       watermark.value = undefined;
     }
   }
 
-  // 只在第一次调用时注册卸载钩子，防止重复注册以致于在路由切换时销毁了水印
-  if (!unmountedHooked.value) {
-    unmountedHooked.value = true;
-    onUnmounted(() => {
-      destroyWatermark();
-    });
-  }
+  onUnmounted(destroyWatermark);
 
   return {
     destroyWatermark,

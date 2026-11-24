@@ -5,7 +5,7 @@ import { MoonStar, Sun, SunMoon } from '@vben/icons';
 import { $t } from '@vben/locales';
 import {
   preferences,
-  updatePreferences,
+  updateUserPreferences as updatePreferences,
   usePreferences,
 } from '@vben/preferences';
 

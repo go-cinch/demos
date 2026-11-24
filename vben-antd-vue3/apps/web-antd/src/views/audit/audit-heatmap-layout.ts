@@ -9,13 +9,13 @@ export function heatmapLayout(
   to: number,
   timezone: string,
 ): AuditHeatCell[] {
-  const daily = to - from > 8 * 86400000;
-  const rolling = to - from <= 86400000;
+  const daily = to - from > 8 * 86_400_000;
+  const rolling = to - from <= 86_400_000;
   const cells: AuditHeatCell[] = [];
   let boundary = from;
   for (let at = from; at < to;) {
     const local = dayjs(at).tz(timezone);
-    let end = at + 3600000;
+    let end = at + 3_600_000;
     if (!rolling) {
       if (at >= boundary) {
         const date = local.format('YYYY-MM-DD');

@@ -14,17 +14,13 @@ import type { ManagementPermissions } from './use-management-permissions';
 
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 
-import { i18n } from '@vben/locales';
-
 import { message, Modal } from 'ant-design-vue';
 
-import { getAction } from '#/api';
+import { responseMessage } from '#/api/request-error';
+import { showRequestErrorToast } from '#/api/request-feedback';
 import { $t } from '#/locales';
-import { catalogDefaultLocale } from '#/locales/catalog';
 
 import { actionWordPattern, isValidActionGroup } from './action-config';
-import { actionEditorName } from './action-detail';
-import { actionDisplayName } from './action-name';
 import {
   authorizedEditorPayload,
   isAssignmentField,
@@ -39,11 +35,20 @@ import {
 } from './update-payload';
 import { useManagementFormatting } from './use-management-formatting';
 import {
+  editableUserMetadata,
   isValidUsername,
   isValidUserPassword,
   USER_PASSWORD_MESSAGE_KEY,
   USER_USERNAME_MESSAGE_KEY,
+  validateUserMetadata,
 } from './user-validation';
+const conflictFields: Record<string, string> = {
+  DICTIONARY_CONFLICT: 'key',
+  ROLE_CONFLICT: 'word',
+  USERGROUP_CONFLICT: 'word',
+  USER_CONFLICT: 'username',
+};
+
 export function useManagementEditor(
   props: { resource: ResourceKind; loading: boolean },
   config: ComputedRef<ResourceConfig>,
@@ -72,7 +77,6 @@ export function useManagementEditor(
   } = details;
   const {
     canCreate,
-    canRead,
     canUpdate,
     canDetail,
     canAssignPermissions,
@@ -83,13 +87,24 @@ export function useManagementEditor(
   const submitting = ref(false);
   const modalOpen = ref(false);
   const editingRecord = ref<null | SystemRecord>(null);
+  const originalMetadata = computed(() => {
+    const record = editingRecord.value;
+    return editableUserMetadata(
+      record && 'metadata' in record ? record.metadata : undefined,
+    );
+  });
+  const canSave = computed(() =>
+    editingRecord.value ? canUpdate.value : canCreate.value,
+  );
   const idempotencyKey = ref('');
   const formModel = reactive<FormModel>({});
   const initialEditorValues = ref<FormModel>({});
   const editorFields = computed(() =>
     config.value.fields.filter(
       (field) =>
-        (editingRecord.value || field.createVisible !== false) &&
+        (editingRecord.value
+          ? field.editVisible !== false
+          : field.createVisible !== false) &&
         (canAssignPermissions.value ||
           !isAssignmentField(props.resource, field.key)) &&
         (!editingRecord.value ||
@@ -99,9 +114,8 @@ export function useManagementEditor(
   );
 
   const editorSnapshot = ref('');
-  const editorError = ref('');
+
   let editorRequest = 0;
-  let editorNameRequest = 0;
   const editorDirty = computed(
     () =>
       modalOpen.value &&
@@ -113,7 +127,7 @@ export function useManagementEditor(
           ]),
         ),
   );
-  const editingPermission = computed(() => {
+  const editingPermissionWord = computed(() => {
     const record = editingRecord.value;
     if (
       props.resource !== 'action' ||
@@ -121,70 +135,21 @@ export function useManagementEditor(
       !record ||
       !('word' in record)
     )
-      return null;
-    const word = String(formModel.word || '');
-    const names = formModel.names as Record<string, string> | undefined;
-    const name = actionEditorName(
-      word,
-      names,
-      String(i18n.global.locale.value),
-      catalogDefaultLocale(),
-      actionDisplayName(
-        word,
-        formModel.config,
-        'name' in record ? record.name : undefined,
-      ),
-    );
-    return { word, name };
+      return undefined;
+    return String(formModel.word || '');
   });
-  async function refreshEditorName() {
-    const locale = i18n.global.locale.value;
-    const record = editingRecord.value;
-    if (
-      props.resource !== 'action' ||
-      !modalOpen.value ||
-      !record ||
-      !active.value ||
-      !canRead.value
-    )
-      return;
-    const request = ++editorNameRequest;
-    const editor = editorRequest;
-    const current = () =>
-      request === editorNameRequest &&
-      editor === editorRequest &&
-      active.value &&
-      canRead.value &&
-      modalOpen.value &&
-      editingRecord.value === record &&
-      locale === i18n.global.locale.value;
-    // Refresh only the translated title; keep unsaved definition edits intact.
-    if ('name' in record) record.name = undefined;
-    try {
-      const translated = await getAction(record.id, { f: 'name' });
-      if (current()) Object.assign(record, translated);
-    } catch {
-      // Editable names and the stable word remain available when translation fails.
-    }
-  }
-  watch(() => i18n.global.locale.value, refreshEditorName);
   const drawerTitle = computed(() => {
-    if (editingPermission.value) {
-      const record = editingPermission.value;
-      return $t('action-editor.editTitle', {
-        name: record.name || record.word,
-      });
+    if (editingPermissionWord.value !== undefined) {
+      return $t('action-editor.editTitle');
     }
-    return $t(
-      modalOpen.value
-        ? editingRecord.value
-          ? 'system.common.editTitle'
-          : 'system.common.createTitle'
-        : 'system-editor.detailTitle',
-      { entity: config.value.entity },
-    );
+    let messageKey = 'system-editor.detailTitle';
+    if (modalOpen.value)
+      messageKey = editingRecord.value
+        ? 'system.common.editTitle'
+        : 'system.common.createTitle';
+    return $t(messageKey, { entity: config.value.entity });
   });
-  function closeEditorPanel(returnToDetail = false) {
+  function closeEditorPanel(returnToDetail = false, confirmDiscard = true) {
     if (submitting.value) return;
     const close = () => {
       ++editorRequest;
@@ -193,7 +158,7 @@ export function useManagementEditor(
         detailsOpen.value = true;
       } else detailsOpen.value = false;
       modalOpen.value = false;
-      editorError.value = '';
+
       formModel.password = '';
       if (
         returnToDetail &&
@@ -204,7 +169,7 @@ export function useManagementEditor(
         void loadRecordDetail();
       }
     };
-    if (editorDirty.value) {
+    if (confirmDiscard && editorDirty.value) {
       Modal.confirm({
         title: $t('system-editor.discardTitle'),
         okText: $t('system-editor.discard'),
@@ -213,6 +178,15 @@ export function useManagementEditor(
       });
     } else close();
   }
+  const conflict = ref<{ field: string; message: string }>();
+  watch(
+    () => conflict.value && formModel[conflict.value.field],
+    (value, previous) => {
+      if (previous !== undefined && value !== previous)
+        conflict.value = undefined;
+    },
+    { flush: 'sync' },
+  );
   const actionValidation = ref('');
   const assignmentValidation = ref('');
   const formRules = computed(() => {
@@ -225,6 +199,9 @@ export function useManagementEditor(
           {
             message: $t('system.validation.required', { field: field.label }),
             required: true,
+            ...(props.resource === 'role' && field.type === 'input'
+              ? { whitespace: true }
+              : {}),
           },
         ];
       }
@@ -268,6 +245,16 @@ export function useManagementEditor(
       });
     }
     if (props.resource === 'user') {
+      if (editingRecord.value) {
+        result.metadata = [
+          {
+            trigger: 'blur',
+            async validator(_rule, value) {
+              validateUserMetadata(value);
+            },
+          },
+        ];
+      }
       result.username ||= [];
       result.username.push({
         trigger: 'blur',
@@ -276,15 +263,16 @@ export function useManagementEditor(
             throw new Error($t(USER_USERNAME_MESSAGE_KEY));
         },
       });
-      result.password ||= [];
-      result.password.push({
-        trigger: 'blur',
-        async validator(_rule, value) {
-          if (editingRecord.value && !value) return;
-          if (!isValidUserPassword(value))
-            throw new Error($t(USER_PASSWORD_MESSAGE_KEY));
-        },
-      });
+      if (!editingRecord.value) {
+        result.password ||= [];
+        result.password.push({
+          trigger: 'blur',
+          async validator(_rule, value) {
+            if (!isValidUserPassword(value))
+              throw new Error($t(USER_PASSWORD_MESSAGE_KEY));
+          },
+        });
+      }
     }
     if (props.resource === 'dictionary') {
       result.key ||= [];
@@ -311,6 +299,14 @@ export function useManagementEditor(
         },
       });
     }
+    if (conflict.value) {
+      const { field, message } = conflict.value;
+      (result[field] ??= []).push({
+        async validator() {
+          throw new Error(message);
+        },
+      });
+    }
     return result;
   });
 
@@ -319,8 +315,7 @@ export function useManagementEditor(
     editorOperation.value = record ? 'update' : 'create';
     if (props.loading || detailLoading.value) return;
     const request = ++editorRequest;
-    const requestedLocale = i18n.global.locale.value;
-    editorError.value = '';
+    conflict.value = undefined;
     actionValidation.value = '';
     assignmentValidation.value = '';
     if (record) {
@@ -346,6 +341,7 @@ export function useManagementEditor(
         formModel.user_ids = { added: [], removed: [] };
       }
       if (props.resource === 'user') {
+        formModel.metadata = formatJSON(originalMetadata.value);
         formModel.password = '';
         formModel.role_id = record.role_id ?? undefined;
       }
@@ -366,13 +362,6 @@ export function useManagementEditor(
       ]),
     );
     modalOpen.value = true;
-    if (
-      record &&
-      props.resource === 'action' &&
-      requestedLocale !== i18n.global.locale.value
-    ) {
-      void refreshEditorName();
-    }
     await nextTick();
     formRef.value?.clearValidate();
   }
@@ -402,12 +391,13 @@ export function useManagementEditor(
       if (value !== undefined) payload[field.key] = value;
     }
     if (props.resource === 'user') {
-      if (editingRecord.value && !payload.password) delete payload.password;
       if (editingRecord.value) {
+        payload.metadata = JSON.parse(payload.metadata);
         if (canAssignPermissions.value)
           payload.role_id = Number(payload.role_id || 0);
         const initial = {
           ...initialEditorValues.value,
+          metadata: originalMetadata.value,
           role_id: Number(initialEditorValues.value.role_id || 0),
         };
         return buildChangedPayload(initial, payload);
@@ -441,7 +431,7 @@ export function useManagementEditor(
             ([tag, name]) => name !== (initial[tag] ?? ''),
           ),
         );
-        if (Object.keys(names).length) changes.names = names;
+        if (Object.keys(names).length > 0) changes.names = names;
         else delete changes.names;
       }
       return changes;
@@ -452,8 +442,7 @@ export function useManagementEditor(
   }
 
   async function submitEditor() {
-    if (editingRecord.value ? !canUpdate.value : !canCreate.value) return;
-    if (submitting.value || !modalOpen.value) return;
+    if (!canSave.value || submitting.value || !modalOpen.value) return;
     const currentEditor = editorRequest;
     try {
       await formRef.value?.validate();
@@ -462,6 +451,7 @@ export function useManagementEditor(
       return;
     }
     if (
+      !canSave.value ||
       submitting.value ||
       !modalOpen.value ||
       !active.value ||
@@ -471,11 +461,11 @@ export function useManagementEditor(
     const payload = buildPayload();
     if (editingRecord.value && Object.keys(payload).length === 0) {
       message.info($t('system.messages.noChanges'));
-      closeEditorPanel(true);
+      closeEditorPanel(true, false);
       return;
     }
     submitting.value = true;
-    editorError.value = '';
+
     try {
       let saved: SystemRecord;
       if (editingRecord.value) {
@@ -514,11 +504,39 @@ export function useManagementEditor(
         typeof error.response.status === 'number'
           ? error.response.status
           : undefined;
-      if (!editingRecord.value && status !== undefined && status !== 409) {
+      // A timeout or server failure can leave the creation outcome unknown.
+      if (
+        !editingRecord.value &&
+        status !== undefined &&
+        status >= 400 &&
+        status < 500 &&
+        status !== 408 &&
+        status !== 409
+      ) {
         idempotencyKey.value = newIdempotencyKey();
       }
-      editorError.value =
-        error instanceof Error ? error.message : $t('system-editor.saveError');
+      const data = (error as { response?: { data?: { error_code?: string } } })
+        ?.response?.data;
+      const field = conflictFields[data?.error_code ?? ''];
+      if (
+        field &&
+        typeof payload[field] === 'string' &&
+        payload[field].trim() === String(formModel[field]).trim()
+      ) {
+        if (!editingRecord.value) idempotencyKey.value = newIdempotencyKey();
+        const fallback =
+          field === 'username'
+            ? 'app.register.usernameExists'
+            : 'developer.duplicate';
+        conflict.value = {
+          field,
+          message: responseMessage(error) ?? $t(fallback),
+        };
+        await nextTick();
+        await formRef.value?.validate()?.catch(() => {});
+      } else {
+        showRequestErrorToast(error);
+      }
     } finally {
       submitting.value = false;
     }
@@ -536,9 +554,9 @@ export function useManagementEditor(
     formModel,
     editorFields,
     editorDirty,
-    editingPermission,
+    editingPermissionWord,
     drawerTitle,
-    editorError,
+
     actionValidation,
     assignmentValidation,
     formRules,

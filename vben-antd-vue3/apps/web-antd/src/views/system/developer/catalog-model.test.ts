@@ -1,5 +1,7 @@
 /* oxlint-disable typescript/no-non-null-assertion -- Fixtures explicitly populate these records. */
 import { describe, expect, it } from 'vitest';
+
+import { fixture } from './__fixtures__/catalog';
 import {
   assign,
   at,
@@ -11,7 +13,6 @@ import {
   normalizeCatalog,
   validate,
 } from './catalog-model';
-import { fixture } from './__fixtures__/catalog';
 import { DraftStorage } from './draft-storage';
 
 describe('catalog diff and merge', () => {
@@ -132,6 +133,23 @@ describe('synchronous local draft persistence', () => {
     expect(restored.document).toEqual(draft.document);
     expect(restored.ui.buffer?.key).toBe('unfinished.');
   });
+  it('allows independent browsing but protects an unsubmitted edit in another tab', () => {
+    localStorage.clear();
+    const first = new DraftStorage(localStorage, 'draft');
+    first.save(value());
+    const second = new DraftStorage(localStorage, 'draft');
+    const browsing = second.load()!;
+    browsing.ui.tab = 'resources';
+    browsing.ui.query = 'user';
+    second.save(browsing);
+    expect(first.changed()).toBe(false);
+
+    const editing = first.load()!;
+    editing.ui.buffer = editor('message', 'test');
+    first.save(editing);
+    expect(second.changed()).toBe(true);
+    expect(() => second.save(browsing)).toThrow('LOCAL_DRAFT_CHANGED');
+  });
   it('refuses to overwrite a write from another tab', () => {
     localStorage.clear();
     const a = new DraftStorage(localStorage, 'draft');
@@ -229,7 +247,7 @@ describe('synchronous local draft persistence', () => {
     expect(new DraftStorage(localStorage, 'account-b').load()).toBeNull();
   });
   it('does not acknowledge a failed storage write and permits a retry', () => {
-    let raw: string | null = null;
+    let raw: null | string = null;
     let fail = true;
     const storage = {
       getItem: () => raw,

@@ -1,5 +1,6 @@
 import { initPreferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
+import { removeLegacyCache, userCache } from '@vben/utils/cache';
 
 import {
   applicationBrandingPreferences,
@@ -16,6 +17,23 @@ async function initApplication() {
   const env = import.meta.env.PROD ? 'prod' : 'dev';
   const appVersion = import.meta.env.VITE_APP_VERSION;
   const namespace = `${import.meta.env.VITE_APP_NAMESPACE}-${appVersion}-${env}`;
+
+  userCache.configure(
+    `${import.meta.env.VITE_APP_NAMESPACE}-${env}`,
+    import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth',
+  );
+  // Previous shared histories and snapshots have no attributable owner.
+  for (const key of [
+    'preferences',
+    'preferences-custom',
+    'preferences-locale',
+    'preferences-theme',
+    'core-timezone',
+  ])
+    removeLegacyCache(`${namespace}-${key}`);
+  removeLegacyCache(`${namespace}-core-tabbar`, 'session');
+  removeLegacyCache('vben-system-filter-history');
+  removeLegacyCache(`__search-history-${location.hostname}__`);
 
   // app偏好设置初始化
   await initPreferences({

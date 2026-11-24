@@ -38,12 +38,10 @@
   "user": {
     "entity": "用户",
     "title": "用户管理",
-    "keepPassword": "留空则保留当前密码",
     "approve": "通过",
     "reject": "拒绝",
     "lock": "锁定",
     "unlock": "解锁",
-    "unlockPassword": "解锁密码修改",
     "lockLabel": "锁定：",
     "permanent": "永久",
     "lockUntil": "至指定时间",
@@ -54,7 +52,11 @@
     "decision": "审核结果",
     "reason": "原因",
     "rejectionPlaceholder": "请输入注册驳回原因",
-    "lockTitle": "锁定用户“{name}”"
+    "lockTitle": "锁定用户“{name}”",
+    "resetPassword": "重置密码",
+    "confirmReset": "确认重置",
+    "confirmPassword": "确认新密码",
+    "resetConsequence": "重置后，该用户的现有会话将失效，需使用新密码登录。"
   },
   "userGroup": {
     "entity": "用户组",
@@ -133,21 +135,25 @@
     "rejected": "注册申请已驳回",
     "locked": "用户锁定成功",
     "unlocked": "用户解锁成功",
-    "passwordUnlocked": "自助修改密码已解锁"
+    "passwordReset": "密码已重置"
   },
   "confirm": {
     "deleteSelected": "确认删除选中的记录？",
     "deleteDescription": "将删除选中的 {count} 条记录。",
     "unlock": "确认解锁“{name}”？",
-    "unlockPassword": "确认解锁“{name}”的自助修改密码功能？",
     "delete": "确认删除“{name}”？"
   },
   "validation": {
     "required": "请输入{field}",
     "dictionaryKey": "请使用大写字母、数字，并以下划线分隔各段",
     "json": "请输入有效的 JSON",
+    "metadataObject": "请输入 JSON 对象。",
+    "metadataKey": "请将字段名“{key}”改为小写蛇形命名，如 user_name。",
     "rejectionRequired": "请输入驳回原因",
-    "futureLock": "请选择未来的锁定截止时间"
+    "futureLock": "请选择未来的锁定截止时间",
+    "managedMetadata": "字段“{key}”由系统管理，无法在此修改。",
+    "passwordMismatch": "两次输入的密码不一致",
+    "passwordConfirmation": "请再次输入新密码"
   },
   "menu": {
     "system": "系统",

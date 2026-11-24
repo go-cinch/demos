@@ -1,0 +1,84 @@
+.catalog-card .ant-pagination {
+  margin-top: 20px;
+}
+
+.dark .catalog-error {
+  color: #ff9c6e;
+}
+
+.dark .catalog-warning {
+  color: #ffd666 !important;
+}
+
+.dark .catalog-success {
+  color: #95de64;
+}
+
+.dark .catalog-old {
+  color: #ffccc7;
+  background: #3b1720;
+}
+
+.dark .catalog-new {
+  color: #d9f7be;
+  background: #183122;
+}
+
+@media (max-width: 1200px) {
+  .catalog-workspace {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .catalog-basic {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .catalog-resource {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .catalog-tabs > .ant-tabs-nav {
+    padding: 0 16px;
+  }
+
+  .catalog-tabs > .ant-tabs-content-holder {
+    padding: 20px 16px;
+  }
+
+  .catalog-language-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalog-language-default {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .catalog-workspace {
+    display: block;
+  }
+
+  .catalog-tree {
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .catalog-three {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-node-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalog-card {
+    overflow-x: auto;
+  }
+
+  .catalog-diff-row,
+  .catalog-diff-head {
+    min-width: 760px;
+  }
+}

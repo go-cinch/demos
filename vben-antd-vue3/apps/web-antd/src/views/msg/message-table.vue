@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { MsgPreview, MsgInput, MsgSentSummary } from '#/api/msg';
+import type { MsgPreview, MsgSentSummary } from '#/api/msg';
+import type { LoadFailure } from '#/api/request-error';
 
 import {
   computed,
@@ -13,62 +14,72 @@ import {
   watch,
 } from 'vue';
 
-import { usePermissions } from '#/composables/use-permissions';
 import { IconifyIcon } from '@vben/icons';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
-import { formatDateTime, getCurrentTimezone } from '@vben/utils';
+import { formatDateTime } from '@vben/utils';
 
 import {
   Alert,
   Button,
   Checkbox,
-  DatePicker,
   Empty,
   FormItem,
-  Input,
-  message,
   Modal,
   Select,
   Space,
   Tag,
 } from 'ant-design-vue';
-import dayjs from 'dayjs';
 
 import { visitMessages } from '#/api/message-attention';
+import { messagesChangedEvent } from '#/api/message-events';
 import { msgApi, msgChanged } from '#/api/msg';
+import { loadFailure } from '#/api/request-error';
+import { showRequestErrorToast } from '#/api/request-feedback';
+import { quietRequest } from '#/api/request-types';
 import LoadWarning from '#/components/load-warning.vue';
-import Table from '#/components/skeleton-table.vue';
-import { vSkeleton } from '#/directives/skeleton';
-import { useDefaultPageSize } from '#/composables/use-default-page-size';
 import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { searchSuggestionGroups } from '#/components/search-suggestions';
+import Table from '#/components/skeleton-table.vue';
+import TableColumnSelector from '#/components/table-column-selector.vue';
+import { useDefaultPageSize } from '#/composables/use-default-page-size';
+import { usePermissions } from '#/composables/use-permissions';
+import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
-import AssociationEditor from '../system/components/association-editor.vue';
 import ManagementCard from '../system/components/management-card.vue';
-import ManagementDrawer from '../system/components/management-drawer.vue';
-import ManagementForm from '../system/components/management-form.vue';
 import ManagementSearch from '../system/components/management-search.vue';
 import ManagementToolbar from '../system/components/management-toolbar.vue';
 import ManagementViewSwitch from '../system/components/management-view-switch.vue';
+import MessageComposeDrawer from './message-compose-drawer.vue';
 import MessageRecordBody from './message-record-body.vue';
 import SentSummary from './sent-summary.vue';
 import SentWorkspace from './sent-workspace.vue';
-const props = withDefaults(defineProps<{ sent?: boolean; embedded?: boolean }>(), {
-  sent: false,
-  embedded: false,
-});
+
+const props = withDefaults(
+  defineProps<{ sent?: boolean; embedded?: boolean }>(),
+  {
+    sent: false,
+    embedded: false,
+  },
+);
 const emit = defineEmits<{ close: [] }>();
 const attentionUser = useUserStore();
 const timezone = useTimezoneStore();
 const active = ref(true);
 const sent = computed(() => props.sent);
 const { hasButton, hasPage } = usePermissions();
-const canControl = (control: string) => hasButton(`admin:btn:${sent.value ? 'system:msg' : 'msg:inbox'}:${control}`);
-const canRead = computed(() => hasPage(sent.value ? '/system/msg' : '/msg/inbox'));
+const canControl = (control: string) =>
+  hasButton(`admin:btn:${sent.value ? 'system:msg' : 'msg:inbox'}:${control}`);
+const canRead = computed(() =>
+  hasPage(sent.value ? '/system/msg' : '/msg/inbox'),
+);
 const canSend = computed(() => sent.value && canControl('send'));
 const canDelete = computed(() => canControl('delete'));
+const selectionVisible = ref(true);
 const checkedKeys = ref<number[]>([]);
+watch(selectionVisible, (visible) => {
+  if (!visible) checkedKeys.value = [];
+});
 const checkedVisible = computed(() =>
   checkedKeys.value.filter((id) => rows.value.some((row) => row.id === id)),
 );
@@ -82,13 +93,18 @@ const rowSelection = computed(() => ({
     'aria-label': `${$t('msg.select')} ${row.title}`,
   }),
   columnTitle: h(Checkbox, {
-    checked: rows.value.length > 0 && checkedVisible.value.length === rows.value.length,
+    checked:
+      rows.value.length > 0 &&
+      checkedVisible.value.length === rows.value.length,
     indeterminate:
-      checkedVisible.value.length > 0 && checkedVisible.value.length < rows.value.length,
-    disabled: loading.value || !rows.value.length,
+      checkedVisible.value.length > 0 &&
+      checkedVisible.value.length < rows.value.length,
+    disabled: loading.value || rows.value.length === 0,
     'aria-label': $t('msg.selectAll'),
     onChange: (event: { target: { checked: boolean } }) => {
-      checkedKeys.value = event.target.checked ? rows.value.map((row) => row.id) : [];
+      checkedKeys.value = event.target.checked
+        ? rows.value.map((row) => row.id)
+        : [];
     },
   }),
 }));
@@ -98,7 +114,7 @@ const defaultPageSize = useDefaultPageSize();
 const size = ref(defaultPageSize.value);
 const total = ref(0);
 const busy = ref(false);
-const error = ref(false);
+const error = ref<LoadFailure>(false);
 const loading = ref(false);
 const status = ref('');
 const type = ref('');
@@ -112,30 +128,44 @@ const sentViewOptions = computed(() => [
 ]);
 const summary = ref<MsgSentSummary>();
 const summaryLoading = ref(false);
-const summaryError = ref(false);
+const summaryError = ref<LoadFailure>(false);
 const selectedId = ref<number>();
-const detailError = ref(false);
+const detailError = ref<LoadFailure>(false);
 const suggestionsLoading = ref(false);
 const suggestionTitles = ref<string[]>([]);
 const queryHistory = ref<string[]>([]);
-const suggestionOptions = computed(() => searchSuggestionGroups(queryDraft.value.trim() ? suggestionTitles.value : [], queryHistory.value));
-function removeQueryHistory(value: string) { queryHistory.value = queryHistory.value.filter((item) => item !== value); }
+const suggestionOptions = computed(() =>
+  searchSuggestionGroups(
+    queryDraft.value.trim() ? suggestionTitles.value : [],
+    queryHistory.value,
+  ),
+);
+function removeQueryHistory(value: string) {
+  queryHistory.value = queryHistory.value.filter((item) => item !== value);
+}
 const detailLoading = ref(false);
 const detailOpen = ref(false);
 const selected = ref<MsgPreview>();
 const panelMessage = ref<MsgPreview>();
-const attempted = ref(false);
 const compose = ref(false);
-const sendError = ref('');
-const composeSnapshot = ref('');
-const form = ref<MsgInput>({
-  title: '',
-  content: '',
-  type: 'notice',
-  scope: 'all',
-  recipient_ids: [],
-  expired_at: null,
-});
+const composeDrawer = ref<InstanceType<typeof MessageComposeDrawer>>();
+function newMessage() {
+  if (canSend.value) compose.value = true;
+}
+function closeCompose() {
+  return composeDrawer.value?.closeCompose() ?? Promise.resolve(!busy.value);
+}
+async function showPublishedMessage(record: MsgPreview) {
+  if (page.value !== 1) {
+    page.value = 1;
+    await nextTick();
+  }
+  await refresh();
+  if (active.value && canRead.value) {
+    panelMessage.value = record;
+    detailOpen.value = true;
+  }
+}
 const density = ref<'large' | 'middle' | 'small'>('middle');
 const bordered = ref(true);
 const striped = ref(true);
@@ -148,24 +178,44 @@ let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let detailGeneration = 0;
 let generation = 0;
-let sendKey = '';
-let lastPayload = '';
 const messageActionWidth = computed(() => {
   const labels = [
     $t('msg.view'),
-    ...(!sent.value ? [$t('msg.markRead')] : []),
-    ...(canDelete.value ? [$t(sent.value ? 'msg.deleteGlobal' : 'msg.delete')] : []),
+    ...(sent.value ? [] : [$t('msg.markRead')]),
+    ...(canDelete.value
+      ? [$t(sent.value ? 'msg.deleteGlobal' : 'msg.delete')]
+      : []),
   ];
-  return labels.reduce((total, label) => total + [...label].reduce(
-    (width, character) => width + ((character.codePointAt(0) ?? 0) > 255 ? 14 : 8), 0,
-  ) + 16, 32 + Math.max(0, labels.length - 1) * 8);
+  return labels.reduce(
+    (total, label) =>
+      total +
+      [...label].reduce(
+        (width, character) =>
+          width + ((character.codePointAt(0) ?? 0) > 255 ? 14 : 8),
+        0,
+      ) +
+      16,
+    32 + Math.max(0, labels.length - 1) * 8,
+  );
 });
-const listFields = computed(() => [...new Set([
-  'id', 'title', ...visible.value,
-  ...(sent.value ? ['expired_at'] : []),
-  ...(sent.value && sentView.value === 'split' ? ['summary'] : []),
-  ...(!sent.value ? ['read_at'] : []),
-])].join(','));
+const listFields = computed(() =>
+  [
+    ...new Set([
+      'id',
+      'title',
+      ...visible.value,
+      ...(sent.value ? ['expired_at'] : []),
+      ...(sent.value && sentView.value === 'split' ? ['summary'] : []),
+      ...(sent.value ? [] : ['read_at']),
+    ]),
+  ].join(','),
+);
+const columnOptions = computed(() =>
+  ['type', 'scope', 'published_at'].map((value) => ({
+    value,
+    label: $t(`msg.${value === 'published_at' ? 'published' : value}`),
+  })),
+);
 const fields = computed(() => [
   // The title absorbs spare space; the actions keep their explicit width.
   { title: $t('msg.title'), key: 'title', dataIndex: 'title' },
@@ -177,7 +227,9 @@ const fields = computed(() => [
       dataIndex: k,
       width: k === 'published_at' ? 190 : 130,
     })),
-  ...(!sent.value ? [{ title: $t('msg.read'), key: 'read_at', width: 100 }] : []),
+  ...(sent.value
+    ? []
+    : [{ title: $t('msg.read'), key: 'read_at', width: 100 }]),
   {
     title: $t('msg.actions'),
     key: 'actions',
@@ -185,26 +237,6 @@ const fields = computed(() => [
     fixed: 'right' as const,
   },
 ]);
-const issues = computed(() => ({
-  title:
-    !form.value.title.trim() || [...form.value.title.trim()].length > 200
-      ? $t('msg.titleError')
-      : '',
-  content:
-    !form.value.content.trim() || [...form.value.content.trim()].length > 20000
-      ? $t('msg.contentError')
-      : '',
-  recipients:
-    form.value.scope === 'targeted' &&
-    (!form.value.recipient_ids?.length || form.value.recipient_ids.length > 1000)
-      ? $t('msg.recipientError')
-      : '',
-  expiry:
-    form.value.expired_at !== null &&
-    (!Number.isFinite(form.value.expired_at) || form.value.expired_at <= Date.now())
-      ? $t('msg.expiryError')
-      : '',
-}));
 function displayTime(value?: number) {
   void timezone.timezone;
   return formatDateTime(value);
@@ -225,11 +257,12 @@ async function loadSummary() {
   summaryError.value = false;
   try {
     const value = await msgApi.sentSummary();
-    if (current === summaryGeneration && canRead.value && active.value) summary.value = value;
-  } catch {
+    if (current === summaryGeneration && canRead.value && active.value)
+      summary.value = value;
+  } catch (requestError) {
     if (current === summaryGeneration) {
       summary.value = undefined;
-      summaryError.value = true;
+      summaryError.value = loadFailure(requestError);
     }
   } finally {
     if (current === summaryGeneration) summaryLoading.value = false;
@@ -244,9 +277,16 @@ function searchSuggestions(value: string) {
   if (!suggestionsLoading.value) return;
   suggestionTimer = setTimeout(async () => {
     try {
-      const result = await msgApi.list(true, { f: 'title', p: 1, s: 8, q: text });
+      const result = await msgApi.list(true, {
+        f: 'title',
+        p: 1,
+        s: 8,
+        q: text,
+      });
       if (current === suggestionGeneration && canRead.value && active.value) {
-        suggestionTitles.value = [...new Set(result.items.map((item) => item.title))];
+        suggestionTitles.value = [
+          ...new Set(result.items.map((item) => item.title)),
+        ];
       }
     } catch {
       if (current === suggestionGeneration) suggestionTitles.value = [];
@@ -273,8 +313,11 @@ function chooseSuggestion(value: unknown) {
   search();
 }
 function setSentPage(nextPage: number, nextSize: number) {
-  if (nextSize !== size.value) size.value = nextSize;
-  else page.value = nextPage;
+  if (nextSize === size.value) {
+    page.value = nextPage;
+  } else {
+    size.value = nextSize;
+  }
 }
 function checkSentRow(id: number, checked: boolean) {
   checkedKeys.value = checked
@@ -285,10 +328,10 @@ function retryDetail() {
   const row = rows.value.find((item) => item.id === selectedId.value);
   if (row) void openDetail(row);
 }
-async function refresh() {
-  await Promise.all([load(), loadSummary()]);
+async function refresh(background = false) {
+  await Promise.all([load(background), loadSummary()]);
 }
-async function load() {
+async function load(background = false) {
   if (!active.value) return;
   const current = ++generation;
   if (!canRead.value) {
@@ -297,7 +340,7 @@ async function load() {
     loading.value = false;
     if (sent.value) {
       suggestionGeneration++;
-  suggestionsLoading.value = false;
+      suggestionsLoading.value = false;
       clearTimeout(suggestionTimer);
       suggestionTitles.value = [];
       summaryGeneration++;
@@ -311,31 +354,46 @@ async function load() {
   loading.value = true;
   error.value = false;
   try {
-    const result = await msgApi.list(sent.value, {
-      f: listFields.value,
-      p: page.value,
-      s: size.value,
-      ...(type.value ? { type: type.value } : {}),
-      ...(sent.value && scope.value ? { scope: scope.value } : {}),
-      ...(sent.value && query.value ? { q: query.value } : {}),
-      ...(!sent.value && status.value ? { read: status.value === 'read' } : {}),
-    });
+    const result = await msgApi.list(
+      sent.value,
+      {
+        f: listFields.value,
+        p: page.value,
+        s: size.value,
+        ...(type.value ? { type: type.value } : {}),
+        ...(sent.value && scope.value ? { scope: scope.value } : {}),
+        ...(sent.value && query.value ? { q: query.value } : {}),
+        ...(!sent.value && status.value
+          ? { read: status.value === 'read' }
+          : {}),
+      },
+      background === true ? quietRequest : undefined,
+    );
     if (current !== generation) return;
-    if (!result.items.length && page.value > 1 && result.t <= (page.value - 1) * size.value) {
+    if (
+      result.items.length === 0 &&
+      page.value > 1 &&
+      result.t <= (page.value - 1) * size.value
+    ) {
       page.value--;
       return;
     }
     rows.value = result.items as MsgPreview[];
     total.value = result.t;
     if (sent.value && sentView.value === 'split') {
-      const row = rows.value.find((item) => item.id === selectedId.value) ?? rows.value[0];
+      const row =
+        rows.value.find((item) => item.id === selectedId.value) ??
+        rows.value[0];
       if (!row) invalidateSentDetail();
-      else if (selectedId.value !== row.id || (!selected.value && !detailLoading.value))
+      else if (
+        selectedId.value !== row.id ||
+        (!selected.value && !detailLoading.value)
+      )
         void openDetail(row);
     }
-  } catch {
+  } catch (requestError) {
     if (current === generation) {
-      error.value = true;
+      error.value = loadFailure(requestError);
       rows.value = [];
       if (sent.value) invalidateSentDetail();
     }
@@ -370,10 +428,9 @@ async function openDetail(row: MsgPreview) {
       msgChanged();
       await refresh();
     }
-  } catch {
+  } catch (requestError) {
     if (current === detailGeneration) {
-      detailError.value = true;
-      if (!inline) detailOpen.value = false;
+      detailError.value = loadFailure(requestError);
     }
   } finally {
     if (current === detailGeneration) detailLoading.value = false;
@@ -382,11 +439,6 @@ async function openDetail(row: MsgPreview) {
 function openSentPanel(row: MsgPreview) {
   panelMessage.value = row;
   detailOpen.value = true;
-}
-function closeMessagePanel() {
-  if (busy.value) return;
-  if (compose.value) void closeCompose();
-  else detailOpen.value = false;
 }
 async function mark(row: MsgPreview) {
   if (!canControl('mark-read')) return;
@@ -403,20 +455,24 @@ function requestBulk(read = false) {
   if (
     busy.value ||
     loading.value ||
-    !checkedVisible.value.length ||
-    (read ? sent.value || !canControl('mark-selected-read') : !canControl('delete-selected'))
+    !selectionVisible.value ||
+    checkedVisible.value.length === 0 ||
+    (read
+      ? sent.value || !canControl('mark-selected-read')
+      : !canControl('delete-selected'))
   )
     return;
   const management = sent.value;
   const remaining = [...checkedVisible.value];
-  Modal.confirm({
-    title: $t(
-      read
-        ? 'msg.readSelectedConfirm'
-        : management
-        ? 'msg.deleteSelectedGlobalConfirm'
-        : 'msg.deleteSelectedConfirm',
-    ),
+  const total = remaining.length;
+  let messageKey = 'msg.deleteSelectedConfirm';
+  if (read) {
+    messageKey = 'msg.readSelectedConfirm';
+  } else if (management) {
+    messageKey = 'msg.deleteSelectedGlobalConfirm';
+  }
+  const dialog = Modal.confirm({
+    title: $t(messageKey),
     okText: $t('msg.confirm'),
     cancelText: $t('msg.cancel'),
     okButtonProps: { danger: !read },
@@ -425,13 +481,23 @@ function requestBulk(read = false) {
       try {
         for (const id of [...remaining]) {
           if (read) await msgApi.read(id);
-          else await msgApi.remove(id, management);
+          else if (management) await msgApi.withdrawIfPresent(id);
+          else await msgApi.remove(id, false);
           remaining.splice(remaining.indexOf(id), 1);
           checkedKeys.value = checkedKeys.value.filter((value) => value !== id);
         }
-      } catch (e) {
-        message.error((e as Error).message);
-        throw e;
+      } catch (error) {
+        if (management) {
+          dialog.update({
+            content: $t('msg.withdrawProgress', {
+              done: total - remaining.length,
+              remaining: remaining.length,
+            }),
+            okText: $t('msg.retry'),
+          });
+          showRequestErrorToast(error);
+        }
+        throw error;
       } finally {
         msgChanged();
         await refresh();
@@ -467,8 +533,8 @@ async function readAll() {
   busy.value = true;
   try {
     await msgApi.readAll();
-  } catch (e) {
-    message.error((e as Error).message);
+  } catch {
+    // The service client reports the failure; retain the current interaction.
   } finally {
     msgChanged();
     await refresh();
@@ -476,82 +542,6 @@ async function readAll() {
   }
 }
 
-function newMessage() {
-  if (!canSend.value) return;
-  form.value = {
-    title: '',
-    content: '',
-    type: 'notice',
-    scope: 'all',
-    recipient_ids: [],
-    expired_at: null,
-  };
-  attempted.value = false;
-  sendError.value = '';
-  sendKey = crypto.randomUUID();
-  lastPayload = '';
-  composeSnapshot.value = JSON.stringify(form.value);
-  compose.value = true;
-}
-async function send() {
-  if (busy.value || !canSend.value) return;
-  attempted.value = true;
-  if (Object.values(issues.value).some(Boolean)) return;
-  busy.value = true;
-  sendError.value = '';
-  try {
-    const payload = {
-      ...form.value,
-      recipient_ids: form.value.scope === 'targeted' ? form.value.recipient_ids : [],
-    };
-    const serialized = JSON.stringify(payload);
-    if (serialized !== lastPayload) {
-      sendKey = crypto.randomUUID();
-      lastPayload = serialized;
-    }
-    const published = await msgApi.send(payload, sendKey);
-    message.success($t('msg.sent'));
-    msgChanged();
-    if (page.value !== 1) {
-      page.value = 1;
-      await nextTick();
-    }
-    await refresh();
-    if (active.value && canRead.value) {
-      panelMessage.value = published;
-      detailOpen.value = true;
-    }
-    compose.value = false;
-  } catch (e) {
-    sendError.value = (e as Error).message;
-  } finally {
-    busy.value = false;
-  }
-}
-function closeCompose(): Promise<boolean> {
-  if (busy.value) return Promise.resolve(false);
-  if (
-    !compose.value ||
-    JSON.stringify(form.value) === composeSnapshot.value
-  ) {
-    compose.value = false;
-    return Promise.resolve(true);
-  }
-  return new Promise((resolve) =>
-    Modal.confirm({
-      title: $t('msg.unsaved'),
-      okText: $t('msg.confirm'),
-      cancelText: $t('msg.cancel'),
-      onOk() {
-        compose.value = false;
-        resolve(true);
-      },
-      onCancel() {
-        resolve(false);
-      },
-    }),
-  );
-}
 function fullscreen() {
   isFullscreen.value = !isFullscreen.value;
 }
@@ -582,27 +572,54 @@ function resetSearch() {
   search();
 }
 defineExpose({ closeCompose });
-watch(defaultPageSize, (value) => { size.value = value; });
+watch(defaultPageSize, (value) => {
+  size.value = value;
+});
 const listRevision = ref(0);
 // Reset pagination synchronously; the single batched watcher below owns requests.
-watch([sent, status, type, scope, size, query], () => {
-  page.value = 1;
-}, { flush: 'sync' });
-watch([sent, page, size, status, type, scope, query, canRead, listRevision, listFields], () => {
-  checkedKeys.value = [];
-  detailOpen.value = false;
-  invalidateSentDetail();
-  void load();
-}, { immediate: true });
-watch([sent, canRead], () => { void loadSummary(); }, { immediate: true });
+watch(
+  [sent, status, type, scope, size, query],
+  () => {
+    page.value = 1;
+  },
+  { flush: 'sync' },
+);
+watch(
+  [
+    sent,
+    page,
+    size,
+    status,
+    type,
+    scope,
+    query,
+    canRead,
+    listRevision,
+    listFields,
+  ],
+  () => {
+    checkedKeys.value = [];
+    detailOpen.value = false;
+    invalidateSentDetail();
+    void load();
+  },
+  { immediate: true },
+);
+watch(
+  [sent, canRead],
+  () => {
+    void loadSummary();
+  },
+  { immediate: true },
+);
 let timer: ReturnType<typeof setInterval>;
 function refreshVisible() {
-  if (active.value && !document.hidden && !busy.value) void refresh();
+  if (active.value && !document.hidden && !busy.value) void refresh(true);
 }
 onMounted(() => {
   if (!sent.value) visitMessages(Number(attentionUser.userInfo?.userId));
-  timer = setInterval(refreshVisible, 30000);
-  window.addEventListener('go-cinch-msg-changed', refreshVisible);
+  timer = setInterval(refreshVisible, 30_000);
+  window.addEventListener(messagesChangedEvent, refreshVisible);
 });
 onActivated(() => {
   if (!sent.value) visitMessages(Number(attentionUser.userInfo?.userId));
@@ -626,7 +643,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   active.value = false;
   clearInterval(timer);
-  window.removeEventListener('go-cinch-msg-changed', refreshVisible);
+  window.removeEventListener(messagesChangedEvent, refreshVisible);
   generation++;
   detailGeneration++;
   summaryGeneration++;
@@ -636,9 +653,12 @@ onBeforeUnmount(() => {
   clearTimeout(suggestionTimer);
 });
 </script>
+
 <template>
-  <div class="msg-region flex h-full flex-col gap-4" :class="{ 'msg-fullscreen': isFullscreen }">
-    <header v-if="sent" class="msg-management-heading"><h1>{{ $t('msg.manage') }}</h1></header>
+  <div
+    class="msg-region flex h-full flex-col gap-4"
+    :class="{ 'msg-fullscreen': isFullscreen }"
+  >
     <SentSummary
       v-if="sent && canRead"
       :summary="summary"
@@ -648,11 +668,15 @@ onBeforeUnmount(() => {
     />
     <ManagementCard class="shrink-0">
       <ManagementSearch @submit.prevent="search">
-        <FormItem v-if="sent" :label="$t('msg.keyword')" class="w-full sm:w-auto">
+        <FormItem
+          v-if="sent"
+          :label="$t('msg.keyword')"
+          class="w-full sm:w-auto"
+        >
           <SearchAutocomplete
             v-model:value="queryDraft"
             class="system-filter-control"
-            style="--filter-width: 280px"
+            :style="{ '--filter-width': '280px' }"
             data-testid="message-search"
             :aria-label="$t('msg.keyword')"
             :placeholder="$t('msg.searchMessages')"
@@ -671,7 +695,7 @@ onBeforeUnmount(() => {
             v-model:value="status"
             :aria-label="$t('msg.read')"
             class="system-filter-control"
-            style="--filter-width: 280px"
+            :style="{ '--filter-width': '280px' }"
             :options="[
               { value: '', label: $t('msg.allStatus') },
               { value: 'unread', label: $t('msg.unread') },
@@ -684,7 +708,7 @@ onBeforeUnmount(() => {
             v-model:value="type"
             :aria-label="$t('msg.type')"
             class="system-filter-control"
-            style="--filter-width: 280px"
+            :style="{ '--filter-width': '280px' }"
             :options="[
               { value: '', label: $t('msg.allTypes') },
               { value: 'system', label: $t('msg.system') },
@@ -698,7 +722,7 @@ onBeforeUnmount(() => {
             data-testid="message-scope"
             :aria-label="$t('msg.scope')"
             class="system-filter-control"
-            style="--filter-width: 200px"
+            :style="{ '--filter-width': '200px' }"
             :options="[
               { value: '', label: $t('msg.allScopes') },
               { value: 'all', label: $t('msg.all') },
@@ -707,15 +731,27 @@ onBeforeUnmount(() => {
           />
         </FormItem>
         <template #actions>
-          <Button v-if="canControl('reset-query')" @click="resetSearch">{{ $t('system.common.reset') }}</Button>
-          <Button v-if="canControl('query')" html-type="submit" type="primary" :loading="loading" :aria-busy="loading">
+          <Button v-if="canControl('reset-query')" @click="resetSearch">{{
+            $t('system.common.reset')
+          }}</Button>
+          <Button
+            v-if="canControl('query')"
+            html-type="submit"
+            type="primary"
+            :loading="loading"
+            :aria-busy="loading"
+          >
             {{ $t('system.common.search') }}
           </Button>
         </template>
       </ManagementSearch>
     </ManagementCard>
     <ManagementCard class="min-h-0 flex-1">
-      <div v-if="sent" class="mb-4 flex justify-end" data-testid="message-result-caption">
+      <div
+        v-if="sent"
+        class="mb-4 flex justify-end"
+        data-testid="message-result-caption"
+      >
         <ManagementViewSwitch
           v-model="sentView"
           test-id="message-view"
@@ -727,29 +763,33 @@ onBeforeUnmount(() => {
           <Button v-if="canSend" type="primary" @click="newMessage">
             <IconifyIcon icon="lucide:plus" />{{ $t('msg.send') }}
           </Button>
-          <Button v-if="!sent && canControl('read-all')" :disabled="loading || busy" @click="readAll">
+          <Button
+            v-if="!sent && canControl('read-all')"
+            :disabled="loading || busy"
+            @click="readAll"
+          >
             {{ $t('msg.readAll') }}
           </Button>
-          <template v-if="canRead && checkedVisible.length">
+          <template v-if="canRead && selectionVisible && checkedVisible.length">
             <Button
               data-testid="message-bulk-delete"
               v-if="canControl('delete-selected')"
               danger
               :disabled="busy || loading"
               @click="requestBulk()"
-              >
-{{ $t('msg.deleteSelected') }}
-</Button>
+            >
+              {{ $t('msg.deleteSelected') }}
+            </Button>
             <Button
               data-testid="message-bulk-read"
               v-if="!sent && canControl('mark-selected-read')"
               :disabled="busy || loading"
               @click="requestBulk(true)"
-              >
-{{ $t('msg.markRead') }}
-</Button>
+            >
+              {{ $t('msg.markRead') }}
+            </Button>
           </template>
-</Space>
+        </Space>
         <ManagementToolbar
           v-model:size="density"
           v-model:bordered="bordered"
@@ -762,25 +802,21 @@ onBeforeUnmount(() => {
           @fullscreen="embedded ? emit('close') : fullscreen()"
         >
           <template #columns>
-            <Checkbox.Group
-              v-model:value="visible"
-              class="flex flex-col gap-2"
-              :options="
-                ['type', 'scope', 'published_at'].map((value) => ({
-                  value,
-                  label: $t(`msg.${value === 'published_at' ? 'published' : value}`),
-                }))
-              "
-            />
+            <TableColumnSelector v-model="visible" :options="columnOptions">
+              <Checkbox v-model:checked="selectionVisible">{{
+                $t('system.common.selection')
+              }}</Checkbox>
+            </TableColumnSelector>
           </template>
         </ManagementToolbar>
       </div>
       <Alert v-if="!canRead" :message="$t('msg.noPermission')" type="info" />
-      <LoadWarning v-else-if="error">
-        <template #action>
-          <Button @click="refresh">{{ $t('msg.retry') }}</Button>
-        </template>
-      </LoadWarning>
+      <LoadWarning
+        v-else-if="error"
+        :failure="error"
+        :retry-label="$t('msg.retry')"
+        @retry="refresh()"
+      />
 
       <SentWorkspace
         v-if="sent && sentView === 'split' && canRead && !error"
@@ -793,6 +829,7 @@ onBeforeUnmount(() => {
         :busy="busy"
         :can-delete="canDelete"
         :checked-keys="checkedVisible"
+        :show-selection="selectionVisible"
         :page="page"
         :size="size"
         :total="total"
@@ -813,7 +850,7 @@ onBeforeUnmount(() => {
         v-if="canRead && !error && (!sent || sentView === 'table')"
         row-key="id"
         :data-source="rows"
-        :row-selection="rowSelection"
+        :row-selection="selectionVisible ? rowSelection : undefined"
         :columns="fields"
         :loading="loading"
         :size="density"
@@ -823,7 +860,12 @@ onBeforeUnmount(() => {
           (_record: MsgPreview, index: number) =>
             striped && index % 2 === 1 ? 'system-table-row-striped' : ''
         "
-        :scroll="{ x: 320 + 48 + fields.reduce((total, field) => total + (field.width ?? 0), 0) }"
+        :scroll="{
+          x:
+            320 +
+            48 +
+            fields.reduce((total, field) => total + (field.width ?? 0), 0),
+        }"
         :pagination="{
           current: page,
           pageSize: size,
@@ -832,18 +874,21 @@ onBeforeUnmount(() => {
           showTotal: (count: number) => $t('system.table.total', { count }),
         }"
         @change="
-          (p: { pageSize?: number; current?: number }) => {
-            size = p.pageSize ?? size;
-            page = p.current ?? 1;
-          }
+          ({ current, pageSize }: { current?: number; pageSize?: number }) =>
+            setSentPage(current ?? 1, pageSize ?? size)
         "
       >
         <template #emptyText><Empty :description="$t('msg.empty')" /></template>
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">
-            <Button size="small" type="link" class="msg-title" @click="openDetail(record as MsgPreview)">
-              {{ record.title }}
-</Button><Tag v-if="record.expired_at && record.expired_at <= Date.now()">
+            <Button
+              size="small"
+              type="link"
+              class="msg-title"
+              @click="openDetail(record as MsgPreview)"
+            >
+              {{ record.title }} </Button
+            ><Tag v-if="record.expired_at && record.expired_at <= Date.now()">
               {{ $t('msg.expired') }}
             </Tag>
           </template>
@@ -853,24 +898,32 @@ onBeforeUnmount(() => {
           <Tag v-else-if="column.key === 'scope'" color="purple">
             {{ $t(`msg.${record.scope}`) }}
           </Tag>
-          <Tag v-else-if="column.key === 'read_at'" :color="record.read_at ? 'default' : 'blue'">
+          <Tag
+            v-else-if="column.key === 'read_at'"
+            :color="record.read_at ? 'default' : 'blue'"
+          >
             {{ $t(record.read_at ? 'msg.read' : 'msg.unread') }}
           </Tag>
           <template v-else-if="column.key === 'published_at'">
             {{ displayTime(record.published_at) }}
           </template>
           <Space v-else-if="column.key === 'actions'" class="whitespace-nowrap">
-            <Button size="small" type="link" :disabled="!canControl('view-detail')" @click="openDetail(record as MsgPreview)">
-              {{ $t('msg.view') }}
-</Button><Button
+            <Button
+              size="small"
+              type="link"
+              :disabled="!canControl('view-detail')"
+              @click="openDetail(record as MsgPreview)"
+            >
+              {{ $t('msg.view') }} </Button
+            ><Button
               v-if="!sent && !record.read_at && canControl('mark-read')"
               size="small"
               type="link"
               :disabled="busy"
               @click="mark(record as MsgPreview)"
             >
-              {{ $t('msg.markRead') }}
-</Button><Button
+              {{ $t('msg.markRead') }} </Button
+            ><Button
               v-if="canDelete"
               size="small"
               danger
@@ -884,141 +937,96 @@ onBeforeUnmount(() => {
       </Table>
     </ManagementCard>
   </div>
-  <Modal v-if="!sent" v-model:open="detailOpen" :title="$t('msg.detail')" :width="560" :footer="null">
-    <div v-if="selected" v-skeleton="detailLoading" class="message-detail-viewport">
+  <Modal
+    v-if="!sent"
+    v-model:open="detailOpen"
+    :title="$t('msg.detail')"
+    :width="560"
+    :footer="null"
+  >
+    <LoadWarning
+      v-if="detailError && selected"
+      :failure="detailError"
+      :retry-label="$t('msg.retry')"
+      @retry="openDetail(selected)"
+    />
+    <div
+      v-else-if="selected"
+      v-skeleton="detailLoading"
+      class="message-detail-viewport"
+    >
       <h2 class="mb-3 text-xl font-semibold">{{ selected.title }}</h2>
       <p>{{ displayTime(selected.published_at) }}</p>
       <p class="msg-content my-5">{{ selected.content }}</p>
       <p>
         {{ $t('msg.expiry') }}:
-        {{ selected.expired_at ? displayTime(selected.expired_at) : $t('msg.noExpiry') }}
+        {{
+          selected.expired_at
+            ? displayTime(selected.expired_at)
+            : $t('msg.noExpiry')
+        }}
       </p>
       <Button v-if="canDelete" danger class="mt-5" @click="remove(selected)">
         {{ $t(sent ? 'msg.deleteGlobal' : 'msg.delete') }}
       </Button>
     </div>
   </Modal>
-  <ManagementDrawer
+  <MessageComposeDrawer
     v-if="sent"
-    :open="compose || detailOpen"
-    :title="$t(compose ? 'msg.send' : 'msg.detail')"
-    :entity="$t('msg.manage')"
-    :record-id="compose ? undefined : panelMessage?.id"
-    :mode="compose ? 'create' : 'detail'"
-    :busy="busy"
-    @close="closeMessagePanel"
+    ref="composeDrawer"
+    v-model:open="compose"
+    v-model:busy="busy"
+    v-model:detail-open="detailOpen"
+    :record-id="panelMessage?.id"
+    :can-send="canSend"
+    :published="showPublishedMessage"
+    :refresh="refresh"
   >
-    <template v-if="!compose">
-      <LoadWarning v-if="detailError" />
-      <div v-else v-skeleton="detailLoading"><MessageRecordBody v-if="panelMessage" :record="panelMessage" /></div>
+    <template #detail>
+      <LoadWarning
+        v-if="detailError && selected"
+        :failure="detailError"
+        :retry-label="$t('msg.retry')"
+        @retry="openDetail(selected)"
+      />
+      <div v-else v-skeleton="detailLoading">
+        <MessageRecordBody v-if="panelMessage" :record="panelMessage" />
+      </div>
     </template>
-    <ManagementForm v-else :disabled="busy" vertical data-testid="message-editor">
-      <MessageRecordBody editing :targeted="form.scope === 'targeted'">
-<template #title>
-<FormItem
-        :label="$t('msg.title')"
-        required
-        :validate-status="attempted && issues.title ? 'error' : ''"
-        :help="attempted ? issues.title : ''"
+    <template #detail-actions>
+      <Button
+        v-if="canDelete && panelMessage"
+        danger
+        :disabled="busy"
+        @click="remove(panelMessage)"
+        >{{ $t('msg.deleteGlobal') }}</Button
       >
-        <Input v-model:value="form.title" :aria-label="$t('msg.title')" />
-      </FormItem>
-</template>
-<template #content>
-<FormItem
-        :label="$t('msg.content')"
-        required
-        :validate-status="attempted && issues.content ? 'error' : ''"
-        :help="attempted ? issues.content : ''"
-      >
-        <Input.TextArea v-model:value="form.content" :aria-label="$t('msg.content')" :auto-size="{ minRows: 5, maxRows: 12 }" />
-      </FormItem>
-</template>
-<template #type>
-<FormItem html-for="msg-type" :label="$t('msg.type')">
-        <Select
-          id="msg-type"
-          v-model:value="form.type"
-          :aria-label="$t('msg.type')"
-          :options="
-            ['system', 'notice'].map((value) => ({
-              value,
-              label: $t(`msg.${value}`),
-            }))
-          "
-        />
-      </FormItem>
-</template>
-<template #scope>
-<FormItem html-for="msg-scope" :label="$t('msg.scope')">
-        <Select
-          id="msg-scope"
-          v-model:value="form.scope"
-          :aria-label="$t('msg.scope')"
-          :options="
-            ['all', 'targeted'].map((value) => ({
-              value,
-              label: $t(`msg.${value}`),
-            }))
-          "
-        />
-      </FormItem>
-</template>
-<template #recipients>
-<FormItem
-        v-show="form.scope === 'targeted'"
-        html-for="msg-recipients"
-        :label="$t('msg.recipients')"
-        required
-        :validate-status="attempted && issues.recipients ? 'error' : ''"
-        :help="attempted ? issues.recipients : ''"
-      >
-        <AssociationEditor
-          id="msg-recipients"
-          :value="form.recipient_ids"
-          kind="recipient"
-          :disabled="busy"
-          @update:value="form.recipient_ids = $event.map(Number)"
-        />
-      </FormItem>
-</template>
-<template #expiry>
-<FormItem
-        :label="$t('msg.expiry')"
-        :validate-status="attempted && issues.expiry ? 'error' : ''"
-        :help="attempted ? issues.expiry : ''"
-      >
-        <DatePicker
-          :value="form.expired_at ? dayjs(formatDateTime(form.expired_at)) : undefined"
-          format="YYYY-MM-DD HH:mm:ss"
-          show-time
-          :placeholder="$t('msg.noExpiry')"
-          @change="
-            (v) =>
-              (form.expired_at = v
-                ? dayjs.tz(dayjs(v).format('YYYY-MM-DD HH:mm:ss'), getCurrentTimezone()).valueOf()
-                : null)
-          "
-        />
-      </FormItem>
-</template>
-      </MessageRecordBody>
-      <Alert class="mt-5" v-if="sendError" type="error" :message="sendError" />
-    </ManagementForm>
-    <template #footer>
-      <Button :disabled="busy" @click="closeMessagePanel">{{ $t(compose ? 'msg.cancel' : 'system-cards.backToList') }}</Button>
-      <Button v-if="compose" type="primary" :loading="busy" :aria-busy="busy" @click="send"><IconifyIcon icon="lucide:send" />{{ $t('msg.send') }}</Button>
-      <Button v-else-if="canDelete && panelMessage" danger :disabled="busy" @click="remove(panelMessage)">{{ $t('msg.deleteGlobal') }}</Button>
     </template>
-  </ManagementDrawer>
+  </MessageComposeDrawer>
 </template>
-<style scoped>
-.message-detail-facts { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; margin: 0; }
-.message-detail-facts dt { color: hsl(var(--muted-foreground)); }
-.message-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
-.message-recipient-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.msg-management-heading{flex-shrink:0;padding:3px 0 2px}.msg-management-heading h1{font-size:24px;line-height:1.35;font-weight:650;margin:0}
+<style scoped>
+.message-detail-facts {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+}
+
+.message-detail-facts dt {
+  color: hsl(var(--muted-foreground));
+}
+
+.message-detail-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.message-recipient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
 .msg-fullscreen {
   position: fixed;
@@ -1028,24 +1036,29 @@ onBeforeUnmount(() => {
   overflow: auto;
   background: hsl(var(--background));
 }
+
 .msg-title {
   height: auto;
-  white-space: normal;
+  padding-left: 0;
   text-align: left;
   overflow-wrap: anywhere;
-  padding-left: 0;
+  white-space: normal;
 }
+
 .msg-content {
   max-height: 384px;
   overflow: auto;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
+
 :deep(.system-table-row-striped > td) {
   background: hsl(var(--muted));
 }
-</style>
 
-<style scoped>
-.message-detail-viewport { height: min(480px, 65vh); overflow: auto; scrollbar-gutter: stable; }
+.message-detail-viewport {
+  height: min(480px, 65vh);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
 </style>

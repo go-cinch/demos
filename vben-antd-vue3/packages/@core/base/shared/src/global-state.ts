@@ -8,6 +8,7 @@ interface ComponentsState {
 }
 
 interface MessageState {
+  copyPreferencesFailed?: () => void;
   copyPreferencesSuccess?: (title: string, content?: string) => void;
 }
 
@@ -23,9 +24,13 @@ class GlobalShareState {
   /**
    * 定义框架内部各个场景的消息提示
    */
-  public defineMessage({ copyPreferencesSuccess }: MessageState) {
+  public defineMessage({
+    copyPreferencesSuccess,
+    copyPreferencesFailed,
+  }: MessageState) {
     this.#message = {
       copyPreferencesSuccess,
+      copyPreferencesFailed,
     };
   }
 

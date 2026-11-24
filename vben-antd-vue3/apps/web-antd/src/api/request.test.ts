@@ -1,6 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cancelMFA, completeMFA, mfaPrompt, requestMFA } from '#/security/mfa-prompt';
-import { isMFAEnrollmentRequired, isPasswordResetRequired } from './auth-headers';
+
+import {
+  cancelVerification,
+  completeVerification,
+  requestVerification,
+  verificationPrompt,
+} from '#/security/verification-prompt';
+
+import { rejectionOf } from '../../../../scripts/test-utils/rejection-of';
+import { required } from '../../../../scripts/test-utils/required';
+import {
+  authInlineVerificationRequestClient,
+  authPublicRequestClient,
+  authRequestClient,
+  authSessionRequestClient,
+  authSilentPublicRequestClient,
+  authVerificationRequestClient,
+  createServiceRequestClient,
+  orderRequestClient,
+} from './request';
 
 type RequestConfig = { headers: Record<string, unknown> };
 type Authentication = {
@@ -25,36 +43,49 @@ const state = vi.hoisted(() => ({
     refreshToken: 'old-refresh' as null | string,
     isAccessChecked: true,
     setAccessToken: vi.fn(),
+    setRefreshToken: vi.fn(),
     setLoginExpired: vi.fn(),
   },
   refresh: vi.fn(),
+  sensitive: vi.fn(),
   acceptSession: vi.fn(),
   logout: vi.fn(),
   requirePasswordReset: vi.fn(),
-  requireMFAEnrollment: vi.fn(),
+  requireTOTPEnrollment: vi.fn(),
   captureSession: vi.fn((): (() => boolean) => () => true),
+  encryptEmail: vi.fn(),
   replay: vi.fn(),
 }));
 vi.mock('@vben/hooks', () => ({ useAppConfig: () => ({ apiURL: '/api' }) }));
 vi.mock('@vben/preferences', () => ({ preferences: state.preferences }));
 vi.mock('@vben/stores', () => ({ useAccessStore: () => state.session }));
 vi.mock('#/store', () => ({ useAuthStore: () => state }));
-vi.mock('./core', () => ({ refreshTokenApi: state.refresh }));
+vi.mock('./core', () => ({
+  refreshTokenApi: state.refresh,
+  getSensitiveStatusApi: state.sensitive,
+  encryptSensitiveEmailCode: state.encryptEmail,
+}));
 vi.mock('./request-error', () => ({
-  isBadGatewayError: () => false,
-  normalizeGatewayError: (error: unknown) => error,
+  isServiceUnavailableError: () => false,
+  rejectResponseError: (error: unknown) => Promise.reject(error),
   requestErrorMessage: (_error: unknown, message: string) => message,
 }));
-vi.mock('ant-design-vue', () => ({ message: { error: vi.fn() } }));
+vi.mock('ant-design-vue', () => ({
+  message: { error: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@vben/request', () => ({
   RequestClient: class {
+    responses: any[] = [];
     constructor(public options: Record<string, unknown>) {}
     addRequestInterceptor(interceptor: (typeof state.requests)[number]) {
       state.requests.push(interceptor);
     }
-    responses: any[] = [];
-    addResponseInterceptor(interceptor: any) { this.responses.push(interceptor); }
-    request(url: string, config: unknown) { return state.replay(url, config); }
+    addResponseInterceptor(interceptor: any) {
+      this.responses.push(interceptor);
+    }
+    request(url: string, config: unknown) {
+      return state.replay(url, config);
+    }
   },
   authenticateResponseInterceptor: (options: Authentication) => {
     state.authentication.push(options);
@@ -63,17 +94,6 @@ vi.mock('@vben/request', () => ({
   defaultResponseInterceptor: () => ({}),
   errorMessageResponseInterceptor: () => ({}),
 }));
-
-import {
-  authRequestClient,
-  authPublicRequestClient,
-  authSessionRequestClient,
-  authSilentPublicRequestClient,
-  authVerificationRequestClient,
-  authMFAVerificationRequestClient,
-  createServiceRequestClient,
-  orderRequestClient,
-} from './request';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -94,10 +114,10 @@ describe('service request configuration', () => {
   it('uses current tokens, locale and admin scope without losing caller headers', async () => {
     expect(state.requests.length).toBeGreaterThanOrEqual(6);
     for (const interceptor of state.requests) {
-      expect(
-        (await interceptor.fulfilled({ headers: { 'x-idempotent': 'once' } }))
-          .headers,
-      ).toEqual({
+      const requestConfig = await interceptor.fulfilled({
+        headers: { 'x-idempotent': 'once' },
+      });
+      expect(requestConfig.headers).toEqual({
         'x-idempotent': 'once',
         Authorization: 'Bearer old-access',
         'Accept-Language': 'en-US',
@@ -106,13 +126,18 @@ describe('service request configuration', () => {
     }
     state.session.accessToken = null;
     state.preferences.app.locale = 'fr-FR';
-    expect(
-      (await state.requests[0]!.fulfilled({ headers: {} })).headers,
-    ).toEqual({
+    const requestConfig2 = await required(state.requests[0]).fulfilled({
+      headers: {},
+    });
+    expect(requestConfig2.headers).toEqual({
       Authorization: null,
       'Accept-Language': 'fr-FR',
       'X-Auth-Scope': 'admin',
     });
+    const explicitLocale = await required(state.requests[0]).fulfilled({
+      headers: { 'Accept-Language': 'zh-CN' },
+    });
+    expect(explicitLocale.headers['Accept-Language']).toBe('zh-CN');
   });
 
   it('keeps service response contracts independent and disables recursive authentication for public clients', () => {
@@ -148,9 +173,13 @@ describe('service request configuration', () => {
 
 describe('shared session refresh', () => {
   const auth = () =>
-    state.authentication.find((item) => item.client === authRequestClient)!;
+    required(
+      state.authentication.find((item) => item.client === authRequestClient),
+    );
   const order = () =>
-    state.authentication.find((item) => item.client === orderRequestClient)!;
+    required(
+      state.authentication.find((item) => item.client === orderRequestClient),
+    );
 
   it('coalesces concurrent services and accepts a rotation within the current session', async () => {
     let finish!: (value: unknown) => void;
@@ -182,10 +211,12 @@ describe('shared session refresh', () => {
       }),
     );
     const pending = auth().doRefreshToken();
-    const rejected = expect(pending).rejects.toThrow('expired session');
+    const rejected = rejectionOf(pending);
     state.session.refreshToken = 'other-account';
     finish({ access_token: 'stale', refresh_token: 'stale' });
-    await rejected;
+    expect(await rejected).toMatchObject({
+      message: expect.stringContaining('expired session'),
+    });
     expect(state.acceptSession).not.toHaveBeenCalled();
   });
 
@@ -193,17 +224,26 @@ describe('shared session refresh', () => {
     let current = true;
     state.captureSession.mockReturnValue(() => current);
     let finish!: (value: unknown) => void;
-    state.refresh.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    state.refresh.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const first = auth().doRefreshToken();
     const second = order().doRefreshToken();
     const results = Promise.allSettled([first, second]);
     // logout changes the session epoch before its network request completes.
     current = false;
     expect(state.session.refreshToken).toBe('old-refresh');
-    finish({ access_token: 'stale-access', refresh_token: 'rotated-old-refresh' });
+    finish({
+      access_token: 'stale-access',
+      refresh_token: 'rotated-old-refresh',
+    });
     for (const result of await results) {
-      expect(result.status).toBe('rejected');
-      if (result.status === 'rejected') expect(result.reason.message).toContain('expired session');
+      expect(result).toMatchObject({
+        status: 'rejected',
+        reason: { message: expect.stringContaining('expired session') },
+      });
     }
     expect(state.refresh).toHaveBeenCalledExactlyOnceWith('old-refresh');
     expect(state.acceptSession).not.toHaveBeenCalled();
@@ -234,161 +274,235 @@ describe('shared session refresh', () => {
   });
 });
 
-
-describe('password reset header protocol', () => {
-  const reject = (client: unknown, error: unknown) => (client as any).responses.filter((item: any) => item.rejected).at(-1).rejected(error);
-
+describe('onboarding error-code routing', () => {
+  const reject = (client: unknown, error: unknown) =>
+    (client as any).responses
+      .findLast((item: any) => item.rejected)
+      .rejected(error);
   it.each([
-    ['login', authPublicRequestClient],
-    ['refresh', authSessionRequestClient],
-    ['recovery login', authVerificationRequestClient],
-    ['MFA confirmation', authMFAVerificationRequestClient],
-  ])('preserves a header-only restriction on %s without changing the response body', (_name, client) => {
-    const data = { access_token: 'restricted-access', refresh_token: 'restricted-refresh', expired_at: 123 };
-    (client as any).responses[0].fulfilled({ data, headers: { 'x-password-reset-required': 'true' } });
-    expect(isPasswordResetRequired(data)).toBe(true);
-    expect(data).toEqual({ access_token: 'restricted-access', refresh_token: 'restricted-refresh', expired_at: 123 });
-  });
-
-  it.each([
-    { headers: new Headers({ 'X-Password-Reset-Required': 'true' }), data: {} },
-    { headers: { 'X-Password-Reset-Required': 'true' }, data: {} },
-    { headers: {}, data: { error_code: 'AUTH_PASSWORD_RESET_REQUIRED' } },
-  ])('redirects a rejected business request using header or legacy error metadata', async ({ headers, data }) => {
-    const error = { config: { url: '/msg/unread-count' }, response: { status: 403, headers, data } };
-    await expect(reject(authRequestClient, error)).rejects.toBe(error);
-    expect(state.requirePasswordReset).toHaveBeenCalledOnce();
-    expect(state.requireMFAEnrollment).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    { status: 403, headers: {} },
-    { status: 403, headers: { 'x-password-reset-required': 'false' } },
-    { status: 401, headers: { 'x-password-reset-required': 'true' } },
-  ])('does not treat unrelated failures as password reset requests', async (response) => {
-    const error = { config: { url: '/msg/unread-count' }, response: { ...response, data: {} } };
-    await expect(reject(authRequestClient, error)).rejects.toBe(error);
-    expect(state.requirePasswordReset).not.toHaveBeenCalled();
-  });
-
-  it('keeps MFA enrollment ahead of password reset when both headers are present', async () => {
+    ['AUTH_PASSWORD_RESET_REQUIRED', 'requirePasswordReset'],
+    ['AUTH_TOTP_ENROLLMENT_REQUIRED', 'requireTOTPEnrollment'],
+  ] as const)('routes %s without response headers', async (code, action) => {
     const error = {
+      config: { url: '/info' },
+      response: { status: 403, headers: {}, data: { error_code: code } },
+    };
+    await expect(reject(authRequestClient, error)).rejects.toBe(error);
+    expect(state[action]).toHaveBeenCalledOnce();
+  });
+  it('ignores retired headers without a matching error code', async () => {
+    const error = {
+      config: { url: '/info' },
       response: {
         status: 403,
-        headers: { 'x-mfa-enrollment-required': 'true', 'x-password-reset-required': 'true' },
-        data: { error_code: 'AUTH_PASSWORD_RESET_REQUIRED' },
+        headers: {
+          'X-Password-Reset-Required': 'true',
+          'X-MFA-Enrollment-Required': 'true',
+        },
+        data: {},
       },
     };
     await expect(reject(authRequestClient, error)).rejects.toBe(error);
-    expect(state.requireMFAEnrollment).toHaveBeenCalledOnce();
     expect(state.requirePasswordReset).not.toHaveBeenCalled();
+    expect(state.requireTOTPEnrollment).not.toHaveBeenCalled();
   });
 });
 
-describe('MFA header protocol', () => {
-  afterEach(cancelMFA);
-  const reject = (client: unknown, error: unknown) => (client as any).responses.filter((item: any) => item.rejected).at(-1).rejected(error);
+describe('multi-factor authentication header protocol', () => {
+  afterEach(cancelVerification);
+  const reject = (client: unknown, error: unknown) =>
+    (client as any).responses
+      .findLast((item: any) => item.rejected)
+      .rejected(error);
   const challenge = (extra: Record<string, string> = {}) => ({
-    config: { url: '/user/7', method: 'PATCH', data: { name: 'updated' }, headers: { 'X-Idempotent': 'same-operation' } },
-    response: { status: 403, headers: { 'x-mfa-required': 'true', ...extra }, data: { error_code: 'AUTH_STEP_UP_REQUIRED', msg: 'Verify' } },
+    config: {
+      url: '/user/7',
+      method: 'PATCH',
+      data: { name: 'updated' },
+      headers: { 'X-Idempotent': 'same-operation' },
+    },
+    response: {
+      status: 403,
+      headers: { 'x-verification-required': 'true', ...extra },
+      data: { error_code: 'AUTH_STEP_UP_REQUIRED', msg: 'Verify' },
+    },
   });
 
-  it.each([400, 429, 403])('returns enrollment verification status %s to its existing form without another prompt or retry', async (status) => {
-    for (const url of ['/mfa/setup', '/mfa/confirm']) {
-      const error = {
-        config: { url, method: 'POST' },
-        response: { status, headers: { 'X-MFA-Required': 'true' }, data: { msg: 'Enrollment verification failed' } },
-      };
-      await expect(reject(authMFAVerificationRequestClient, error)).rejects.toBe(error);
-      expect(mfaPrompt.value).toBeUndefined();
+  it.each([400, 429, 403])(
+    'returns enrollment verification status %s to its existing form without another prompt or retry',
+    async (status) => {
+      for (const url of ['/totp/setup', '/totp/confirm']) {
+        const error = {
+          config: { url, method: 'POST' },
+          response: {
+            status,
+            headers: { 'X-Verification-Required': 'true' },
+            data: { msg: 'Enrollment verification failed' },
+          },
+        };
+        await expect(
+          reject(authInlineVerificationRequestClient, error),
+        ).rejects.toBe(error);
+        expect(verificationPrompt.value).toBeUndefined();
+        expect(state.replay).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([400, 429])(
+    'does not start a new business challenge for verification failure status %s',
+    async (status) => {
+      const error = challenge();
+      error.response.status = status;
+      await expect(reject(authRequestClient, error)).rejects.toBe(error);
+      expect(verificationPrompt.value).toBeUndefined();
       expect(state.replay).not.toHaveBeenCalled();
-    }
-  });
-
-  it.each([400, 429])('does not start a new business challenge for verification failure status %s', async (status) => {
-    const error = challenge();
-    error.response.status = status;
-    await expect(reject(authRequestClient, error)).rejects.toBe(error);
-    expect(mfaPrompt.value).toBeUndefined();
-    expect(state.replay).not.toHaveBeenCalled();
-  });
+    },
+  );
 
   it('keeps enrollment routing active on the inline client', async () => {
-    const error = challenge({ 'X-MFA-Enrollment-Required': 'true' });
-    await expect(reject(authMFAVerificationRequestClient, error)).rejects.toBe(error);
-    expect(state.requireMFAEnrollment).toHaveBeenCalledOnce();
-    expect(mfaPrompt.value).toBeUndefined();
-  });
-
-  it('keeps enrollment metadata outside the successful response body', () => {
-    const data = { access_token: 'access', refresh_token: 'refresh' };
-    (authPublicRequestClient as any).responses[0].fulfilled({ data, headers: { 'x-mfa-enrollment-required': 'true' } });
-    expect(isMFAEnrollmentRequired(data)).toBe(true);
-    expect(data).toEqual({ access_token: 'access', refresh_token: 'refresh' });
+    const error = challenge();
+    error.response.data.error_code = 'AUTH_TOTP_ENROLLMENT_REQUIRED';
+    await expect(
+      reject(authInlineVerificationRequestClient, error),
+    ).rejects.toBe(error);
+    expect(state.requireTOTPEnrollment).toHaveBeenCalledOnce();
+    expect(verificationPrompt.value).toBeUndefined();
   });
 
   it('opens inline login verification from headers, without reading JSON MFA flags', async () => {
-    const error = challenge({ 'x-mfa-ticket': 'ticket', 'x-mfa-expires-at': String(Date.now() + 300_000) });
+    const error = challenge({
+      'x-mfa-ticket': 'ticket',
+      'x-mfa-expires-at': String(Date.now() + 300_000),
+    });
     error.config.url = '/pub/login';
     const pending = reject(authPublicRequestClient, error);
-    expect(mfaPrompt.value).toMatchObject({ mode: 'login', ticket: 'ticket' });
-    const result = { access_token: 'access', refresh_token: 'refresh', expired_at: 1 };
-    completeMFA(mfaPrompt.value!.id, result);
+    expect(verificationPrompt.value).toMatchObject({
+      mode: 'login',
+      ticket: 'ticket',
+    });
+    const result = {
+      access_token: 'access',
+      refresh_token: 'refresh',
+      expired_at: 1,
+    };
+    completeVerification(required(verificationPrompt.value).id, result);
     await expect(pending).resolves.toBe(result);
     expect(state.replay).not.toHaveBeenCalled();
   });
 
   it('verifies on the original mutation with the same idempotency key and regenerated credential', async () => {
     const error: any = challenge();
-    const fresh = vi.fn().mockResolvedValue({ challenge_id: 'fresh', credential: 'encrypted' });
-    error.config.mfaRetryCredential = fresh;
+    const fresh = vi
+      .fn()
+      .mockResolvedValue({ challenge_id: 'fresh', credential: 'encrypted' });
+    error.config.verificationRetryCredential = fresh;
     state.replay.mockResolvedValue({ id: 7 });
     const pending = reject(authRequestClient, error);
-    const prompt = mfaPrompt.value!;
+    const prompt = required(verificationPrompt.value);
     expect(state.replay).not.toHaveBeenCalled();
-    await prompt.verify!('123456');
-    completeMFA(prompt.id);
+    await required(prompt.verify)('123456');
+    completeVerification(prompt.id);
     await expect(pending).resolves.toEqual({ id: 7 });
-    expect(state.replay).toHaveBeenCalledExactlyOnceWith('/user/7', expect.objectContaining({
-      method: 'PATCH', _mfaRetried: true,
-      data: { name: 'updated', challenge_id: 'fresh', credential: 'encrypted' },
-      headers: { 'X-Idempotent': 'same-operation', 'X-MFA-Code': '123456' },
-    }));
+    expect(state.encryptEmail).not.toHaveBeenCalled();
+    expect(state.replay).toHaveBeenCalledExactlyOnceWith(
+      '/user/7',
+      expect.objectContaining({
+        method: 'PATCH',
+        _verificationRetried: true,
+        data: {
+          name: 'updated',
+          challenge_id: 'fresh',
+          credential: 'encrypted',
+        },
+        headers: { 'X-Idempotent': 'same-operation', 'X-TOTP-Code': '123456' },
+      }),
+    );
+  });
+
+  it('sends only the challenge and ciphertext when using email verification', async () => {
+    const ticket = { browser_uuid: 'browser', verification_id: 'ticket' };
+    state.encryptEmail.mockResolvedValueOnce({
+      challenge_id: 'challenge',
+      credential: 'jwe',
+    });
+    state.replay.mockResolvedValueOnce({ id: 7 });
+    const pending = reject(authRequestClient, challenge());
+    const prompt = required(verificationPrompt.value);
+    await required(prompt.verify)('123456', ticket);
+    completeVerification(prompt.id);
+    await pending;
+    expect(state.encryptEmail).toHaveBeenCalledExactlyOnceWith(
+      '123456',
+      ticket,
+    );
+    expect(required(state.replay.mock.calls[0])[1].headers).toEqual({
+      'X-Idempotent': 'same-operation',
+      'X-Step-Up-Challenge': 'challenge',
+      'X-Step-Up-Credential': 'jwe',
+    });
   });
 
   it('keeps a wrong code inline and allows another original-request attempt', async () => {
-    state.replay.mockRejectedValueOnce(challenge()).mockResolvedValueOnce({ id: 7 });
+    state.replay
+      .mockRejectedValueOnce(challenge())
+      .mockResolvedValueOnce({ id: 7 });
     const pending = reject(authRequestClient, challenge());
-    const prompt = mfaPrompt.value!;
-    await expect(prompt.verify!('wrong')).rejects.toMatchObject({ response: { status: 403 } });
-    expect(mfaPrompt.value?.id).toBe(prompt.id);
-    await prompt.verify!('correct');
-    completeMFA(prompt.id);
+    const prompt = required(verificationPrompt.value);
+    await expect(required(prompt.verify)('wrong')).rejects.toMatchObject({
+      response: { status: 403 },
+    });
+    expect(verificationPrompt.value?.id).toBe(prompt.id);
+    await required(prompt.verify)('correct');
+    completeVerification(prompt.id);
     await expect(pending).resolves.toEqual({ id: 7 });
     expect(state.replay).toHaveBeenCalledTimes(2);
   });
 
   it.each([
-    { name: 'business conflict', failure: { response: { status: 409, headers: {}, data: { error_code: 'USER_EXISTS' } } } },
-    { name: 'unavailable verification service', failure: { response: { status: 503, headers: {}, data: { error_code: 'AUTH_MFA_UNAVAILABLE' } } } },
+    {
+      name: 'business conflict',
+      failure: {
+        response: {
+          status: 409,
+          headers: {},
+          data: { error_code: 'USER_EXISTS' },
+        },
+      },
+    },
+    {
+      name: 'unavailable verification service',
+      failure: {
+        response: {
+          status: 503,
+          headers: {},
+          data: { error_code: 'AUTH_VERIFICATION_UNAVAILABLE' },
+        },
+      },
+    },
     { name: 'network failure', failure: new Error('Network Error') },
-  ])('returns $name to the caller without claiming verification success or replaying again', async ({ failure }) => {
-    state.replay.mockRejectedValue(failure);
-    const pending = reject(authRequestClient, challenge());
-    const rejected = expect(pending).rejects.toBe(failure);
-    const prompt = mfaPrompt.value!;
-    await expect(prompt.verify!('123456')).resolves.toBe(false);
-    completeMFA(prompt.id);
-    await rejected;
-    expect(mfaPrompt.value).toBeUndefined();
-    expect(state.replay).toHaveBeenCalledOnce();
-  });
+  ])(
+    'returns $name to the caller without claiming verification success or replaying again',
+    async ({ failure }) => {
+      state.replay.mockRejectedValue(failure);
+      const pending = reject(authRequestClient, challenge());
+      const rejected = rejectionOf(pending);
+      const prompt = required(verificationPrompt.value);
+      await expect(required(prompt.verify)('123456')).resolves.toBe(false);
+      completeVerification(prompt.id);
+      expect(await rejected).toBe(failure);
+      expect(verificationPrompt.value).toBeUndefined();
+      expect(state.replay).toHaveBeenCalledOnce();
+    },
+  );
 
   it('does not resend an operation after logout cancels the prompt', async () => {
     const pending = reject(authRequestClient, challenge());
-    const rejected = expect(pending).rejects.toThrow('MFA cancelled');
-    cancelMFA();
-    await rejected;
+    const rejected = rejectionOf(pending);
+    cancelVerification();
+    expect(await rejected).toMatchObject({
+      message: expect.stringContaining('Verification cancelled'),
+    });
     expect(state.replay).not.toHaveBeenCalled();
   });
 
@@ -396,13 +510,19 @@ describe('MFA header protocol', () => {
     const first = reject(authRequestClient, challenge());
     const second = reject(authRequestClient, challenge());
     const failures = Promise.allSettled([first, second]);
-    cancelMFA();
+    cancelVerification();
     for (const outcome of await failures) {
-      expect(outcome.status).toBe('rejected');
-      if (outcome.status === 'rejected') expect(outcome.reason.message).toBe('MFA cancelled');
+      expect(outcome).toMatchObject({
+        status: 'rejected',
+        reason: { message: 'Verification cancelled' },
+      });
     }
-    const recovery = requestMFA('login', 'new-password-ticket');
-    completeMFA(mfaPrompt.value!.id, { access_token: 'enrollment-only', refresh_token: 'refresh', expired_at: 123 });
+    const recovery = requestVerification('login', 'new-password-ticket');
+    completeVerification(required(verificationPrompt.value).id, {
+      access_token: 'enrollment-only',
+      refresh_token: 'refresh',
+      expired_at: 123,
+    });
     await recovery;
     expect(state.replay).not.toHaveBeenCalled();
   });
@@ -411,32 +531,45 @@ describe('MFA header protocol', () => {
     state.replay.mockResolvedValue({ ok: true });
     const first = reject(authRequestClient, challenge());
     const second = reject(authRequestClient, challenge());
-    const prompt = mfaPrompt.value!;
-    await prompt.verify!('123456');
-    completeMFA(prompt.id);
+    const prompt = required(verificationPrompt.value);
+    await required(prompt.verify)('123456');
+    completeVerification(prompt.id);
     await Promise.all([first, second]);
     expect(state.replay).toHaveBeenCalledTimes(2);
-    expect(state.replay.mock.calls.filter(([, config]) => config.headers['X-MFA-Code'])).toHaveLength(1);
+    expect(
+      state.replay.mock.calls.filter(
+        ([, config]) => config.headers['X-TOTP-Code'],
+      ),
+    ).toHaveLength(1);
   });
 
   it('cancels a shared retry when the session changes while renewing its credential', async () => {
     let current = true;
     state.captureSession.mockReturnValue(() => current);
-    let finishCredential!: (value: { challenge_id: string; credential: string }) => void;
-    const credential = vi.fn(() => new Promise<{ challenge_id: string; credential: string }>(resolve => {
-      finishCredential = resolve;
-    }));
+    let finishCredential!: (value: {
+      challenge_id: string;
+      credential: string;
+    }) => void;
+    const credential = vi.fn(
+      () =>
+        new Promise<{ challenge_id: string; credential: string }>((resolve) => {
+          finishCredential = resolve;
+        }),
+    );
     const secondChallenge = challenge();
     state.replay.mockResolvedValue({ ok: true });
     const first = reject(authRequestClient, challenge());
     const second = reject(authRequestClient, {
       ...secondChallenge,
-      config: { ...secondChallenge.config, mfaRetryCredential: credential },
+      config: {
+        ...secondChallenge.config,
+        verificationRetryCredential: credential,
+      },
     });
     const outcomes = Promise.allSettled([first, second]);
-    const prompt = mfaPrompt.value!;
-    await prompt.verify!('123456');
-    completeMFA(prompt.id);
+    const prompt = required(verificationPrompt.value);
+    await required(prompt.verify)('123456');
+    completeVerification(prompt.id);
     await vi.waitFor(() => expect(credential).toHaveBeenCalledOnce());
 
     current = false;
@@ -445,7 +578,137 @@ describe('MFA header protocol', () => {
 
     const [firstOutcome, secondOutcome] = await outcomes;
     expect(firstOutcome).toEqual({ status: 'fulfilled', value: { ok: true } });
-    expect(secondOutcome).toMatchObject({ status: 'rejected', reason: { message: 'MFA cancelled' } });
+    expect(secondOutcome).toMatchObject({
+      status: 'rejected',
+      reason: { message: 'Verification cancelled' },
+    });
     expect(state.replay).toHaveBeenCalledOnce();
+  });
+});
+
+describe('sensitive preflight', () => {
+  afterEach(cancelVerification);
+  const preflight = () => required(state.requests[0]).fulfilled;
+  it('requests verification before sending a protected mutation and passes methods to the dialog', async () => {
+    state.sensitive.mockResolvedValue({
+      server_time: 100,
+      methods: { totp: true, email: false },
+      grant: { expired_at: 0 },
+    });
+    const config = {
+      url: '/user/7',
+      method: 'PATCH',
+      headers: { 'X-Idempotent': 'once' },
+      data: { name: 'new' },
+    };
+    let rejection: unknown;
+    try {
+      await preflight()(config);
+    } catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toMatchObject({
+      response: { status: 403, data: { error_code: 'AUTH_STEP_UP_REQUIRED' } },
+    });
+    expect(state.replay).not.toHaveBeenCalled();
+    const handler = (authRequestClient as any).responses.findLast(
+      (item: any) => item.rejected,
+    ).rejected;
+    const pending = handler(rejection);
+    expect(verificationPrompt.value).toMatchObject({
+      mode: 'sensitive',
+      methods: { totp: true, address: '' },
+    });
+    state.replay.mockResolvedValue({ ok: true });
+    await required(required(verificationPrompt.value).verify)('123456');
+    completeVerification(required(verificationPrompt.value).id);
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(state.replay).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    [
+      '/totp/setup',
+      { totp: false, email: true, address: 'ow***@example.test' },
+    ],
+    [
+      '/totp/confirm',
+      { totp: false, email: true, address: 'ow***@example.test' },
+    ],
+    ['/email/bind', { totp: true, email: false }],
+  ])(
+    'protects credential binding on %s with the existing method',
+    async (url, methods) => {
+      state.sensitive.mockResolvedValue({
+        server_time: 100,
+        methods,
+        grant: { expired_at: 0 },
+      });
+      await expect(
+        preflight()({ url, method: 'POST', headers: {} } as any),
+      ).rejects.toMatchObject({
+        response: {
+          status: 403,
+          data: { error_code: 'AUTH_STEP_UP_REQUIRED' },
+        },
+        verificationMethods: {
+          totp: methods.totp,
+          address: methods.email ? 'ow***@example.test' : '',
+        },
+      });
+      expect(state.replay).not.toHaveBeenCalled();
+    },
+  );
+  it('sends immediately with a valid grant or when verification is unavailable', async () => {
+    for (const status of [
+      {
+        server_time: 100,
+        methods: { totp: true, email: false },
+        grant: { expired_at: 200 },
+      },
+      {
+        server_time: 100,
+        methods: { totp: false, email: false },
+        grant: { expired_at: 0 },
+      },
+    ]) {
+      state.sensitive.mockResolvedValue(status);
+      await expect(
+        preflight()({ url: '/user', method: 'POST', headers: {} } as any),
+      ).resolves.toMatchObject({ url: '/user' });
+    }
+  });
+  it('does not preflight reads, inline verification or an already verified retry', async () => {
+    await preflight()({ url: '/info', method: 'GET', headers: {} } as any);
+    await preflight()({
+      url: '/user',
+      method: 'POST',
+      headers: {},
+      _verificationRetried: true,
+    } as any);
+    await preflight()({
+      url: '/user',
+      method: 'POST',
+      headers: { 'X-TOTP-Code': '123456' },
+    } as any);
+    expect(state.sensitive).not.toHaveBeenCalled();
+  });
+  it('blocks a mutation if preflight fails and never treats a bare MFA header as a challenge', async () => {
+    state.sensitive.mockRejectedValue(new Error('status unavailable'));
+    await expect(
+      preflight()({ url: '/user', method: 'POST', headers: {} } as any),
+    ).rejects.toThrow('status unavailable');
+    const handler = (authRequestClient as any).responses.findLast(
+      (item: any) => item.rejected,
+    ).rejected;
+    const error = {
+      config: { url: '/user' },
+      response: {
+        status: 403,
+        headers: { 'X-Verification-Required': 'true' },
+        data: { error_code: 'FORBIDDEN' },
+      },
+    };
+    await expect(handler(error)).rejects.toBe(error);
+    expect(verificationPrompt.value).toBeUndefined();
   });
 });

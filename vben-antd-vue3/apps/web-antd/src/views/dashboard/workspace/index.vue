@@ -212,7 +212,9 @@ const trendItems = computed<WorkbenchTrendItem[]>(() => [
   },
   {
     avatar: 'svg:avatar-1',
-    content: $t('page.dashboard.workspacePage.trends.items.repliedOptimization'),
+    content: $t(
+      'page.dashboard.workspacePage.trends.items.repliedOptimization',
+    ),
     date: $t('page.dashboard.workspacePage.trends.dates.threeDaysAgo'),
     title: $t('page.dashboard.workspacePage.people.peter'),
   },

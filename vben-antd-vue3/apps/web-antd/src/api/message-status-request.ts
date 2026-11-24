@@ -2,10 +2,8 @@
 // every waiter then receives a request started after that mutation completed.
 // Settled responses are not cached, so expiry and remote publications stay fresh.
 export class MessageStatusRequest<T> {
-  private revision = 0;
   private pending = new Map<unknown, Promise<T>>();
-
-  invalidate(): void { this.revision++; }
+  private revision = 0;
 
   get(key: unknown, load: () => Promise<T>): Promise<T> {
     const existing = this.pending.get(key);
@@ -15,6 +13,10 @@ export class MessageStatusRequest<T> {
     });
     this.pending.set(key, request);
     return request;
+  }
+
+  invalidate(): void {
+    this.revision++;
   }
 
   private async latest(load: () => Promise<T>): Promise<T> {

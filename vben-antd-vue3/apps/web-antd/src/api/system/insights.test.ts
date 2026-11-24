@@ -26,6 +26,7 @@ describe('system summaries', () => {
         trend: [],
       });
       expect(get).toHaveBeenCalledExactlyOnceWith(`/${resource}/summary`, {
+        suppressErrorMessage: true,
         params: { days: 7, time_zone: 'Asia/Shanghai', f },
       });
     },

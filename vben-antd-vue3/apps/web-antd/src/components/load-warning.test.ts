@@ -1,7 +1,11 @@
+import type { LoadFailure } from '#/api/request-error';
+
 import { mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick } from 'vue';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loadFailure } from '#/api/request-error';
 import { useStatisticsWarning } from '#/composables/use-statistics-warning';
 
 import LoadWarning from './load-warning.vue';
@@ -9,17 +13,25 @@ import LoadWarning from './load-warning.vue';
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
 
 const StatisticsHarness = defineComponent({
-  props: { error: Boolean },
+  props: {
+    error: {
+      type: [Boolean, String] as unknown as import('vue').PropType<LoadFailure>,
+      default: false,
+    },
+  },
   setup(props) {
     const visible = useStatisticsWarning(() => props.error);
-    return () => h('section', [
-      visible.value ? h(LoadWarning, { kind: 'statistics' }) : null,
-      h('output', String(props.error)),
-    ]);
+    return () =>
+      h('section', [
+        visible.value ? h(LoadWarning, { kind: 'statistics' }) : null,
+        h('output', String(props.error)),
+      ]);
   },
 });
 const wrappers: Array<ReturnType<typeof mount>> = [];
-beforeEach(() => { vi.useFakeTimers(); });
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 afterEach(() => {
   wrappers.forEach((wrapper) => wrapper.unmount());
   wrappers.length = 0;
@@ -33,9 +45,37 @@ function statistics() {
 }
 
 describe('shared loading warnings', () => {
+  it.each([500, 502, 503, 504])(
+    'keeps the retry action for status %s without repeating the toast',
+    async (status) => {
+      const wrapper = mount(LoadWarning, {
+        props: { failure: loadFailure({ response: { status } }) },
+        slots: { action: '<button>Retry</button>' },
+      });
+      wrappers.push(wrapper);
+      expect(wrapper.get('button').text()).toBe('Retry');
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+      await wrapper.setProps({ failure: false });
+      expect(wrapper.find('button').exists()).toBe(false);
+    },
+  );
+
+  it('marks a gateway failure locally for background statistics', async () => {
+    const wrapper = mount(StatisticsHarness, { props: { error: 'gateway' } });
+    wrappers.push(wrapper);
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      'app.errors.statisticsLoad',
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.get('output').text()).toBe('gateway');
+  });
+
   it('hides the statistics warning after five seconds without clearing the failed state', async () => {
     const wrapper = statistics();
-    expect(wrapper.get('.ant-alert-warning').text()).toBe('app.errors.statisticsLoad');
+    expect(wrapper.get('.ant-alert-warning').text()).toBe(
+      'app.errors.statisticsLoad',
+    );
     await vi.advanceTimersByTimeAsync(4999);
     expect(wrapper.find('[role="alert"]').exists()).toBe(true);
     await vi.advanceTimersByTimeAsync(1);
@@ -70,7 +110,7 @@ describe('shared loading warnings', () => {
     });
     wrappers.push(wrapper);
     await vi.advanceTimersByTimeAsync(6000);
-    expect(wrapper.get('.ant-alert-warning').text()).toContain('app.errors.dataLoad');
+    expect(wrapper.get('[role="status"] button').isVisible()).toBe(true);
     expect(wrapper.classes()).toContain('load-warning--data');
     await wrapper.get('button').trigger('click');
     expect(retry).toHaveBeenCalledOnce();

@@ -1,23 +1,56 @@
 <script lang="ts" setup>
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { usePermissions } from '#/composables/use-permissions';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
 import { useWatermark } from '@vben/hooks';
 import { BasicLayout, LockScreen, UserDropdown } from '@vben/layouts';
-import { preferences, updatePreferences, usePreferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { preferences, usePreferences } from '@vben/preferences';
+import { useAccessStore, useTabbarStore, useUserStore } from '@vben/stores';
 
+import { usePermissions } from '#/composables/use-permissions';
 import { $t } from '#/locales';
-import { applicationWidgetPreferences } from '#/preferences';
+import {
+  mailTemplatePath,
+  normalizeMailTemplateTabs,
+} from '#/router/mail-template-tabs';
+import { normalizeProfileTabs } from '#/router/profile-tabs';
 import { useAuthStore } from '#/store';
-import MsgBell from './msg-bell.vue';
-import LoginForm from '#/views/_core/authentication/login.vue';
+import { canVisitAuthenticatedPage } from '#/store/login-destination';
 
-updatePreferences({ widget: applicationWidgetPreferences });
+import MsgBell from './msg-bell.vue';
 
 const router = useRouter();
+const tabbarStore = useTabbarStore();
+// Migrate cached profile tabs before mounting their page components.
+const profileTabs = normalizeProfileTabs(
+  tabbarStore.tabs,
+  router.currentRoute.value.fullPath,
+);
+if (profileTabs !== tabbarStore.tabs) {
+  const oldKeys = tabbarStore.tabs
+    .filter((tab) => tab.path === '/profile' && tab.key !== '/profile')
+    .map((tab) => tab.key ?? tab.fullPath);
+  tabbarStore.tabs = profileTabs;
+  for (const key of oldKeys) tabbarStore.removeCachedRoute(key);
+  tabbarStore.visitHistory.remove(...oldKeys);
+  void tabbarStore.updateCacheTabs();
+}
+// Consolidate only saved email-template tabs; other pages retain their keys.
+const mailTemplateTabs = normalizeMailTemplateTabs(
+  tabbarStore.tabs,
+  router.currentRoute.value.fullPath,
+);
+if (mailTemplateTabs !== tabbarStore.tabs) {
+  const oldKeys = tabbarStore.tabs
+    .filter(
+      (tab) => tab.path === mailTemplatePath && tab.key !== mailTemplatePath,
+    )
+    .map((tab) => tab.key ?? tab.fullPath);
+  tabbarStore.tabs = mailTemplateTabs;
+  for (const key of oldKeys) tabbarStore.removeCachedRoute(key);
+  tabbarStore.visitHistory.remove(...oldKeys);
+  void tabbarStore.updateCacheTabs();
+}
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
@@ -26,19 +59,37 @@ const { isDark } = usePreferences();
 const { hasPage } = usePermissions();
 async function refreshPermissions(event?: Event) {
   const fresh = event?.type === 'auth-permissions-changed';
-  if (!accessStore.accessToken || authStore.passwordResetRequired || (document.hidden && !fresh)) return;
+  if (
+    !accessStore.accessToken ||
+    authStore.passwordResetRequired ||
+    (document.hidden && !fresh)
+  )
+    return;
   try {
-    await authStore.fetchUserInfo({ fresh });
+    const { permission } = await authStore.fetchUserInfo({ fresh });
     const path = router.currentRoute.value.path;
-    if (!hasPage(path) && path !== '/forbidden' && !path.startsWith('/auth/')) await router.replace('/forbidden');
-  } catch { /* Authentication failures use the common request handler. */ }
+    if (
+      path !== '/forbidden' &&
+      !path.startsWith('/auth/') &&
+      !canVisitAuthenticatedPage(permission, path)
+    )
+      await router.replace('/forbidden');
+  } catch {
+    /* Authentication failures use the common request handler. */
+  }
 }
-onMounted(() => { window.addEventListener('focus', refreshPermissions); window.addEventListener('auth-permissions-changed', refreshPermissions); });
-onBeforeUnmount(() => { window.removeEventListener('focus', refreshPermissions); window.removeEventListener('auth-permissions-changed', refreshPermissions); });
+onMounted(() => {
+  window.addEventListener('focus', refreshPermissions);
+  window.addEventListener('auth-permissions-changed', refreshPermissions);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', refreshPermissions);
+  window.removeEventListener('auth-permissions-changed', refreshPermissions);
+});
 const menus = computed(() => [
   {
     handler: () => {
-      router.push({ name: 'Profile' });
+      router.push('/profile');
     },
     icon: 'lucide:user',
     text: $t('page.auth.profile'),
@@ -56,12 +107,16 @@ async function handleLogout() {
 watch(
   () => ({
     enable: preferences.app.watermark,
-    content: preferences.app.watermarkContent,
+    content:
+      preferences.app.watermarkContent ||
+      `${userStore.userInfo?.username ?? ''} - ${userStore.userInfo?.realName ?? ''}`,
     isDark: isDark.value,
   }),
   async ({ enable, content, isDark: isDarkValue }) => {
     if (enable) {
-      const watermarkColor = isDarkValue ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)';
+      const watermarkColor = isDarkValue
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.12)';
 
       await updateWatermark({
         advancedStyle: {
@@ -77,7 +132,7 @@ watch(
           ],
           type: 'linear',
         },
-        content: content || `${userStore.userInfo?.username} - ${userStore.userInfo?.realName}`,
+        content,
       });
     } else {
       destroyWatermark();
@@ -109,11 +164,6 @@ watch(
     </template>
     <template #notification>
       <MsgBell v-if="hasPage('/msg/inbox')" />
-    </template>
-    <template #extra>
-      <AuthenticationLoginExpiredModal v-model:open="accessStore.loginExpired" :avatar>
-        <LoginForm />
-      </AuthenticationLoginExpiredModal>
     </template>
     <template #lock-screen>
       <LockScreen :avatar @to-login="handleLogout" />

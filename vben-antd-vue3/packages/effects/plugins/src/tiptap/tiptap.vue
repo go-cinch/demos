@@ -9,7 +9,7 @@ import type {
 import { computed, onBeforeUnmount, reactive, watch } from 'vue';
 
 import { Check, ChevronDown, Eye } from '@vben/icons';
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 
 import { useVbenModal } from '@vben-core/popup-ui';
 import { VbenIconButton, VbenPopover } from '@vben-core/shadcn-ui';
@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<TipTapProps>(), {
   imageUpload: undefined,
   minHeight: 240,
   maxHeight: 400,
-  placeholder: $t('ui.tiptap.placeholder'),
+  placeholder: $placeholder('ui.tiptap.placeholder'),
   previewable: true,
   toolbar: true,
 });

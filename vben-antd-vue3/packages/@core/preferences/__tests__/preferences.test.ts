@@ -1,3 +1,5 @@
+import { userCache } from '@vben-core/shared/cache';
+
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultPreferences } from '../src/config';
@@ -81,13 +83,15 @@ describe('preferences', () => {
       await vi.advanceTimersByTimeAsync(151);
 
       expect(localStorage.setItem).toHaveBeenCalledWith(
-        'testNamespace-preferences',
+        userCache.current().child('testNamespace').key('preferences'),
         expect.any(String),
       );
       expect(
         vi
           .mocked(localStorage.setItem)
-          .mock.calls.every(([key]) => key.startsWith('testNamespace-')),
+          .mock.calls.every(([key]) =>
+            key.startsWith(userCache.current().child('testNamespace').key('')),
+          ),
       ).toBe(true);
       expect(warnSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('empty prefix'),
@@ -534,12 +538,14 @@ describe('preferences', () => {
 
   it('filters cached custom number values that violate field constraints', async () => {
     vi.mocked(localStorage.getItem).mockImplementation((key) => {
-      if (key.endsWith('cache-preferences-custom')) {
-        return JSON.stringify({
-          value: {
-            pageSize: 5,
-          },
-        });
+      if (
+        key ===
+        userCache
+          .current()
+          .child('custom-number-cache')
+          .key('preferences-custom')
+      ) {
+        return JSON.stringify({ pageSize: 5 });
       }
 
       return null;

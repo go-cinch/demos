@@ -1,8 +1,16 @@
 import type { Ref } from 'vue';
 
 import type { MsgFeedPreview } from '#/api/msg';
+import type { LoadFailure } from '#/api/request-error';
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 
 import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
@@ -10,16 +18,20 @@ import { useUserStore } from '@vben/stores';
 import { Modal } from 'ant-design-vue';
 
 import { visitMessages } from '#/api/message-attention';
+import { messagesChangedEvent } from '#/api/message-events';
 import { msgApi, msgChanged, msgPreviewFields } from '#/api/msg';
+import { loadFailure } from '#/api/request-error';
+import { quietRequest } from '#/api/request-types';
 import { searchSuggestionGroups } from '#/components/search-suggestions';
 import { $t } from '#/locales';
 
 const PAGE_SIZE = 10;
 type Filter = 'all' | 'notice' | 'read' | 'system' | 'unread';
+type InboxRow = MsgFeedPreview & { unavailable?: true };
 
 export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
   const user = useUserStore();
-  const rows = ref<MsgFeedPreview[]>([]);
+  const rows = ref<InboxRow[]>([]);
   const total = ref(0);
   const unread = ref<number>();
   const filter = ref<Filter>('all');
@@ -27,14 +39,15 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
   const draft = ref('');
   const loading = ref(false);
   const loadingMore = ref(false);
-  const error = ref(false);
-  const moreError = ref(false);
+  const error = ref<LoadFailure>(false);
+  const moreError = ref<LoadFailure>(false);
   const busy = ref(false);
   const pages = ref(0);
   const exhausted = ref(false);
   const expanded = ref<number[]>([]);
   const detailLoading = ref<number>();
   const detailError = ref<number>();
+  const detailFailure = ref<LoadFailure>(false);
   const selecting = ref(false);
   const selected = ref<number[]>([]);
   const viewport = ref<HTMLElement>();
@@ -47,14 +60,27 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
   let suggestionGeneration = 0;
   let detailGeneration = 0;
   let needsRebase = false;
+  let checkingExpanded = false;
   let pendingMessageId = messageId.value;
   let latest: null | number | undefined;
   let timer: ReturnType<typeof setInterval>;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
-  const hasMore = computed(() => !exhausted.value && rows.value.length < total.value);
-  const options = computed(() => searchSuggestionGroups(draft.value.trim() ? suggestions.value : [], history.value));
-  function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
+  const availableIds = computed(() =>
+    rows.value.filter((row) => !row.unavailable).map((row) => row.id),
+  );
+  const hasMore = computed(
+    () => !exhausted.value && availableIds.value.length < total.value,
+  );
+  const options = computed(() =>
+    searchSuggestionGroups(
+      draft.value.trim() ? suggestions.value : [],
+      history.value,
+    ),
+  );
+  function removeHistory(value: string) {
+    history.value = history.value.filter((item) => item !== value);
+  }
   const filters = computed(() => [
     { value: 'all', label: $t('msg.feedAll') },
     { value: 'unread', label: $t('msg.unread') },
@@ -66,8 +92,12 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     return {
       ...(messageId.value === undefined ? {} : { id: messageId.value }),
       ...(query.value ? { q: query.value } : {}),
-      ...(['notice', 'system'].includes(filter.value) ? { type: filter.value } : {}),
-      ...(['read', 'unread'].includes(filter.value) ? { read: filter.value === 'read' } : {}),
+      ...(['notice', 'system'].includes(filter.value)
+        ? { type: filter.value }
+        : {}),
+      ...(['read', 'unread'].includes(filter.value)
+        ? { read: filter.value === 'read' }
+        : {}),
     };
   }
   async function count(notify = false) {
@@ -75,14 +105,21 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     try {
       const value = await msgApi.count(id);
       if (disposed || Number(user.userInfo?.userId) !== id) return;
-      if (notify && latest !== undefined && (value.count !== unread.value || value.latest_unread_at !== latest)) newMessages.value = true;
+      if (
+        notify &&
+        latest !== undefined &&
+        (value.count !== unread.value || value.latest_unread_at !== latest)
+      )
+        newMessages.value = true;
       unread.value = value.count;
       latest = value.latest_unread_at;
-    } catch { if (!disposed) unread.value = undefined; }
+    } catch {
+      if (!disposed) unread.value = undefined;
+    }
   }
   // Re-read the loaded prefix after writes: offset pagination would otherwise skip
   // records removed by read/unread filters or personal deletion.
-  async function refresh(reset = false) {
+  async function refresh(reset = false, background = false) {
     const run = ++generation;
     const depth = reset ? 1 : Math.max(pages.value, 1);
     const criteria = params();
@@ -100,6 +137,7 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
       detailGeneration++;
       detailLoading.value = undefined;
       detailError.value = undefined;
+      detailFailure.value = false;
       viewport.value?.scrollTo({ top: 0 });
     }
     try {
@@ -108,17 +146,25 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
       let available = 0;
       let ended = false;
       for (let page = 1; page <= depth; page++) {
-        const result = await msgApi.list(false, { ...criteria, f: msgPreviewFields, p: page, s: PAGE_SIZE });
+        const result = await msgApi.list(
+          false,
+          { ...criteria, f: msgPreviewFields, p: page, s: PAGE_SIZE },
+          background ? quietRequest : undefined,
+        );
         if (disposed || run !== generation) return;
         available = result.t;
         loaded = page;
         result.items.forEach((row) => {
           const previous = rows.value.find((item) => item.id === row.id);
-          collected.set(row.id, expanded.value.includes(row.id) && previous?.content !== undefined
-            ? { ...row, content: previous.content }
-            : row);
+          collected.set(
+            row.id,
+            expanded.value.includes(row.id) && previous?.content !== undefined
+              ? { ...row, content: previous.content }
+              : row,
+          );
         });
-        ended = result.items.length < PAGE_SIZE || page * PAGE_SIZE >= available;
+        ended =
+          result.items.length < PAGE_SIZE || page * PAGE_SIZE >= available;
         if (ended) break;
       }
       rows.value = [...collected.values()];
@@ -130,9 +176,14 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
       newMessages.value = false;
       needsRebase = false;
       await nextTick();
-      if (run === generation && viewport.value) viewport.value.scrollTop = scrollTop;
-    } catch { if (run === generation && !disposed) error.value = true; }
-    finally { if (run === generation && !disposed) loading.value = false; }
+      if (run === generation && viewport.value)
+        viewport.value.scrollTop = scrollTop;
+    } catch (requestError) {
+      if (run === generation && !disposed)
+        error.value = loadFailure(requestError);
+    } finally {
+      if (run === generation && !disposed) loading.value = false;
+    }
     if (!disposed && run === generation) {
       void count();
       const target = pendingMessageId;
@@ -144,7 +195,15 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     }
   }
   async function more(): Promise<void> {
-    if (disposed || loading.value || loadingMore.value || busy.value || error.value || !hasMore.value) return;
+    if (
+      disposed ||
+      loading.value ||
+      loadingMore.value ||
+      busy.value ||
+      error.value ||
+      !hasMore.value
+    )
+      return;
     if (needsRebase) {
       await refresh();
       if (!disposed && !error.value) return more();
@@ -154,7 +213,12 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     loadingMore.value = true;
     moreError.value = false;
     try {
-      const result = await msgApi.list(false, { ...params(), f: msgPreviewFields, p: pages.value + 1, s: PAGE_SIZE });
+      const result = await msgApi.list(false, {
+        ...params(),
+        f: msgPreviewFields,
+        p: pages.value + 1,
+        s: PAGE_SIZE,
+      });
       if (disposed || run !== generation) return;
       if (result.t < total.value) {
         await refresh();
@@ -165,19 +229,33 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
       rows.value.push(...result.items.filter((row) => !known.has(row.id)));
       pages.value++;
       total.value = result.t;
-      exhausted.value = result.items.length < PAGE_SIZE || pages.value * PAGE_SIZE >= result.t;
-    } catch { if (!disposed && run === generation) moreError.value = true; }
-    finally { if (!disposed && run === generation) loadingMore.value = false; }
+      exhausted.value =
+        result.items.length < PAGE_SIZE || pages.value * PAGE_SIZE >= result.t;
+    } catch (requestError) {
+      if (!disposed && run === generation)
+        moreError.value = loadFailure(requestError);
+    } finally {
+      if (!disposed && run === generation) loadingMore.value = false;
+    }
   }
   function onScroll() {
     const el = viewport.value;
-    if (el && !moreError.value && el.scrollHeight - el.scrollTop - el.clientHeight < 100) void more();
+    if (
+      el &&
+      !moreError.value &&
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    )
+      void more();
   }
   function search() {
     clearTimeout(searchTimer);
     if (busy.value) return;
     const value = draft.value.trim();
-    if (value) history.value = [value, ...history.value.filter((item) => item !== value)].slice(0, 8);
+    if (value)
+      history.value = [
+        value,
+        ...history.value.filter((item) => item !== value),
+      ].slice(0, 8);
     if (query.value === value) return;
     query.value = value;
     void refresh(true);
@@ -187,26 +265,52 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     const run = ++suggestionGeneration;
     suggestions.value = [];
     suggesting.value = !!text.trim();
-    if (!text.trim()) { search(); return; }
+    if (!text.trim()) {
+      search();
+      return;
+    }
     suggestionTimer = setTimeout(async () => {
       try {
-        const result = await msgApi.list(false, { ...params(), f: 'title', p: 1, s: 8, q: text.trim() });
-        if (!disposed && run === suggestionGeneration) suggestions.value = [...new Set(result.items.map((row) => row.title))];
-      } catch { /* The request client reports failures; keep query history available. */ }
-      finally { if (!disposed && run === suggestionGeneration) suggesting.value = false; }
+        const result = await msgApi.list(false, {
+          ...params(),
+          f: 'title',
+          p: 1,
+          s: 8,
+          q: text.trim(),
+        });
+        if (!disposed && run === suggestionGeneration)
+          suggestions.value = [
+            ...new Set(result.items.map((row) => row.title)),
+          ];
+      } catch {
+        /* The request client reports failures; keep query history available. */
+      } finally {
+        if (!disposed && run === suggestionGeneration) suggesting.value = false;
+      }
     }, 250);
   }
-  function scheduleSearch() { searchTimer = setTimeout(search, 300); }
-  function cancelSearch() { clearTimeout(searchTimer); }
-  function choose(value: unknown) { draft.value = String(value); search(); }
+  function scheduleSearch() {
+    searchTimer = setTimeout(search, 300);
+  }
+  function cancelSearch() {
+    clearTimeout(searchTimer);
+  }
+  function choose(value: unknown) {
+    draft.value = String(value);
+    search();
+  }
   function segments(value: string) {
     const text = draft.value.trim();
-    const index = text ? value.toLocaleLowerCase().indexOf(text.toLocaleLowerCase()) : -1;
-    return index < 0 ? [{ text: value, matched: false }] : [
-      { text: value.slice(0, index), matched: false },
-      { text: value.slice(index, index + text.length), matched: true },
-      { text: value.slice(index + text.length), matched: false },
-    ];
+    const index = text
+      ? value.toLocaleLowerCase().indexOf(text.toLocaleLowerCase())
+      : -1;
+    return index < 0
+      ? [{ text: value, matched: false }]
+      : [
+          { text: value.slice(0, index), matched: false },
+          { text: value.slice(index, index + text.length), matched: true },
+          { text: value.slice(index + text.length), matched: false },
+        ];
   }
   async function mutate(action: () => Promise<unknown>) {
     if (busy.value || disposed) return;
@@ -216,15 +320,17 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     loadingMore.value = false;
     try {
       await action();
-    } catch { /* Shared request notifications retain the server error. */ }
-    finally {
+    } catch {
+      /* Shared request notifications retain the server error. */
+    } finally {
       msgChanged();
       if (!disposed) await refresh();
       busy.value = false;
     }
   }
   async function toggle(row: MsgFeedPreview) {
-    if (busy.value || loading.value || detailLoading.value !== undefined) return;
+    if (busy.value || loading.value || detailLoading.value !== undefined)
+      return;
     if (expanded.value.includes(row.id)) {
       expanded.value = expanded.value.filter((id) => id !== row.id);
       if (filter.value === 'unread' && row.read_at) void refresh();
@@ -233,6 +339,7 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     const run = ++detailGeneration;
     detailLoading.value = row.id;
     detailError.value = undefined;
+    detailFailure.value = false;
     busy.value = true;
     generation++;
     loadingMore.value = false;
@@ -245,25 +352,43 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
         needsRebase = filter.value === 'unread';
       }
       if (disposed || run !== detailGeneration) return;
-      rows.value = rows.value.map((item) => item.id === row.id ? { ...item, ...value } : item);
+      rows.value = rows.value.map((item) =>
+        item.id === row.id ? { ...item, ...value } : item,
+      );
       expanded.value.push(row.id);
       // Keep the opened unread item readable until collapsed or the filter changes.
       msgChanged();
       void count();
-    } catch { if (!disposed && run === detailGeneration) detailError.value = row.id; }
-    finally {
-      if (!disposed && run === detailGeneration) detailLoading.value = undefined;
+    } catch (requestError) {
+      if (!disposed && run === detailGeneration) {
+        detailError.value = row.id;
+        detailFailure.value = loadFailure(requestError);
+      }
+    } finally {
+      if (!disposed && run === detailGeneration)
+        detailLoading.value = undefined;
       busy.value = false;
     }
   }
-  function mark(row: MsgFeedPreview) { return mutate(() => msgApi.read(row.id)); }
-  function readAll() { return mutate(() => msgApi.readAll()); }
+  function mark(row: MsgFeedPreview) {
+    return mutate(() => msgApi.read(row.id));
+  }
+  function readAll() {
+    return mutate(() => msgApi.readAll());
+  }
   function confirmAction(read: boolean, ids: number[], bulk = false) {
-    if (busy.value || loading.value || !ids.length) return;
+    if (busy.value || loading.value || ids.length === 0) return;
     const remaining = [...ids];
+    let messageKey = 'msg.deleteConfirm';
+    if (read) {
+      messageKey = 'msg.readSelectedConfirm';
+    } else if (bulk) {
+      messageKey = 'msg.deleteSelectedConfirm';
+    }
     Modal.confirm({
-      title: $t(read ? 'msg.readSelectedConfirm' : bulk ? 'msg.deleteSelectedConfirm' : 'msg.deleteConfirm'),
-      okText: $t('msg.confirm'), cancelText: $t('msg.cancel'),
+      title: $t(messageKey),
+      okText: $t('msg.confirm'),
+      cancelText: $t('msg.cancel'),
       okButtonProps: { danger: !read },
       async onOk() {
         busy.value = true;
@@ -271,8 +396,7 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
         loadingMore.value = false;
         try {
           for (const id of [...remaining]) {
-            if (read) await msgApi.read(id);
-            else await msgApi.remove(id, false);
+            await (read ? msgApi.read(id) : msgApi.remove(id, false));
             remaining.splice(remaining.indexOf(id), 1);
             selected.value = selected.value.filter((value) => value !== id);
           }
@@ -285,19 +409,74 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     });
   }
   function check(id: number, checked: boolean) {
-    selected.value = checked ? [...new Set([...selected.value, id])] : selected.value.filter((value) => value !== id);
+    selected.value = checked
+      ? [...new Set([...selected.value, id])]
+      : selected.value.filter((value) => value !== id);
   }
   function changed() {
     if (disposed || busy.value || loading.value || document.hidden) return;
-    if ((viewport.value?.scrollTop ?? 0) > 0 || expanded.value.length || selected.value.length) {
+    if (
+      (viewport.value?.scrollTop ?? 0) > 0 ||
+      expanded.value.length > 0 ||
+      selected.value.length > 0
+    ) {
       newMessages.value = true;
       void count();
     } else void refresh();
   }
+  async function checkExpandedMessages() {
+    if (checkingExpanded || expanded.value.length === 0) return;
+    checkingExpanded = true;
+    const run = generation;
+    try {
+      for (const id of [...expanded.value]) {
+        if (disposed || run !== generation || document.hidden) return;
+        if (!expanded.value.includes(id)) continue;
+        try {
+          // An opened item in the Unread view is already read. Check its ID independently of the view.
+          const result = await msgApi.list(
+            false,
+            { id, f: 'id', p: 1, s: 1 },
+            quietRequest,
+          );
+          if (disposed || run !== generation) return;
+          if (result.items.length > 0 || !expanded.value.includes(id)) continue;
+          rows.value = rows.value.map((row) =>
+            row.id === id
+              ? {
+                  ...row,
+                  title: '',
+                  summary: undefined,
+                  content: undefined,
+                  unavailable: true,
+                }
+              : row,
+          );
+          expanded.value = expanded.value.filter((opened) => opened !== id);
+          selected.value = selected.value.filter(
+            (selectedId) => selectedId !== id,
+          );
+          total.value = Math.max(0, total.value - 1);
+          needsRebase = true;
+          newMessages.value = true;
+        } catch {
+          // Only a successful lookup establishes that the message is gone. Retry on the next poll.
+        }
+      }
+    } finally {
+      checkingExpanded = false;
+    }
+  }
   function poll() {
     if (disposed || busy.value || loading.value || document.hidden) return;
-    if ((viewport.value?.scrollTop ?? 0) > 0 || expanded.value.length || selected.value.length) void count(true);
-    else void refresh();
+    if (
+      (viewport.value?.scrollTop ?? 0) > 0 ||
+      expanded.value.length > 0 ||
+      selected.value.length > 0
+    ) {
+      void count(true);
+      void checkExpandedMessages();
+    } else void refresh(false, true);
   }
   watch([filter, messageId], ([, id], [, previousId]) => {
     if (id !== previousId) pendingMessageId = id;
@@ -307,30 +486,36 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     suggesting.value = false;
     void refresh(true);
   });
-  watch(() => preferences.app.locale, () => {
-    suggestionGeneration++;
-    clearTimeout(suggestionTimer);
-    suggestions.value = [];
-    suggesting.value = false;
-    void refresh();
-  });
-  watch(() => user.userInfo?.userId, () => {
-    suggestionGeneration++;
-    clearTimeout(suggestionTimer);
-    clearTimeout(searchTimer);
-    suggesting.value = false;
-    latest = undefined;
-    unread.value = undefined;
-    history.value = [];
-    suggestions.value = [];
-    draft.value = '';
-    query.value = '';
-    void refresh(true);
-  });
+  watch(
+    () => preferences.app.locale,
+    () => {
+      suggestionGeneration++;
+      clearTimeout(suggestionTimer);
+      suggestions.value = [];
+      suggesting.value = false;
+      void refresh();
+    },
+  );
+  watch(
+    () => user.userInfo?.userId,
+    () => {
+      suggestionGeneration++;
+      clearTimeout(suggestionTimer);
+      clearTimeout(searchTimer);
+      suggesting.value = false;
+      latest = undefined;
+      unread.value = undefined;
+      history.value = [];
+      suggestions.value = [];
+      draft.value = '';
+      query.value = '';
+      void refresh(true);
+    },
+  );
   onMounted(() => {
     visitMessages(Number(user.userInfo?.userId));
     void refresh(true);
-    window.addEventListener('go-cinch-msg-changed', changed);
+    window.addEventListener(messagesChangedEvent, changed);
     document.addEventListener('visibilitychange', poll);
     timer = setInterval(poll, 30_000);
   });
@@ -342,11 +527,48 @@ export function useInboxFeed(messageId: Ref<number | undefined> = ref()) {
     clearInterval(timer);
     clearTimeout(searchTimer);
     clearTimeout(suggestionTimer);
-    window.removeEventListener('go-cinch-msg-changed', changed);
+    window.removeEventListener(messagesChangedEvent, changed);
     document.removeEventListener('visibilitychange', poll);
   });
-  return { rows, total, unread, filter, filters, draft, query, loading, loadingMore, error, moreError,
-    busy, expanded, detailLoading, detailError, selecting, selected, viewport, newMessages, hasMore,
-    options, suggesting, removeHistory, refresh, more, onScroll, search, suggest, scheduleSearch, cancelSearch,
-    choose, segments, toggle, mark, readAll, confirmAction, check };
+  return {
+    rows,
+    availableIds,
+    total,
+    unread,
+    filter,
+    filters,
+    draft,
+    query,
+    loading,
+    loadingMore,
+    error,
+    moreError,
+    busy,
+    expanded,
+    detailLoading,
+    detailError,
+    detailFailure,
+    selecting,
+    selected,
+    viewport,
+    newMessages,
+    hasMore,
+    options,
+    suggesting,
+    removeHistory,
+    refresh,
+    more,
+    onScroll,
+    search,
+    suggest,
+    scheduleSearch,
+    cancelSearch,
+    choose,
+    segments,
+    toggle,
+    mark,
+    readAll,
+    confirmAction,
+    check,
+  };
 }

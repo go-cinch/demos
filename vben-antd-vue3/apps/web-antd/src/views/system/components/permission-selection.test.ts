@@ -75,7 +75,7 @@ describe('permission selection normalization', () => {
       selectionFingerprint(normalizeSelection(catalog(), selections)),
     ).toBe(
       selectionFingerprint(
-        normalizeSelection(catalog(), [...selections].reverse()),
+        normalizeSelection(catalog(), [...selections].toReversed()),
       ),
     );
   });
@@ -94,12 +94,12 @@ describe('permission selection normalization', () => {
           feature_keys: ['edit'],
         },
       ]),
-    ).toThrow();
+    ).toThrow('Invalid feature selection');
     expect(() =>
       normalizeSelection(catalog(), [
         { resource_key: 'admin:missing', operation: 'read' },
       ]),
-    ).toThrow();
+    ).toThrow('Invalid resource operation');
   });
 
   it('supports legacy single bindings and explicit empty default grants', () => {

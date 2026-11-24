@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SelectOption } from '@vben/types';
 
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import { GripVertical } from '@vben/icons';
 import { $t } from '@vben/locales';
@@ -52,13 +52,24 @@ function initSortable() {
   sortableInstance = Sortable.create(container, {
     animation: 200,
     handle: '.drag-handle',
-    onEnd() {
-      // Sortable 已经改了 DOM，但 sortableList computed 还是旧顺序。
-      // 直接从 DOM 读 children 的 data-key 拿新顺序，再追加 hidden 部分。
-      const newOrder = [...container.children]
-        .map((el) => (el as HTMLElement).dataset.key)
-        .filter(Boolean) as string[];
-      emit('updateOrder', [...newOrder, ...hiddenList.value.map((i) => i.key)]);
+    onEnd({ newIndex, oldIndex }) {
+      if (
+        oldIndex === undefined ||
+        newIndex === undefined ||
+        oldIndex === newIndex
+      )
+        return;
+      const moved = sortableList.value[oldIndex];
+      const target = sortableList.value[newIndex];
+      if (!moved || !target) return;
+
+      // Move only the dragged item in the full order, keeping hidden items in sequence.
+      const order = props.items
+        .map(({ key }) => key)
+        .filter((key) => key !== moved.key);
+      const index = order.indexOf(target.key) + (newIndex > oldIndex ? 1 : 0);
+      order.splice(index, 0, moved.key);
+      emit('updateOrder', order);
     },
   });
 }
@@ -76,12 +87,6 @@ function setPosition(key: string, value: string | undefined) {
     key,
     value as 'auto' | 'fixed' | 'header' | 'none' | 'user-dropdown',
   );
-  nextTick(() => {
-    emit(
-      'updateOrder',
-      [...sortableList.value, ...hiddenList.value].map((i) => i.key),
-    );
-  });
 }
 </script>
 

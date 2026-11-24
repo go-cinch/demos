@@ -16,18 +16,3 @@ export function loadActionRecord(
     ? getAction(id, { f: editorFields })
     : getAction(id, { f: detailFields });
 }
-
-export function actionEditorName(
-  word: string,
-  names: Record<string, string> | undefined,
-  locale: string,
-  defaultLocale: string,
-  generatedName?: string,
-) {
-  return (
-    names?.[locale]?.trim() ||
-    names?.[defaultLocale]?.trim() ||
-    generatedName ||
-    word
-  );
-}

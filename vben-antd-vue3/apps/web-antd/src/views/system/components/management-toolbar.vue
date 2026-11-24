@@ -14,7 +14,12 @@ withDefaults(
     loading?: boolean;
     isFullscreen?: boolean;
   }>(),
-  { canRead: true, loading: false, isFullscreen: false },
+  {
+    refreshLabel: undefined,
+    canRead: true,
+    loading: false,
+    isFullscreen: false,
+  },
 );
 const emit = defineEmits<{ refresh: []; fullscreen: [] }>();
 const size = defineModel<'large' | 'middle' | 'small'>('size', {
@@ -36,7 +41,9 @@ const densityOptions = computed(() => [
         class="management-tool-button"
         v-if="canRead"
         :aria-label="refreshLabel || $t('system.common.refresh')"
-        :disabled="loading" v-skeleton="loading" :aria-busy="loading"
+        :disabled="loading"
+        v-skeleton="loading"
+        :aria-busy="loading"
         size="small"
         @click="emit('refresh')"
       >
@@ -144,16 +151,19 @@ const densityOptions = computed(() => [
   padding: 0;
   line-height: 1;
 }
+
 .management-tool-button.ant-btn > svg {
   display: block;
   flex: none;
   width: 14px;
   height: 14px;
 }
+
 .system-compact-popover .ant-popover-inner {
   min-width: 0;
   padding: 8px;
 }
+
 .system-compact-popover .ant-popover-title {
   min-width: 0;
   margin-bottom: 6px;

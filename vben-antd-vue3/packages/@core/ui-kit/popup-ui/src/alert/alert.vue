@@ -34,7 +34,7 @@ import { provideAlertContext } from './alert';
 const props = withDefaults(defineProps<AlertProps>(), {
   bordered: true,
   buttonAlign: 'end',
-  centered: true,
+  centered: false,
   escapeKeyClose: true,
 });
 const emits = defineEmits(['closed', 'confirm', 'opened']);

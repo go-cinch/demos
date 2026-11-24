@@ -283,10 +283,13 @@ describe('content loading deadline', () => {
       vi.advanceTimersByTime(1);
       expect(spinning()).toBe(false);
       await runAfter(afterHook, route);
-      vi.advanceTimersByTime(20000);
+      vi.advanceTimersByTime(20_000);
       expect(spinning()).toBe(false);
       expect(vi.getTimerCount()).toBe(0);
-    } finally { cleanup(); vi.useRealTimers(); }
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
   it('cancels an old deadline on the next navigation and cleans up on unmount', async () => {
     vi.useFakeTimers();
@@ -301,7 +304,10 @@ describe('content loading deadline', () => {
       expect(spinning()).toBe(true);
       cleanup();
       expect(vi.getTimerCount()).toBe(0);
-    } finally { cleanup(); vi.useRealTimers(); }
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
   it('releases a pending mask when navigating back to an already loaded page', async () => {
     vi.useFakeTimers();
@@ -315,6 +321,9 @@ describe('content loading deadline', () => {
       await runBefore(beforeGuard, makeRoute({ loaded: true }));
       expect(spinning()).toBe(false);
       expect(vi.getTimerCount()).toBe(0);
-    } finally { cleanup(); vi.useRealTimers(); }
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 });

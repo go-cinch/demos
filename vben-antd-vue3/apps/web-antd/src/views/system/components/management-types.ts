@@ -30,6 +30,7 @@ export interface FieldDefinition {
   createRequired?: boolean;
   createVisible?: boolean;
   defaultValue?: unknown;
+  editVisible?: boolean;
   editLabel?: string;
   editPlaceholder?: string;
   key: string;
@@ -44,6 +45,7 @@ export interface FormValidationRule {
   required?: boolean;
   trigger?: 'blur' | 'change';
   validator?: (_rule: unknown, value: unknown) => Promise<void>;
+  whitespace?: boolean;
 }
 
 export interface FilterDefinition {
@@ -127,8 +129,8 @@ export interface ManagementRecordActions {
   openApproval: (record: Recordable<any>) => void;
   openLock: (record: Recordable<any>) => void;
   unlockUser: (record: Recordable<any>) => Promise<void>;
-  unlockPasswordChange: (record: Recordable<any>) => Promise<void>;
-  confirmResetMFA: (record: Recordable<any>) => void;
+  openResetPassword: (record: Recordable<any>) => void;
+  confirmResetTOTP: (record: Recordable<any>) => void;
   confirmRemove: (record: SystemRecord) => void;
   removeRecords: (ids: number[], control?: string) => Promise<void>;
   removeSelected: () => void;

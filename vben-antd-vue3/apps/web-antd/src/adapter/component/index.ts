@@ -1,10 +1,3 @@
-/**
- * 通用组件共同的使用的基础组件，原先放在 adapter/form 内部，限制了使用范围，这里提取出来，方便其他地方使用
- * 可用于 vben-form、vben-modal、vben-drawer 等组件使用,
- */
-
-/* eslint-disable vue/one-component-per-file */
-
 import type {
   AutoCompleteProps,
   ButtonProps,
@@ -29,6 +22,11 @@ import type {
   UploadFile,
   UploadProps,
 } from 'ant-design-vue';
+/**
+ * 通用组件共同的使用的基础组件，原先放在 adapter/form 内部，限制了使用范围，这里提取出来，方便其他地方使用
+ * 可用于 vben-form、vben-modal、vben-drawer 等组件使用,
+ */
+/* eslint-disable vue/one-component-per-file */
 import type { RangePickerProps } from 'ant-design-vue/es/date-picker';
 
 import type { Component, Ref } from 'vue';
@@ -63,7 +61,7 @@ import {
 } from '@vben/common-ui';
 import { useSortable } from '@vben/hooks';
 import { IconifyIcon } from '@vben/icons';
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 import { isEmpty } from '@vben/utils';
 
 import { message, Modal, notification } from 'ant-design-vue';
@@ -143,7 +141,7 @@ const withDefaultPlaceholder = (
       const placeholder =
         props?.placeholder ||
         attrs?.placeholder ||
-        $t(`ui.placeholder.${type}`);
+        $placeholder(`ui.placeholder.${type}`);
       // 透传组件暴露的方法
       const innerRef = ref();
       expose(
@@ -358,7 +356,7 @@ function cropImage(file: File, aspectRatio: string | undefined) {
                   $t('ui.crop.titleTip', [aspectRatio]),
                 ),
               ]),
-              centered: true,
+              centered: false,
               width: 548,
               zIndex: 9999,
               keyboard: false,
@@ -730,6 +728,7 @@ async function initComponentAdapter() {
 
   // 定义全局共享状态中的消息提示
   globalShareState.defineMessage({
+    copyPreferencesFailed: () => message.error($t('verification.copyFailed')),
     // 复制成功消息提示
     copyPreferencesSuccess: (title, content) => {
       notification.success({

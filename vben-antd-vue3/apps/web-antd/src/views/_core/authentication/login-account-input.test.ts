@@ -1,4 +1,3 @@
-/* eslint-disable vue/one-component-per-file -- Test harness includes cached login and reset routes. */
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, KeepAlive, markRaw, nextTick, ref } from 'vue';
 
@@ -6,6 +5,7 @@ import { useVbenForm } from '@vben/common-ui';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import LoginAccountInput from './login-account-input.vue';
 
 vi.mock('@vben/locales', () => ({ $t: (key: string) => key }));
@@ -58,10 +58,12 @@ describe('cached login account dropdown', () => {
       );
       expect(option).not.toBeNull();
       if (method === 'mouse') {
-        option!.dispatchEvent(
+        required(option).dispatchEvent(
           new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
         );
-        option!.querySelector<HTMLButtonElement>('button')!.click();
+        required(
+          required(option).querySelector<HTMLButtonElement>('button'),
+        ).click();
       } else {
         await input.trigger('keydown', {
           key: 'ArrowDown',
@@ -77,25 +79,29 @@ describe('cached login account dropdown', () => {
       await flushPromises();
       await new Promise((resolve) => setTimeout(resolve, 200));
       await flushPromises();
-      expect((await formApi.getValues()).username).toBe('super');
-      expect((await formApi.getValues()).password).toBe('');
+      const values = await formApi.getValues();
+      expect(values.username).toBe('super');
+      const values2 = await formApi.getValues();
+      expect(values2.password).toBe('');
       expect(input.element.value).toBe('super');
       expect(input.attributes('aria-expanded')).toBe('false');
 
       await wrapper.get('.ant-input-clear-icon').trigger('click');
       await flushPromises();
-      expect((await formApi.getValues()).username).toBe('');
+      const values3 = await formApi.getValues();
+      expect(values3.username).toBe('');
       expect(input.element.value).toBe('');
       input.element.focus();
       await input.trigger('input');
       await flushPromises();
-      document
-        .querySelector<HTMLButtonElement>(
+      required(
+        document.querySelector<HTMLButtonElement>(
           '.ant-select-item-option-content button',
-        )!
-        .click();
+        ),
+      ).click();
       await flushPromises();
-      expect((await formApi.getValues()).username).toBe('super');
+      const values4 = await formApi.getValues();
+      expect(values4.username).toBe('super');
       expect(input.element.value).toBe('super');
     },
   );
@@ -151,10 +157,10 @@ describe('cached login account dropdown', () => {
       button.textContent?.includes('authentication.clearAccountHistory'),
     );
     expect(clearButton).toBeDefined();
-    clearButton!.dispatchEvent(
+    required(clearButton).dispatchEvent(
       new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
     );
-    clearButton!.click();
+    required(clearButton).click();
     await flushPromises();
 
     expect(

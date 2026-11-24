@@ -326,7 +326,7 @@ function handleClosed() {
         <slot name="extra"></slot>
         <VbenIconButton
           v-if="fullscreenButton"
-          class="flex-center size-6 rounded-full px-1 text-lg text-foreground/80 opacity-70 transition-opacity hover:bg-accent hover:text-accent-foreground hover:opacity-100 focus:outline-hidden disabled:pointer-events-none"
+          class="flex-center size-6 rounded-sm px-1 text-lg text-foreground/80 opacity-70 transition-opacity hover:bg-accent hover:text-accent-foreground hover:opacity-100 focus:outline-hidden disabled:pointer-events-none"
           @click="handleFullscreen"
         >
           <Shrink v-if="fullscreen" class="size-3.5" />

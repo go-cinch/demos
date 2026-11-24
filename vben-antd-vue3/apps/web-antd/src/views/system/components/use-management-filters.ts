@@ -12,6 +12,8 @@ import type {
 
 import { onBeforeUnmount, onDeactivated, reactive, ref } from 'vue';
 
+import { userCache } from '@vben/utils/cache';
+
 import { useDebounceFn, useTimeoutFn } from '@vueuse/core';
 
 import { $t } from '#/locales';
@@ -27,35 +29,17 @@ export function useManagementFilters(
   const filtersDirty = ref(false);
   const { start: scheduleFilterSearch, stop: cancelFilterSearch } =
     useTimeoutFn(autoSearch, 500, { immediate: false });
-  const filterHistoryStorageKey = 'vben-system-filter-history';
-
-  function loadFilterHistory(): FilterHistory {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(filterHistoryStorageKey) || '{}',
-      ) as FilterHistory;
-      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
-        return {};
-      }
-      const normalizedHistory = Object.fromEntries(
-        Object.entries(stored).map(([key, values]) => [
-          key,
-          Array.isArray(values)
-            ? values.filter((value) => typeof value === 'string').slice(0, 10)
-            : [],
-        ]),
-      );
-      localStorage.setItem(
-        filterHistoryStorageKey,
-        JSON.stringify(normalizedHistory),
-      );
-      return normalizedHistory;
-    } catch {
-      return {};
-    }
+  const cache = userCache.current();
+  const historyCache = cache.child('system-filter-history');
+  const filterHistory = reactive<FilterHistory>({});
+  function storedHistory(key: string): string[] {
+    const values = historyCache.get<unknown>(key);
+    return Array.isArray(values)
+      ? values
+          .filter((value): value is string => typeof value === 'string')
+          .slice(0, 10)
+      : [];
   }
-
-  const filterHistory = reactive<FilterHistory>(loadFilterHistory());
   const backendFilterSuggestions = reactive<Record<string, string[]>>({});
   const filterSuggestionQueries = reactive<Record<string, string>>({});
   const filterSuggestionsLoading = reactive<Record<string, boolean>>({});
@@ -135,7 +119,7 @@ export function useManagementFilters(
       : [];
     const historyOptions = normalizeMultiFilterValue(
       fieldKey,
-      filterHistory[key] || [],
+      filterHistory[key] ?? storedHistory(key),
     ).map((value): FilterSuggestionOption => ({
       label: value,
       source: 'history',
@@ -161,15 +145,7 @@ export function useManagementFilters(
     );
   }
 
-  function persistFilterHistory() {
-    localStorage.setItem(
-      filterHistoryStorageKey,
-      JSON.stringify(filterHistory),
-    );
-  }
-
   function saveFilterHistory() {
-    let changed = false;
     for (const field of config.value.filters) {
       if (field.type !== 'input' && field.type !== 'input-multi-select') {
         continue;
@@ -184,27 +160,27 @@ export function useManagementFilters(
       const key = filterHistoryKey(field.key);
       filterHistory[key] = [
         ...normalizedValues,
-        ...(filterHistory[key] || []).filter(
+        ...storedHistory(key).filter(
           (item) => !normalizedValues.includes(item),
         ),
       ].slice(0, 10);
-      changed = true;
+      historyCache.set(key, filterHistory[key]);
     }
-    if (changed) persistFilterHistory();
   }
 
   function removeFilterHistory(fieldKey: string, value: string) {
     const key = filterHistoryKey(fieldKey);
     const remainingValues = normalizeMultiFilterValue(
       fieldKey,
-      filterHistory[key] || [],
+      storedHistory(key),
     ).filter((item) => item !== value);
     if (remainingValues.length > 0) {
       filterHistory[key] = remainingValues;
+      historyCache.set(key, remainingValues);
     } else {
-      delete filterHistory[key];
+      Reflect.deleteProperty(filterHistory, key);
+      historyCache.removeItem(key);
     }
-    persistFilterHistory();
   }
 
   const loadBackendFilterSuggestions = useDebounceFn(

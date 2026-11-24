@@ -124,3 +124,26 @@ export function triggerWindowResize(): void {
   // 触发 window 的 resize 事件
   window.dispatchEvent(resizeEvent);
 }
+
+export async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // Embedded and insecure contexts can still support a selection-based copy.
+  }
+  const previous = document.activeElement;
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.readOnly = true;
+  field.style.cssText = 'position:fixed;top:0;left:-9999px';
+  document.body.append(field);
+  try {
+    field.select();
+    if (!document.execCommand('copy')) throw new Error('Copy failed');
+  } finally {
+    field.remove();
+    if (previous instanceof HTMLElement)
+      previous.focus({ preventScroll: true });
+  }
+}

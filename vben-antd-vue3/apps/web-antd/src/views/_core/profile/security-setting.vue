@@ -32,8 +32,8 @@ const formSchema = computed(() => {
     {
       value: false,
       fieldName: 'securityMfa',
-      label: 'MFA 设备',
-      description: '未绑定 MFA 设备，绑定后，可以进行二次确认',
+      label: 'TOTP 验证器',
+      description: '未绑定 TOTP 验证器，绑定后，可以进行二次确认',
     },
   ];
 });

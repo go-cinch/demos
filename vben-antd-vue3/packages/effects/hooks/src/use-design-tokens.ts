@@ -8,10 +8,12 @@ import { convertToRgb, updateCSSVariables } from '@vben/utils';
  */
 
 export function useAntdDesignTokens() {
-  const rootStyles = getComputedStyle(document.documentElement);
-
   const tokens = reactive({
-    borderRadius: '' as any,
+    borderRadius: 0,
+    borderRadiusLG: 0,
+    borderRadiusOuter: 0,
+    borderRadiusSM: 0,
+    borderRadiusXS: 0,
     colorBgBase: '',
     colorBgContainer: '',
     colorBgElevated: '',
@@ -29,7 +31,9 @@ export function useAntdDesignTokens() {
   });
 
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
-    const value = rootStyles.getPropertyValue(variable);
+    const value = getComputedStyle(document.documentElement).getPropertyValue(
+      variable,
+    );
     return isColor ? `hsl(${value})` : value;
   };
 
@@ -59,14 +63,24 @@ export function useAntdDesignTokens() {
 
       tokens.colorBgBase = getCssVariableValue('--background');
 
-      const radius = Number.parseFloat(getCssVariableValue('--radius', false));
-      // 1rem = 16px
-      tokens.borderRadius = radius * 16;
+      // The preference is in rem, and the root font size is configurable.
+      // Specify the whole scale so Ant's derived radii match the CSS controls.
+      const rootFontSize =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).fontSize,
+        ) || 16;
+      const radius =
+        Math.max(0, Number.parseFloat(preferences.theme.radius) || 0) *
+        rootFontSize;
+      tokens.borderRadius = tokens.borderRadiusLG = radius;
+      tokens.borderRadiusOuter = radius * 0.75;
+      tokens.borderRadiusSM = radius * 0.5;
+      tokens.borderRadiusXS = radius * 0.25;
 
       tokens.colorBgLayout = getCssVariableValue('--background-deep');
       tokens.colorBgMask = getCssVariableValue('--overlay');
     },
-    { immediate: true },
+    { deep: true, flush: 'post', immediate: true },
   );
 
   return {

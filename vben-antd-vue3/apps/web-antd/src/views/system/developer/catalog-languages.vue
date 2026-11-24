@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IconifyIcon } from '@vben/icons';
-import { Input, Select, Tag } from 'ant-design-vue';
-import { $t } from '#/locales';
-import type { Catalog } from './catalog-model';
 
-const props = defineProps<{ catalog: Catalog; disabled: boolean }>();
+import { IconifyIcon } from '@vben/icons';
+
+import { Input, Select, Tag } from 'ant-design-vue';
+
+import { $t } from '#/locales';
+
+import { useCatalogEditor } from './catalog-editor-context';
+
+defineProps<{ disabled: boolean }>();
+const { catalog } = useCatalogEditor();
 const t = (key: string) => $t(`developer.${key}`);
 const localeOptions = computed(() =>
-  props.catalog.locales
+  catalog.value.locales
     .filter((locale) => locale.enabled)
     .map((locale) => ({
       value: locale.tag,

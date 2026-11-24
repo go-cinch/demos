@@ -38,6 +38,7 @@ declare global {
   };
 }
 
+const brandLabel = 'go cinch';
 const projectGithubUrl = 'https://github.com/go-cinch/demos';
 
 const renderLink = (href: string, text: string) =>
@@ -87,7 +88,7 @@ const vbenDescriptionItems: DescriptionItem[] = [
     title: 'Github',
   },
   {
-    content: renderLink(projectGithubUrl, 'go cinch'),
+    content: renderLink(projectGithubUrl, brandLabel),
     title: '作者',
   },
 ];

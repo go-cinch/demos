@@ -1,5 +1,5 @@
 {
-  "editTitle": "Edit permission: {name}",
+  "editTitle": "Edit permission",
   "names": "Permission names (all languages)",
   "wordPlaceholder": "e.g. admin:read:system:user",
   "wordHint": "Changing the identifier preserves the selected resource, operation and features.",
@@ -87,6 +87,7 @@
   "groupUpdateFailed": "Could not update the group. Please retry",
   "groupPermissionCount": "Permission count",
   "groupCountsFailed": "Could not load permission group counts",
+  "editGroupName": "Edit group {name}",
   "deleteGroupName": "Delete group {name}",
   "groupType": "Group type",
   "groupTypeNormal": "Normal",

@@ -8,7 +8,9 @@ import InboxFeed from './inbox-feed.vue';
 defineProps<{ messageTitle?: string }>();
 const messageId = defineModel<number>('messageId');
 const open = defineModel<boolean>('open', { default: false });
-onDeactivated(() => { open.value = false; });
+onDeactivated(() => {
+  open.value = false;
+});
 </script>
 <template>
   <Drawer
@@ -20,6 +22,11 @@ onDeactivated(() => { open.value = false; });
     destroy-on-close
     root-class-name="message-history-drawer"
   >
-    <InboxFeed v-if="open" v-model:message-id="messageId" :message-title="messageTitle" @close="open = false" />
+    <InboxFeed
+      v-if="open"
+      v-model:message-id="messageId"
+      :message-title="messageTitle"
+      @close="open = false"
+    />
   </Drawer>
 </template>

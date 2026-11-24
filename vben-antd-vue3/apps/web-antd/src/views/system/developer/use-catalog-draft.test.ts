@@ -1,9 +1,12 @@
+import type { Catalog } from './catalog-model';
+
 /* oxlint-disable typescript/no-non-null-assertion -- Fixtures explicitly populate these records. */
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, reactive, ref } from 'vue';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { clone } from './catalog-model';
-import type { Catalog } from './catalog-model';
 import { DraftStorage } from './draft-storage';
 import { useCatalogDraft } from './use-catalog-draft';
 
@@ -25,7 +28,7 @@ vi.mock('#/composables/use-permissions', () => ({
 }));
 vi.mock('#/api/system', () => ({
   listDictionaries: mock.load,
-  updateDictionary: mock.update,
+  publishDictionaryCatalog: mock.update,
 }));
 
 function catalog(): Catalog {
@@ -74,7 +77,7 @@ describe('developer draft workflow', () => {
     mock.allowed = ref(true);
     mock.canPublish = ref(true);
     mock.load.mockResolvedValue({ items: [record()] });
-    mock.update.mockImplementation(async (_id, body) => record(body.value));
+    mock.update.mockImplementation(async (body) => record(body.value));
   });
   afterEach(() => {
     wrapper?.unmount();
@@ -223,10 +226,9 @@ describe('developer draft workflow', () => {
     mock.load.mockResolvedValue({ items: [record(online)] });
     expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(await a.publish()).toBe(true);
-    // updateDictionary owns the refresh; publishing must not request it again.
+    // publishDictionaryCatalog owns the refresh; publishing must not request it again.
     expect(mock.refreshI18n).not.toHaveBeenCalled();
     expect(mock.update).toHaveBeenCalledWith(
-      3,
       expect.objectContaining({
         expected_value: online,
         value: expect.objectContaining({
@@ -251,7 +253,7 @@ describe('developer draft workflow', () => {
     mock.update.mockRejectedValue(new Error('network'));
     expect(await a.publish()).toBe(false);
     expect(mock.refreshI18n).not.toHaveBeenCalled();
-    expect(a.state.error).toBe('submitFailed');
+    expect(a.state.draft!.ui.tab).toBe('diff');
     expect(a.state.draft!.document.messages['en-US']!.frontend).toEqual({
       label: 'Local',
     });

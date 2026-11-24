@@ -12,6 +12,8 @@ const test: OxlintConfig = {
       },
     ],
     'vitest/hoisted-apis-on-top': 'off',
+    // Vitest supports a diagnostic message as the second expect argument.
+    'vitest/valid-expect': ['error', { maxArgs: 2 }],
     'vitest/no-focused-tests': 'error',
     'vitest/no-identical-title': 'error',
     'vitest/no-import-node-test': 'error',

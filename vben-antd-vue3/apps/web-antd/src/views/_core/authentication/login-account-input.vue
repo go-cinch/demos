@@ -43,7 +43,7 @@ const options = computed(() => {
 function segments(account: string) {
   const query = model.value.trim();
   const index = account.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-  if (!query || index < 0) return [{ text: account, matched: false }];
+  if (!query || index === -1) return [{ text: account, matched: false }];
   return [
     { text: account.slice(0, index), matched: false },
     { text: account.slice(index, index + query.length), matched: true },
@@ -72,7 +72,7 @@ function selectAccount(value: unknown) {
 
 const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
   h('div', [
-    history.value.length
+    history.value.length > 0
       ? h(
           'div',
           {
@@ -86,7 +86,7 @@ const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
               {
                 type: 'button',
                 class:
-                  'hover:text-primary focus-visible:ring-ring shrink-0 rounded px-1 py-1 focus-visible:outline-none focus-visible:ring-2',
+                  'hover:text-primary focus-visible:ring-ring shrink-0 rounded-sm px-1 py-1 focus-visible:outline-none focus-visible:ring-2',
                 onMousedown: (event: MouseEvent) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -133,7 +133,7 @@ const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
       <Input
         v-bind="$attrs"
         allow-clear
-        autocomplete="off"
+        autocomplete="username"
         autocapitalize="none"
         :spellcheck="false"
         class="h-10"
@@ -142,7 +142,7 @@ const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
         <div class="flex min-w-0 items-center justify-between gap-2">
           <button
             type="button"
-            class="min-w-0 cursor-pointer break-all rounded border bg-muted px-2 py-0.5 text-start"
+            class="min-w-0 cursor-pointer break-all rounded-sm border bg-muted px-2 py-0.5 text-start"
             @mousedown.prevent
             @click.stop="selectAccount(value)"
             @keydown.enter.stop
@@ -152,13 +152,14 @@ const renderDropdown: AutoCompleteProps['dropdownRender'] = (dropdown) =>
               v-for="(part, index) in segments(String(value))"
               :key="index"
               :class="{ 'font-bold text-primary': part.matched }"
-              >{{ part.text }}</span>
+              >{{ part.text }}</span
+            >
           </button>
           <button
             :aria-label="
               $t('authentication.removeAccountHistory', { account: value })
             "
-            class="text-muted-foreground hover:bg-accent shrink-0 rounded p-1"
+            class="text-muted-foreground hover:bg-accent shrink-0 rounded-sm p-1"
             type="button"
             @mousedown.prevent.stop
             @click.prevent.stop="remove(String(value))"

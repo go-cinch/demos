@@ -6,7 +6,6 @@ import {
   RadarChart,
 } from 'echarts/charts';
 import {
-  VisualMapComponent,
   DatasetComponent,
   DataZoomComponent,
   GraphicComponent,
@@ -16,6 +15,7 @@ import {
   ToolboxComponent,
   TooltipComponent,
   TransformComponent,
+  VisualMapComponent,
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import {

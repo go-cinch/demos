@@ -1,5 +1,9 @@
 import type { RequestClient } from './request-client';
-import type { MakeErrorMessageFn, ResponseInterceptorConfig } from './types';
+import type {
+  MakeErrorMessageFn,
+  RequestClientConfig,
+  ResponseInterceptorConfig,
+} from './types';
 
 import { $t } from '@vben/locales';
 import { isFunction } from '@vben/utils';
@@ -50,13 +54,22 @@ export const authenticateResponseInterceptor = ({
   doRefreshToken,
   enableRefreshToken,
   formatToken,
+  isCurrentRequest = () => true,
 }: {
   client: RequestClient;
-  doReAuthenticate: () => Promise<void>;
-  doRefreshToken: () => Promise<string>;
+  doReAuthenticate: (cause: unknown) => Promise<void>;
+  doRefreshToken: (unauthorized: unknown) => Promise<string>;
   enableRefreshToken: boolean;
   formatToken: (token: string) => null | string;
+  /** A request must retain its original session across refreshes and retries. */
+  isCurrentRequest?: (config: RequestClientConfig) => boolean;
 }): ResponseInterceptorConfig => {
+  let pendingRefresh:
+    | undefined
+    | {
+        isCurrent: () => boolean;
+        promise: Promise<string>;
+      };
   return {
     rejected: async (error) => {
       const { config, response } = error;
@@ -64,46 +77,51 @@ export const authenticateResponseInterceptor = ({
       if (response?.status !== 401) {
         throw error;
       }
+      const isCurrent = () => isCurrentRequest(config);
+      const assertCurrent = () => {
+        if (!isCurrent()) {
+          throw new axios.CanceledError(
+            'Request belongs to an expired session',
+          );
+        }
+      };
+      assertCurrent();
       // 判断是否启用了 refreshToken 功能
       // 如果没有启用或者已经是重试请求了，直接跳转到重新登录
       if (!enableRefreshToken || config.__isRetryRequest) {
-        await doReAuthenticate();
+        await doReAuthenticate(error);
         throw error;
       }
-      // 如果正在刷新 token，则将请求加入队列，等待刷新完成
-      if (client.isRefreshing) {
-        return new Promise((resolve) => {
-          client.refreshTokenQueue.push((newToken: string) => {
-            config.headers.Authorization = formatToken(newToken);
-            resolve(client.request(config.url, { ...config }));
-          });
-        });
-      }
-
-      // 标记开始刷新 token
-      client.isRefreshing = true;
-      // 标记当前请求为重试请求，避免无限循环
+      // All waiters retry at most once. A new session must not join an old flight.
       config.__isRetryRequest = true;
-
+      if (!pendingRefresh?.isCurrent()) {
+        pendingRefresh = {
+          isCurrent,
+          promise: (async () => {
+            try {
+              return await doRefreshToken(error);
+            } catch (refreshError) {
+              // Expired requests must neither sign out the current account nor replay.
+              assertCurrent();
+              if (
+                (refreshError as null | { response?: { status?: number } })
+                  ?.response?.status === 401
+              ) {
+                await doReAuthenticate(refreshError);
+              }
+              throw refreshError;
+            }
+          })(),
+        };
+      }
+      const refresh = pendingRefresh;
       try {
-        const newToken = await doRefreshToken();
-
-        // 处理队列中的请求
-        client.refreshTokenQueue.forEach((callback) => callback(newToken));
-        // 清空队列
-        client.refreshTokenQueue = [];
-
-        return client.request(error.config.url, { ...error.config });
-      } catch (refreshError) {
-        // 如果刷新 token 失败，处理错误（如强制登出或跳转登录页面）
-        client.refreshTokenQueue.forEach((callback) => callback(''));
-        client.refreshTokenQueue = [];
-        console.error('Refresh token failed, please login again.');
-        await doReAuthenticate();
-
-        throw refreshError;
+        const newToken = await refresh.promise;
+        assertCurrent();
+        config.headers.Authorization = formatToken(newToken);
+        return client.request(config.url, { ...config });
       } finally {
-        client.isRefreshing = false;
+        if (pendingRefresh === refresh) pendingRefresh = undefined;
       }
     },
   };

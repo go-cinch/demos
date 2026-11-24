@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
-import { IconifyIcon } from '@vben/icons';
-import { useClipboard } from '@vueuse/core';
-import { Button, Tooltip, message } from 'ant-design-vue';
-import { $t } from '#/locales';
-import type { Catalog, Change } from './catalog-model';
 import type { JsonComparisonBlock } from './catalog-json-comparison';
+import type { Catalog, Change } from './catalog-model';
+
+import { computed, nextTick, ref, watch } from 'vue';
+
+import { IconifyIcon } from '@vben/icons';
+import { copyText } from '@vben/utils';
+
+import { Button, message, Tooltip } from 'ant-design-vue';
+
+import { $t } from '#/locales';
+
 import { compareJson } from './catalog-json-comparison';
 import { catalogPathLabel } from './catalog-path-label';
 
@@ -17,7 +22,7 @@ const props = defineProps<{
 }>();
 const t = (key: string) => $t(`developer.${key}`);
 const viewport = ref<HTMLElement>();
-const active = ref<number | null>(null);
+const active = ref<null | number>(null);
 const comparison = computed(() => compareJson(props.local, props.online));
 const matches = (block: JsonComparisonBlock, change: Change) =>
   block.paths.some((path) =>
@@ -71,13 +76,12 @@ function keyboardNavigate(event: KeyboardEvent) {
   event.preventDefault();
   void navigate(event.shiftKey ? -1 : 1);
 }
-const { copy } = useClipboard({ legacy: true });
 async function copyJson(value: string) {
   try {
-    await copy(value);
+    await copyText(value);
     message.success(t('jsonCopied'));
   } catch {
-    message.error(t('copyJsonFailed'));
+    message.error($t('verification.copyFailed'));
   }
 }
 </script>
@@ -97,8 +101,9 @@ async function copyJson(value: string) {
             :aria-label="t('previousChange')"
             :disabled="position <= 0"
             @click="navigate(-1)"
-            ><template #icon><IconifyIcon icon="lucide:arrow-up" /></template
-          ></Button>
+          >
+            <template #icon><IconifyIcon icon="lucide:arrow-up" /></template>
+          </Button>
         </Tooltip>
         <Tooltip placement="bottom" :title="t('nextChange')">
           <Button
@@ -107,8 +112,9 @@ async function copyJson(value: string) {
             :aria-label="t('nextChange')"
             :disabled="position < 0 || position >= navigation.length - 1"
             @click="navigate(1)"
-            ><template #icon><IconifyIcon icon="lucide:arrow-down" /></template
-          ></Button>
+          >
+            <template #icon><IconifyIcon icon="lucide:arrow-down" /></template>
+          </Button>
         </Tooltip>
         <span class="catalog-ide-position" role="status" aria-live="polite">
           {{ t('changePosition') }} {{ position + 1 }} / {{ navigation.length }}
@@ -147,8 +153,9 @@ async function copyJson(value: string) {
                 class="catalog-json-copy"
                 :aria-label="t('copyLocalJson')"
                 @click="copyJson(comparison.localText)"
-                ><template #icon><IconifyIcon icon="lucide:copy" /></template
-              ></Button>
+              >
+                <template #icon><IconifyIcon icon="lucide:copy" /></template>
+              </Button>
             </Tooltip>
           </div>
         </header>
@@ -171,8 +178,9 @@ async function copyJson(value: string) {
                 class="catalog-json-copy"
                 :aria-label="t('copyOnlineJson')"
                 @click="copyJson(comparison.onlineText)"
-                ><template #icon><IconifyIcon icon="lucide:copy" /></template
-              ></Button>
+              >
+                <template #icon><IconifyIcon icon="lucide:copy" /></template>
+              </Button>
             </Tooltip>
           </div>
         </header>
@@ -202,7 +210,7 @@ async function copyJson(value: string) {
             'catalog-ide-line-empty': !row.local,
           }"
           :data-local-line="row.local?.number"
-        ><span v-for="(token, tokenIndex) in row.local?.tokens" :key="tokenIndex" :class="'catalog-ide-token-' + token.kind">{{ token.text }}</span></pre>
+        ><span v-for="(token, tokenIndex) in row.local?.tokens" :key="tokenIndex" :class="`catalog-ide-token-${ token.kind}`">{{ token.text }}</span></pre>
         <div class="catalog-ide-gutter" aria-hidden="true">
           <span>{{ row.local?.number }}</span>
           <span>{{ row.online?.number }}</span>
@@ -214,7 +222,7 @@ async function copyJson(value: string) {
             'catalog-ide-line-empty': !row.online,
           }"
           :data-online-line="row.online?.number"
-        ><span v-for="(token, tokenIndex) in row.online?.tokens" :key="tokenIndex" :class="'catalog-ide-token-' + token.kind">{{ token.text }}</span></pre>
+        ><span v-for="(token, tokenIndex) in row.online?.tokens" :key="tokenIndex" :class="`catalog-ide-token-${ token.kind}`">{{ token.text }}</span></pre>
       </div>
     </div>
   </section>

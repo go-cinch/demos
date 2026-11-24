@@ -20,7 +20,7 @@ const props = defineProps<{
 }>();
 const {
   canDetail,
-  canRead,
+  canResetTOTP,
   canUpdate,
   canManageDefinitionRecord,
   canRemoveRecord,
@@ -33,14 +33,15 @@ const {
   openApproval,
   openLock,
   unlockUser,
-  unlockPasswordChange,
-  confirmResetMFA,
+  openResetPassword,
+  confirmResetTOTP,
   removeRecords,
 } = props.actions;
 const { operationPopover, setOperationPopover, runConfirmedOperation } =
   props.confirmation;
-const { getRecordID, getRecordLabel, userPasswordChangeFailures } =
-  useManagementFormatting(() => props.resource);
+const { getRecordID, getRecordLabel } = useManagementFormatting(
+  () => props.resource,
+);
 </script>
 <template>
   <Space class="system-operation-actions">
@@ -101,36 +102,22 @@ const { getRecordID, getRecordLabel, userPasswordChangeFailures } =
         {{ buttonLabel('unlock', 'system.user.unlock') }}
       </Button>
     </Popconfirm>
-    <Popconfirm
-      v-if="
-        hasButtonAccess('unlock-password') &&
-        props.resource === 'user' &&
-        userPasswordChangeFailures(record) > 0
-      "
-      :title="
-        $t('system.confirm.unlockPassword', {
-          name: record.username,
-        })
-      "
-      :open="operationPopover === `unlock-password:${getRecordID(record)}`"
-      @open-change="
-        (open) =>
-          setOperationPopover(`unlock-password:${getRecordID(record)}`, open)
-      "
-      @confirm="runConfirmedOperation(() => unlockPasswordChange(record))"
-    >
-      <Button size="small" type="link">
-        {{ buttonLabel('unlock-password', 'system.user.unlockPassword') }}
-      </Button>
-    </Popconfirm>
     <Button
-      v-if="props.resource === 'user' && canRead"
+      v-if="props.resource === 'user' && hasButtonAccess('reset-password')"
+      size="small"
+      type="link"
+      @click="openResetPassword(record)"
+    >
+      {{ buttonLabel('reset-password', 'system.user.resetPassword') }}
+    </Button>
+    <Button
+      v-if="canResetTOTP"
       type="link"
       size="small"
-      @click="confirmResetMFA(record)"
-      >
-{{ $t('mfa.reset') }}
-</Button>
+      @click="confirmResetTOTP(record)"
+    >
+      {{ buttonLabel('reset-totp', 'verification.reset') }}
+    </Button>
     <Popconfirm
       v-if="canRemoveRecord(record)"
       :title="

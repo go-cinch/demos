@@ -103,7 +103,10 @@ function useContentSpinner() {
     return true;
   });
 
-  const removeError = router.onError?.(() => { clearTimers(); spinning.value = false; });
+  const removeError = router.onError?.(() => {
+    clearTimers();
+    spinning.value = false;
+  });
   onScopeDispose(() => {
     ++navSeq;
     clearTimers();

@@ -271,5 +271,11 @@ defineExpose({
 </template>
 
 <style scoped>
-.api-option-skeleton { display: inline-block; width: 14px; height: 14px; border-radius: calc(var(--radius) * 0.375); background: hsl(var(--muted)); }
+.api-option-skeleton {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: hsl(var(--muted));
+  border-radius: calc(var(--radius) * 0.375);
+}
 </style>

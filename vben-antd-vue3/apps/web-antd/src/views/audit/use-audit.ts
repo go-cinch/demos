@@ -1,11 +1,12 @@
 import type {
   AuditEvent,
-  AuditPreview,
   AuditHeatCell,
   AuditKind,
   AuditParams,
+  AuditPreview,
   AuditSummary,
 } from '#/api/audit';
+import type { LoadFailure } from '#/api/request-error';
 
 import {
   computed,
@@ -19,34 +20,41 @@ import {
 } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { usePermissions } from '#/composables/use-permissions';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
 import dayjs from 'dayjs';
 
 import { auditApi } from '#/api/audit';
+import { loadFailure } from '#/api/request-error';
 import { useDefaultPageSize } from '#/composables/use-default-page-size';
+import { usePermissions } from '#/composables/use-permissions';
 import { $t } from '#/locales';
+
 import { heatmapLayout } from './audit-heatmap-layout';
+export type AuditExactField = 'ip' | 'path' | 'user_id' | 'username';
+
 export function useAudit(kind: AuditKind) {
   const route = useRoute();
   function profileFilter() {
-    return route.path === `/audit/${kind}` && typeof route.query.username === 'string'
-      ? route.query.username.trim() : '';
+    return route.path === `/audit/${kind}` &&
+      typeof route.query.username === 'string'
+      ? route.query.username.trim()
+      : '';
   }
   const { hasButton, hasPage } = usePermissions();
-  const canControl = (control: string) => hasButton(`admin:btn:audit:${kind}:${control}`);
+  const canControl = (control: string) =>
+    hasButton(`admin:btn:audit:${kind}:${control}`);
   const timezone = useTimezoneStore();
   const user = useUserStore();
   const canRead = computed(() => hasPage(`/audit/${kind}`));
   const canExport = computed(() => canControl('export-report'));
   const days = ref(profileFilter() && route.query.days === '30' ? 30 : 1);
   const module = ref('');
-    const q = ref('');
-    const result = ref('');
-    const sort = ref('newest');
-  const exact = ref<{ username?: string; ip?: string; path?: string }>(
+  const q = ref('');
+  const result = ref('');
+  const sort = ref('newest');
+  const exact = ref<Partial<Record<AuditExactField, string>>>(
     profileFilter() ? { username: profileFilter() } : {},
   );
   const cell = ref<AuditHeatCell>();
@@ -54,74 +62,90 @@ export function useAudit(kind: AuditKind) {
   const dayHeatmap = ref<AuditSummary>();
   const interval = ref<{ from: number; to: number }>();
   const overview = ref<AuditSummary>();
-    const scope = ref<AuditSummary>();
+  const scope = ref<AuditSummary>();
   const page = ref(1);
-    const rows = shallowRef<AuditPreview[]>([]);
-  const listFields = ref(kind === 'login'
-    ? 'id,occurred_at,username,status,ip,user_agent'
-    : 'id,occurred_at,module,method,path,username,status,duration_ms');
+  const rows = shallowRef<AuditPreview[]>([]);
+  const listFields = ref(
+    kind === 'login'
+      ? 'id,occurred_at,operation,username,status,ip,user_agent,outcome'
+      : 'id,occurred_at,module,method,path,operation,username,status,duration_ms',
+  );
   const defaultPageSize = useDefaultPageSize();
   const size = ref(defaultPageSize.value);
-    const total = ref(0);
+  const total = ref(0);
   const loading = ref(false);
-    const overviewLoading = ref(false);
-    const scopeLoading = ref(false);
-  const error = ref(false);
-    const overviewError = ref(false);
-    const scopeError = ref(false);
-  const detailError = ref(false);
-    const detailLoading = ref(false);
-    const selected = shallowRef<AuditPreview>();
-    const selectedID = ref<number>();
+  const overviewLoading = ref(false);
+  const scopeLoading = ref(false);
+  const error = ref<LoadFailure>(false);
+  const overviewError = ref<LoadFailure>(false);
+  const scopeError = ref<LoadFailure>(false);
+  const detailError = ref<LoadFailure>(false);
+  const detailLoading = ref(false);
+  const selected = shallowRef<AuditPreview>();
+  const selectedID = ref<number>();
   const optionsLoading = ref(false);
   const history = ref<string[]>([]);
-    const options = ref<Pick<AuditEvent, 'username' | 'ip' | 'path' | 'trace_id'>[]>([]);
+  const options = ref<
+    Pick<AuditEvent, 'ip' | 'path' | 'trace_id' | 'username'>[]
+  >([]);
   const windowEnd = ref(Date.now());
   const active = ref(true);
   let mounted = false;
   let dayHeatmapKey: string | undefined;
   let detailRun = 0;
-    let listRun = 0;
-    let optionRun = 0;
-    let overviewRun = 0;
-    let scopeRun = 0;
+  let listRun = 0;
+  let optionRun = 0;
+  let overviewRun = 0;
+  let scopeRun = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let optionTimer: ReturnType<typeof setTimeout> | undefined;
   let displayedFilters: AuditParams | undefined;
   let pendingFilters: AuditParams | undefined;
   const hasScope = computed(() => !!cell.value || !!interval.value);
   const context = computed(() =>
-    hasScope.value ? scope.value : overview.value
+    hasScope.value ? scope.value : overview.value,
   );
   const scopeLabel = computed(() => {
     if (cell.value)
       return `${formatDateTime(cell.value.started_at)} — ${formatDateTime(cell.value.ended_at)}`;
     if (interval.value)
       return `${formatDateTime(interval.value.from)} — ${formatDateTime(
-        interval.value.to
+        interval.value.to,
       )}`;
     return $t(`audit.period${days.value}`);
   });
   function globalParams(): AuditParams {
-    const localDate = dayjs(windowEnd.value).tz(timezone.timezone).format('YYYY-MM-DD');
-    const firstDate = dayjs.utc(localDate).subtract(days.value - 1, 'day').format('YYYY-MM-DD');
+    const localDate = dayjs(windowEnd.value)
+      .tz(timezone.timezone)
+      .format('YYYY-MM-DD');
+    const firstDate = dayjs
+      .utc(localDate)
+      .subtract(days.value - 1, 'day')
+      .format('YYYY-MM-DD');
     return {
-      from: days.value === 1
-        ? windowEnd.value - 86400000
-        : dayjs.tz(firstDate, timezone.timezone).valueOf(),
+      from:
+        days.value === 1
+          ? windowEnd.value - 86_400_000
+          : dayjs.tz(firstDate, timezone.timezone).valueOf(),
       to: windowEnd.value,
       time_zone: timezone.timezone,
     };
   }
   const heatmapPlaceholder = computed(() => {
     const range = globalParams();
-    return heatmapLayout(Number(range.from), Number(range.to), timezone.timezone);
+    return heatmapLayout(
+      Number(range.from),
+      Number(range.to),
+      timezone.timezone,
+    );
   });
   function scopeParams(): AuditParams {
     return {
       ...globalParams(),
       ...interval.value,
-      ...(cell.value ? { from: cell.value.started_at, to: cell.value.ended_at } : {}),
+      ...(cell.value
+        ? { from: cell.value.started_at, to: cell.value.ended_at }
+        : {}),
     };
   }
   function filterParams(): AuditParams {
@@ -157,8 +181,8 @@ export function useAudit(kind: AuditKind) {
     try {
       const data = await auditApi.get(kind, id);
       if (run === detailRun && active.value) selected.value = data;
-    } catch {
-      if (run === detailRun) detailError.value = true;
+    } catch (requestError) {
+      if (run === detailRun) detailError.value = loadFailure(requestError);
     } finally {
       if (run === detailRun) detailLoading.value = false;
     }
@@ -194,9 +218,9 @@ export function useAudit(kind: AuditKind) {
           q.value.trim(),
           ...history.value.filter((v) => v !== q.value.trim()),
         ].slice(0, 6);
-    } catch {
+    } catch (requestError) {
       if (run === listRun) {
-        error.value = true;
+        error.value = loadFailure(requestError);
         rows.value = [];
         total.value = 0;
         closeDetail();
@@ -221,8 +245,16 @@ export function useAudit(kind: AuditKind) {
     try {
       const params = { ...scopeParams(), ...filterParams() };
       const day = heatmapDay.value;
-      const sameDay = day?.started_at === params.from && day?.ended_at === params.to;
-      const key = day ? JSON.stringify({ ...filterParams(), from: day.started_at, to: day.ended_at, time_zone: params.time_zone }) : undefined;
+      const sameDay =
+        day?.started_at === params.from && day?.ended_at === params.to;
+      const key = day
+        ? JSON.stringify({
+            ...filterParams(),
+            from: day.started_at,
+            to: day.ended_at,
+            time_zone: params.time_zone,
+          })
+        : undefined;
       if (key !== dayHeatmapKey) dayHeatmap.value = undefined;
       const needsDay = kind === 'login' && day && !sameDay && !dayHeatmap.value;
       const [data, dayData] = await Promise.all([
@@ -230,17 +262,24 @@ export function useAudit(kind: AuditKind) {
           ...params,
           f: kind === 'login' ? 'metrics,heatmap,accounts,sources' : 'modules',
         }),
-        needsDay ? auditApi.summary(kind, {
-          ...params, from: day.started_at, to: day.ended_at, f: 'heatmap',
-        }) : undefined,
+        needsDay
+          ? auditApi.summary(kind, {
+              ...params,
+              from: day.started_at,
+              to: day.ended_at,
+              f: 'heatmap',
+            })
+          : undefined,
       ]);
       if (run === scopeRun && active.value) {
         scope.value = data;
-        dayHeatmap.value = day ? (sameDay ? data : dayData ?? dayHeatmap.value) : undefined;
+        const previousDay = dayData ?? dayHeatmap.value;
+        const selectedDay = sameDay ? data : previousDay;
+        dayHeatmap.value = day ? selectedDay : undefined;
         dayHeatmapKey = key;
       }
-    } catch {
-      if (run === scopeRun) scopeError.value = true;
+    } catch (requestError) {
+      if (run === scopeRun) scopeError.value = loadFailure(requestError);
     } finally {
       if (run === scopeRun) scopeLoading.value = false;
     }
@@ -259,14 +298,15 @@ export function useAudit(kind: AuditKind) {
       const data = await auditApi.summary(kind, {
         ...globalParams(),
         ...filterParams(),
-        f: kind === 'login'
-          ? 'metrics,trend,heatmap,accounts,sources'
-          : 'metrics,trend,modules',
+        f:
+          kind === 'login'
+            ? 'metrics,trend,heatmap,accounts,sources'
+            : 'metrics,trend,modules',
       });
       if (run === overviewRun && active.value) overview.value = data;
-    } catch {
+    } catch (requestError) {
       if (run === overviewRun) {
-        overviewError.value = true;
+        overviewError.value = loadFailure(requestError);
         overview.value = undefined;
       }
     } finally {
@@ -276,7 +316,9 @@ export function useAudit(kind: AuditKind) {
   }
   function selectCell(value: AuditHeatCell, toggle = true) {
     cell.value =
-      toggle && cell.value?.started_at === value.started_at && cell.value.ended_at === value.ended_at
+      toggle &&
+      cell.value?.started_at === value.started_at &&
+      cell.value.ended_at === value.ended_at
         ? undefined
         : value;
     interval.value = undefined;
@@ -286,7 +328,7 @@ export function useAudit(kind: AuditKind) {
   function selectInterval(from: number, to: number) {
     const global = globalParams();
     const end = Math.min(Number(global.to), to);
-      const start = Math.max(Number(global.from), from);
+    const start = Math.max(Number(global.from), from);
     if (end <= start) return;
     interval.value = { from: start, to: end };
     cell.value = undefined;
@@ -326,21 +368,25 @@ export function useAudit(kind: AuditKind) {
     interval.value = undefined;
     void applyFilters();
   }
-  function related(field: 'ip' | 'path' | 'username', value: string, toggle = false) {
+  function related(field: AuditExactField, value: string, toggle = false) {
     if (!value) return;
     if (toggle && exact.value[field] === value) {
-      delete exact.value[field];
+      Reflect.deleteProperty(exact.value, field);
     } else {
+      if (field === 'user_id') delete exact.value.username;
+      if (field === 'username') delete exact.value.user_id;
       exact.value = { ...exact.value, [field]: value };
       q.value = '';
     }
     void applyFilters();
   }
-  function removeExact(field: 'ip' | 'path' | 'username') {
-    delete exact.value[field];
+  function removeExact(field: AuditExactField) {
+    Reflect.deleteProperty(exact.value, field);
     void applyFilters();
   }
-  function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
+  function removeHistory(value: string) {
+    history.value = history.value.filter((item) => item !== value);
+  }
   function suggest(value: string) {
     const run = ++optionRun;
     clearTimeout(optionTimer);
@@ -348,14 +394,19 @@ export function useAudit(kind: AuditKind) {
     optionsLoading.value = !!value.trim();
     if (!value.trim()) return;
     optionTimer = setTimeout(async () => {
-      if (!canRead.value || !active.value) { optionsLoading.value = false; return; }
+      if (!canRead.value || !active.value) {
+        optionsLoading.value = false;
+        return;
+      }
       try {
         const filters = recordParams();
         delete filters.q;
         const data = await auditApi.list(kind, {
           ...filters,
           ...(value.trim() ? { q: value.trim() } : {}),
-          f: 'username,ip,path,trace_id', p: 1, s: 10,
+          f: 'username,ip,path,trace_id',
+          p: 1,
+          s: 10,
         });
         if (run === optionRun && active.value) options.value = data.items;
       } catch {
@@ -365,12 +416,16 @@ export function useAudit(kind: AuditKind) {
       }
     }, 200);
   }
-  watch([exact, cell, interval, days, result, module, () => timezone.timezone], () => {
-    ++optionRun;
-    optionsLoading.value = false;
-    clearTimeout(optionTimer);
-    options.value = [];
-  }, { deep: true });
+  watch(
+    [exact, cell, interval, days, result, module, () => timezone.timezone],
+    () => {
+      ++optionRun;
+      optionsLoading.value = false;
+      clearTimeout(optionTimer);
+      options.value = [];
+    },
+    { deep: true },
+  );
   async function exportEvents() {
     if (!canExport.value || !displayedFilters || loading.value) return;
     return auditApi.export(kind, displayedFilters);
@@ -393,7 +448,7 @@ export function useAudit(kind: AuditKind) {
       page.value = 1;
       closeDetail();
       void refresh(false);
-    }
+    },
   );
   watch(
     () => user.userInfo?.userId,
@@ -413,7 +468,7 @@ export function useAudit(kind: AuditKind) {
       pendingFilters = undefined;
       closeDetail();
       if (user.userInfo && active.value) void refresh();
-    }
+    },
   );
   watch(canRead, (allowed) => {
     if (allowed) void refresh();
@@ -426,20 +481,25 @@ export function useAudit(kind: AuditKind) {
       closeDetail();
     }
   });
-  watch(() => [route.path, route.query.username, route.query.days], () => {
-    if (route.path !== `/audit/${kind}` || !profileFilter()) return;
-    exact.value = { username: profileFilter() };
-    if (route.query.days === '30') days.value = 30;
-    cell.value = undefined;
-    interval.value = undefined;
-    q.value = '';
-    result.value = '';
-    module.value = '';
-    page.value = 1;
-    closeDetail();
-    if (active.value && mounted) void refresh();
+  watch(
+    () => [route.path, route.query.username, route.query.days],
+    () => {
+      if (route.path !== `/audit/${kind}` || !profileFilter()) return;
+      exact.value = { username: profileFilter() };
+      if (route.query.days === '30') days.value = 30;
+      cell.value = undefined;
+      interval.value = undefined;
+      q.value = '';
+      result.value = '';
+      module.value = '';
+      page.value = 1;
+      closeDetail();
+      if (active.value && mounted) void refresh();
+    },
+  );
+  watch(listFields, () => {
+    void loadRecords();
   });
-  watch(listFields, () => { void loadRecords(); });
   watch(defaultPageSize, (value) => {
     size.value = value;
     page.value = 1;
@@ -519,3 +579,5 @@ export function useAudit(kind: AuditKind) {
     exportEvents,
   };
 }
+
+export type AuditState = ReturnType<typeof useAudit>;

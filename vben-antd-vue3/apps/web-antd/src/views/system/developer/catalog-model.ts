@@ -1,8 +1,18 @@
+import type {
+  ActionGroupDraft,
+  PermissionGroupType,
+} from '../components/action-group-model';
+
 import type { ResourceCatalog } from '#/api/system';
-import type { ActionGroupDraft, PermissionGroupType } from '../components/action-group-model';
+
+import { requiredEntry } from '#/utils/required-entry';
+
 import { pruneGroupDefaults } from '../components/action-group-model';
-import { referenceGraphIssues, referencedOperations } from '../components/resource-references';
 import { menuResourceKeys } from '../components/resource-catalog';
+import {
+  referencedOperations,
+  referenceGraphIssues,
+} from '../components/resource-references';
 
 export const messageCategories = ['frontend', 'backend'];
 
@@ -27,7 +37,7 @@ export interface Conflict extends Change {
   base: unknown;
 }
 export interface EditorBuffer {
-  kind: 'resource' | 'entry' | 'feature' | 'message';
+  kind: 'entry' | 'feature' | 'message' | 'resource';
   original: string;
   key: string;
   parent: string;
@@ -70,7 +80,7 @@ export interface ResourceEditor {
   parent: string;
   nodeKind: 'directory' | 'resource';
   sort: number;
-  position?: number | null;
+  position?: null | number;
   references: string[];
   referenceOperations?: Record<string, string[]>;
   zh: string;
@@ -105,7 +115,7 @@ export interface EditorUI {
   expanded: string[];
   scroll: number;
   buffer: EditorBuffer | null;
-  resourceEditor: ResourceEditor | null;
+  resourceEditor: null | ResourceEditor;
   diffQuery: string;
   diffKind: string;
   jsonDiff: boolean;
@@ -132,37 +142,71 @@ export function normalizeCatalog(value: Catalog): Catalog {
   Reflect.deleteProperty(document, 'group_aliases');
   Reflect.deleteProperty(document.resource_catalog, 'resource_aliases');
   Reflect.deleteProperty(document.resource_catalog, 'feature_aliases');
-  const legacyDefaults: unknown = Reflect.get(document.resource_catalog, 'defaults');
-  if (legacyDefaults !== undefined && (!isObject(legacyDefaults) || Object.keys(legacyDefaults).length))
-    throw new Error('Legacy default mappings must be migrated to explicit resource bindings');
+  const legacyDefaults: unknown = Reflect.get(
+    document.resource_catalog,
+    'defaults',
+  );
+  if (
+    legacyDefaults !== undefined &&
+    (!isObject(legacyDefaults) || Object.keys(legacyDefaults).length > 0)
+  )
+    throw new Error(
+      'Legacy default mappings must be migrated to explicit resource bindings',
+    );
   Reflect.deleteProperty(document.resource_catalog, 'defaults');
   for (const resource of Object.values(document.resource_catalog.resources)) {
     Reflect.deleteProperty(resource, 'action_word');
     // Upgrade old browser drafts once; current data has no collection marker.
     if (Reflect.get(resource, 'collection') === 'default_permissions') {
-      if (resource.kind === 'directory' && !resource.parent && resource.frontend_visible === undefined)
+      if (
+        resource.kind === 'directory' &&
+        !resource.parent &&
+        resource.frontend_visible === undefined
+      )
         resource.frontend_visible = false;
       for (const target of resource.references ?? [])
         (resource.reference_operations ??= {})[target] ??= ['read'];
     }
     Reflect.deleteProperty(resource, 'collection');
-    if (resource.entries && !Object.keys(resource.entries).length) delete resource.entries;
-    if (resource.operations && !Object.keys(resource.operations).length) delete resource.operations;
+    if (resource.entries && Object.keys(resource.entries).length === 0)
+      delete resource.entries;
+    if (resource.operations && Object.keys(resource.operations).length === 0)
+      delete resource.operations;
     for (const entry of Object.values(resource.entries ?? {}))
       Reflect.deleteProperty(entry, 'type');
   }
   // Freeze legacy node-only references at their current operation scope. Later
   // edits to the target never silently broaden a saved draft's references.
-  const referenceScopes = Object.entries(document.resource_catalog.resources).map(([owner, node]) => [owner,
-    Object.fromEntries((node.references ?? []).map((target) => [target, clone(referencedOperations(document.resource_catalog, owner, target))])),
-  ] as const);
+  const referenceScopes = Object.entries(
+    document.resource_catalog.resources,
+  ).map(
+    ([owner, node]) =>
+      [
+        owner,
+        Object.fromEntries(
+          (node.references ?? []).map((target) => [
+            target,
+            clone(
+              referencedOperations(document.resource_catalog, owner, target),
+            ),
+          ]),
+        ),
+      ] as const,
+  );
   for (const [owner, operations] of referenceScopes)
-    if (Object.keys(operations).length)
-      document.resource_catalog.resources[owner]!.reference_operations = operations;
+    if (Object.keys(operations).length > 0)
+      requiredEntry(
+        document.resource_catalog.resources[owner],
+        'resource catalog entry',
+      ).reference_operations = operations;
   const owners = menuResourceKeys(document.resource_catalog);
   for (const messages of Object.values(document.messages)) {
     if (isObject(messages.backend))
-      for (const code of ['HTTP_INVALID_CATEGORY_FORMAT', 'HTTP_INVALID_CATEGORY_VALUE', 'HTTP_BAD_REQUEST'])
+      for (const code of [
+        'HTTP_INVALID_CATEGORY_FORMAT',
+        'HTTP_INVALID_CATEGORY_VALUE',
+        'HTTP_BAD_REQUEST',
+      ])
         Reflect.deleteProperty(messages.backend, code);
     if (!isObject(messages.frontend)) continue;
     const frontend = messages.frontend;
@@ -173,19 +217,29 @@ export function normalizeCatalog(value: Catalog): Catalog {
         'admin:default:system:general': 'admin:default:system:default',
       })) {
         if (!Object.hasOwn(frontend.actions, previous)) continue;
-        if (!Object.hasOwn(frontend.actions, current)) frontend.actions[current] = frontend.actions[previous];
+        if (!Object.hasOwn(frontend.actions, current))
+          frontend.actions[current] = frontend.actions[previous];
         Reflect.deleteProperty(frontend.actions, previous);
       }
     }
-    if (!document.resource_catalog.resources['admin:system:user-test'] && isObject(frontend.resources))
+    if (
+      !document.resource_catalog.resources['admin:system:user-test'] &&
+      isObject(frontend.resources)
+    )
       Reflect.deleteProperty(frontend.resources, 'admin:system:user-test');
     if (!isObject(frontend.menus)) continue;
     const names: Record<string, unknown> = isObject(frontend.resources)
       ? frontend.resources
       : {};
-    for (const [menu, resource] of [...owners].sort(([a], [b]) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    )) {
+    for (const [menu, resource] of [...owners].toSorted(([a], [b]) => {
+      if (a < b) {
+        return -1;
+      }
+      if (a > b) {
+        return 1;
+      }
+      return 0;
+    })) {
       if (!Object.hasOwn(frontend.menus, menu)) continue;
       if (
         !Object.hasOwn(names, resource) &&
@@ -194,8 +248,8 @@ export function normalizeCatalog(value: Catalog): Catalog {
         names[resource] = frontend.menus[menu];
       Reflect.deleteProperty(frontend.menus, menu);
     }
-    if (Object.keys(names).length) frontend.resources = names;
-    if (!Object.keys(frontend.menus).length)
+    if (Object.keys(names).length > 0) frontend.resources = names;
+    if (Object.keys(frontend.menus).length === 0)
       Reflect.deleteProperty(frontend, 'menus');
   }
   return document;
@@ -319,8 +373,10 @@ export function isCatalog(value: unknown): value is Catalog {
     isObject(value.resource_catalog.resources) &&
     isObject(value.resource_catalog.buttons) &&
     (value.resource_catalog.defaults === undefined ||
-      (isObject(value.resource_catalog.defaults) && !Object.keys(value.resource_catalog.defaults).length)) &&
-    (value.group_defaults === undefined || map(value.group_defaults, (v) => typeof v === 'boolean')) &&
+      (isObject(value.resource_catalog.defaults) &&
+        Object.keys(value.resource_catalog.defaults).length === 0)) &&
+    (value.group_defaults === undefined ||
+      map(value.group_defaults, (v) => typeof v === 'boolean')) &&
     strings(value.scopes) &&
     strings(value.operations) &&
     value.locales.every(
@@ -337,11 +393,14 @@ export function isCatalog(value: unknown): value is Catalog {
         isObject(r) &&
         typeof r.kind === 'string' &&
         typeof r.sort === 'number' &&
-        (r.frontend_visible === undefined || typeof r.frontend_visible === 'boolean') &&
+        (r.frontend_visible === undefined ||
+          typeof r.frontend_visible === 'boolean') &&
         (r.parent === undefined || typeof r.parent === 'string') &&
-        (r.collection === undefined || r.collection === 'default_permissions') &&
+        (r.collection === undefined ||
+          r.collection === 'default_permissions') &&
         (r.references === undefined || strings(r.references)) &&
-        (r.reference_operations === undefined || map(r.reference_operations, strings)) &&
+        (r.reference_operations === undefined ||
+          map(r.reference_operations, strings)) &&
         (r.child_order === undefined ||
           (Array.isArray(r.child_order) &&
             r.child_order.every(
@@ -394,13 +453,20 @@ export function isResourceEditor(value: unknown): value is ResourceEditor {
     ['original', 'parent'].every((key) => typeof value[key] === 'string') &&
     ['directory', 'resource'].includes(String(value.nodeKind)) &&
     typeof value.sort === 'number' &&
-    (value.permissionScope === undefined || value.permissionScope === '' || value.permissionScope === '*') &&
-    (value.frontendVisible === undefined || typeof value.frontendVisible === 'boolean') &&
+    (value.permissionScope === undefined ||
+      value.permissionScope === '' ||
+      value.permissionScope === '*') &&
+    (value.frontendVisible === undefined ||
+      typeof value.frontendVisible === 'boolean') &&
     (value.position === undefined ||
       value.position === null ||
       typeof value.position === 'number') &&
     strings(value.references) &&
-    (value.referenceOperations === undefined || (isObject(value.referenceOperations) && Object.values(value.referenceOperations).every(strings))) &&
+    (value.referenceOperations === undefined ||
+      (isObject(value.referenceOperations) &&
+        Object.values(value.referenceOperations).every((item) =>
+          strings(item),
+        ))) &&
     strings(value.operations) &&
     Array.isArray(value.entries) &&
     value.entries.every(
@@ -537,11 +603,32 @@ export function validate(c: Catalog): Problem[] {
   const issues: Problem[] = [];
   const add = (path: string[], code = 'invalid', warning = false) =>
     issues.push({ path, code, warning });
-  if (c.group_order !== undefined && (!Array.isArray(c.group_order) || new Set(c.group_order).size !== c.group_order.length
-    || c.group_order.some((key) => typeof key !== 'string' || key.length > 128 || !/^[a-z][a-z0-9_-]*(?::[a-z][a-z0-9_-]*){2,}$/.test(key)))) add(['group_order']);
-  const groups = new Set(Object.values(c.messages).flatMap((messages) => isObject(messages.frontend) && isObject(messages.frontend.groups) ? Object.keys(messages.frontend.groups) : []));
+  if (
+    c.group_order !== undefined &&
+    (!Array.isArray(c.group_order) ||
+      new Set(c.group_order).size !== c.group_order.length ||
+      c.group_order.some(
+        (key) =>
+          typeof key !== 'string' ||
+          key.length > 128 ||
+          !/^[a-z][a-z0-9_-]*(?::[a-z][a-z0-9_-]*){2,}$/.test(key),
+      ))
+  )
+    add(['group_order']);
+  const groups = new Set(
+    Object.values(c.messages).flatMap((messages) =>
+      isObject(messages.frontend) && isObject(messages.frontend.groups)
+        ? Object.keys(messages.frontend.groups)
+        : [],
+    ),
+  );
   for (const [key, enabled] of Object.entries(c.group_defaults ?? {}))
-    if (!groups.has(key) || !c.scopes.includes(key.split(':')[0] ?? '') || typeof enabled !== 'boolean') add(['group_defaults', key]);
+    if (
+      !groups.has(key) ||
+      !c.scopes.includes(key.split(':')[0] ?? '') ||
+      typeof enabled !== 'boolean'
+    )
+      add(['group_defaults', key]);
   if (!equal(c.operations, ['read', 'create', 'update', 'delete']))
     add(['operations']);
   if (
@@ -600,14 +687,30 @@ export function validate(c: Catalog): Problem[] {
       resource.sort < 0
     )
       add(p);
-    if (resource.permission_group !== undefined && (typeof resource.permission_group !== 'string' || resource.kind !== 'directory' || !!resource.parent || resource.permission_group.length > 128 || !keyPattern.test(resource.permission_group) || resource.permission_group.split(':').length < 3 || resource.permission_group.split(':')[0] !== parts[0])) add([...p, 'permission_group']);
-    if (resource.permission_scope !== undefined && (resource.kind !== 'resource' || resource.permission_scope !== '*')) add([...p, 'permission_scope']);
-    if (resource.frontend_visible !== undefined && (typeof resource.frontend_visible !== 'boolean' || resource.kind !== 'directory' || !!resource.parent)) add([...p, 'frontend_visible']);
     if (
-      resource.kind === 'resource' &&
-      parts.length < 3
+      resource.permission_group !== undefined &&
+      (typeof resource.permission_group !== 'string' ||
+        resource.kind !== 'directory' ||
+        !!resource.parent ||
+        resource.permission_group.length > 128 ||
+        !keyPattern.test(resource.permission_group) ||
+        resource.permission_group.split(':').length < 3 ||
+        resource.permission_group.split(':')[0] !== parts[0])
     )
-      add(p);
+      add([...p, 'permission_group']);
+    if (
+      resource.permission_scope !== undefined &&
+      (resource.kind !== 'resource' || resource.permission_scope !== '*')
+    )
+      add([...p, 'permission_scope']);
+    if (
+      resource.frontend_visible !== undefined &&
+      (typeof resource.frontend_visible !== 'boolean' ||
+        resource.kind !== 'directory' ||
+        !!resource.parent)
+    )
+      add([...p, 'frontend_visible']);
+    if (resource.kind === 'resource' && parts.length < 3) add(p);
     if (
       resource.kind === 'directory' &&
       (Object.keys(resource.entries ?? {}).length > 0 ||
@@ -687,11 +790,24 @@ export function validate(c: Catalog): Problem[] {
       add(p);
       continue;
     }
-    const prefixes = [...entries].filter((entry) => entry.startsWith(`${parts[0]}:menu:`)).map(
-      (entry) => `${entry.replace(':menu:', ':btn:')}:`,
-    );
-    if (f.permission_resource !== undefined && f.permission_resource !== '' && !/^[a-z][a-z0-9_-]*$/.test(f.permission_resource)) add([...p, 'permission_resource']);
-    if (f.entry_keys !== undefined && (!Array.isArray(f.entry_keys) || new Set(f.entry_keys).size !== f.entry_keys.length || f.entry_keys.some((key) => !entries.has(key) || !key.startsWith(`${parts[0]}:menu:`)))) add([...p, 'entry_keys']);
+    const prefixes = [...entries]
+      .filter((entry) => entry.startsWith(`${parts[0]}:menu:`))
+      .map((entry) => `${entry.replace(':menu:', ':btn:')}:`);
+    if (
+      f.permission_resource !== undefined &&
+      f.permission_resource !== '' &&
+      !/^[a-z][a-z0-9_-]*$/.test(f.permission_resource)
+    )
+      add([...p, 'permission_resource']);
+    if (
+      f.entry_keys !== undefined &&
+      (!Array.isArray(f.entry_keys) ||
+        new Set(f.entry_keys).size !== f.entry_keys.length ||
+        f.entry_keys.some(
+          (key) => !entries.has(key) || !key.startsWith(`${parts[0]}:menu:`),
+        ))
+    )
+      add([...p, 'entry_keys']);
     if (
       new Set(f.btn).size !== f.btn.length ||
       f.btn.some(
@@ -709,13 +825,13 @@ export function validate(c: Catalog): Problem[] {
       f.http.some(
         (h) =>
           ![
-            'GET',
-            'POST',
-            'PUT',
-            'PATCH',
             'DELETE',
+            'GET',
             'HEAD',
             'OPTIONS',
+            'PATCH',
+            'POST',
+            'PUT',
           ].includes(h.method) || !catalogPath(h.path, true),
       )
     )

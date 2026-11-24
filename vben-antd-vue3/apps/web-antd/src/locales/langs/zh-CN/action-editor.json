@@ -1,5 +1,5 @@
 {
-  "editTitle": "编辑权限：{name}",
+  "editTitle": "编辑权限",
   "names": "权限名称（多语言）",
   "wordPlaceholder": "例如：admin:read:system:user",
   "wordHint": "修改标识不会改变已选资源、操作和功能。",
@@ -87,6 +87,7 @@
   "groupUpdateFailed": "更新分组失败，请重试",
   "groupPermissionCount": "权限数量",
   "groupCountsFailed": "权限分组关联数量加载失败",
+  "editGroupName": "编辑分组{name}",
   "deleteGroupName": "删除{name}分组",
   "groupType": "分组类型",
   "groupTypeNormal": "普通",

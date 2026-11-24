@@ -12,6 +12,7 @@ const routes: RouteRecordRaw[] = [
         '/system/dictionary',
         '/system/developer',
         '/system/msg',
+        '/system/mail-template',
       ],
       icon: 'lucide:settings',
       order: 100,
@@ -20,8 +21,6 @@ const routes: RouteRecordRaw[] = [
     name: 'SystemManagement',
     path: '/system',
     children: [
-
-
       {
         component: () => import('#/views/system/user/index.vue'),
         meta: {
@@ -39,6 +38,7 @@ const routes: RouteRecordRaw[] = [
           authority: ['/system/role'],
           fullPathKey: false,
           icon: 'lucide:shield-check',
+          keepAlive: true,
           title: 'menus.admin:menu:system:role',
         },
         name: 'SystemRole',
@@ -77,14 +77,33 @@ const routes: RouteRecordRaw[] = [
       },
 
       {
+        path: 'mail-template',
+        name: 'SystemMailTemplate',
+        component: () => import('#/views/system/mail-template/index.vue'),
+        meta: {
+          authority: ['/system/mail-template'],
+          fullPathKey: false,
+          icon: 'lucide:mail',
+          title: 'mail-template.title',
+        },
+      },
+      {
         path: 'msg',
         name: 'SystemMsg',
         component: () => import('#/views/msg/index.vue'),
-        meta: { authority: ['/system/msg'], icon: 'lucide:mail', title: 'menus.admin:menu:system:msg' },
+        meta: {
+          authority: ['/system/msg'],
+          icon: 'lucide:mail',
+          title: 'menus.admin:menu:system:msg',
+        },
       },
       {
         component: () => import('#/views/system/developer/index.vue'),
-        meta: { authority: ['/system/developer'], icon: 'lucide:code-xml', title: 'developer.title' },
+        meta: {
+          authority: ['/system/developer'],
+          icon: 'lucide:code-xml',
+          title: 'developer.title',
+        },
         name: 'SystemDeveloper',
         path: 'developer',
       },

@@ -23,11 +23,15 @@ import { useUserStore } from '@vben/stores';
 import { useFullscreen } from '@vueuse/core';
 import { Button, message, Result, Tag } from 'ant-design-vue';
 
-import { updateUser } from '#/api';
-import { resetUserMFAApi } from '#/api/core/auth';
+import { unlockUserAccount } from '#/api';
+import { resetUserTOTPApi } from '#/api/core/auth';
 import { useOperationConfirmation } from '#/composables/use-operation-confirmation';
 import { $t, catalogLabel } from '#/locales';
-import { catalogGroupOrder, catalogGroupWords } from '#/locales/catalog';
+import {
+  catalogGroupNames,
+  catalogGroupOrder,
+  catalogGroupWords,
+} from '#/locales/catalog';
 import { useAuthStore } from '#/store';
 
 import { actionListFields } from './action-detail';
@@ -51,10 +55,8 @@ const route = useRoute();
 const permissions = useManagementPermissions(() => props.resource);
 const {
   canRead,
+  canResetTOTP,
   canCreate,
-  canDelete,
-  canAssignPermissions,
-  canManagePermission,
   canRemoveRecord,
   canSelectRecord,
   hasButtonAccess,
@@ -120,14 +122,15 @@ const {
   },
 });
 
-const viewMode = ref<'cards' | 'matrix' | 'table'>(
-  props.resource === 'user'
-    ? 'table'
-    : props.resource === 'action'
-      ? 'matrix'
-      : 'cards',
-);
+let initialView: 'cards' | 'matrix' | 'table' = 'cards';
+if (props.resource === 'user') {
+  initialView = 'table';
+} else if (props.resource === 'action') {
+  initialView = 'matrix';
+}
+const viewMode = ref<'cards' | 'matrix' | 'table'>(initialView);
 const groupDialogOpen = ref(false);
+const editingGroup = ref<string>();
 const permissionGroups = computed(() => {
   const groups = summary.value?.groups ?? [];
   const used = new Set(groups.map((group) => group.name));
@@ -141,24 +144,24 @@ const permissionGroups = computed(() => {
     catalogGroupOrder(),
   );
 });
-function openGroupEditor() {
-  if (
-    canManagePermission('action', 'update') &&
-    hasButtonAccess('create-group')
-  )
-    groupDialogOpen.value = true;
+function openGroupEditor(word?: string) {
+  if (!hasButtonAccess(word ? 'edit-group' : 'create-group')) return;
+  editingGroup.value = word;
+  groupDialogOpen.value = true;
 }
-async function groupSaved() {
+async function groupSaved(word: string) {
+  if (editingGroup.value && editingGroup.value !== word) {
+    filters.groups_exact = selectedExactGroups.value.map((key) =>
+      key === editingGroup.value ? word : key,
+    );
+  }
   await refreshAll();
 }
 function removeGroup(word: string) {
-  if (
-    !canManagePermission('action', 'update') ||
-    !hasButtonAccess('delete-group')
-  )
-    return;
+  if (!hasButtonAccess('delete-group')) return;
   if (permissionGroups.value.find((group) => group.name === word)?.count !== 0)
     return;
+  const expectedNames = catalogGroupNames(word);
   confirmSensitiveOperation({
     title: $t('action-editor.deleteGroup'),
     content: $t('action-editor.deleteGroupConfirm', {
@@ -168,7 +171,8 @@ function removeGroup(word: string) {
     cancelText: $t('system-editor.cancel'),
     okButtonProps: { danger: true },
     async onOk() {
-      await deletePermissionGroup(word);
+      if (!hasButtonAccess('delete-group')) return;
+      await deletePermissionGroup(word, expectedNames);
       filters.groups_exact = selectedExactGroups.value.filter(
         (key) => key !== word,
       );
@@ -178,15 +182,18 @@ function removeGroup(word: string) {
 }
 const selectedDay = ref('');
 const selectedDayKind = ref<'created' | 'login'>('created');
-const selectedStatus = computed(() =>
-  Array.isArray(filters.status)
-    ? filters.status.length === 1
-      ? Number(filters.status[0])
-      : undefined
-    : typeof filters.status === 'number'
-      ? filters.status
-      : undefined,
-);
+const selectedStatus = computed(() => {
+  if (Array.isArray(filters.status)) {
+    if (filters.status.length === 1) {
+      return Number(filters.status[0]);
+    }
+    return undefined;
+  }
+  if (typeof filters.status === 'number') {
+    return filters.status;
+  }
+  return undefined;
+});
 const selectedExactGroups = computed<string[]>(() =>
   Array.isArray(filters.groups_exact) ? filters.groups_exact : [],
 );
@@ -254,12 +261,11 @@ async function clearDay() {
 async function selectPermissionGroup(name?: string) {
   filters.group = undefined;
   filters.group_exact = undefined;
-  filters.groups_exact =
-    name === undefined
-      ? []
-      : selectedExactGroups.value.includes(name)
-        ? selectedExactGroups.value.filter((group) => group !== name)
-        : [...selectedExactGroups.value, name];
+  if (name === undefined) filters.groups_exact = [];
+  else
+    filters.groups_exact = selectedExactGroups.value.includes(name)
+      ? selectedExactGroups.value.filter((group) => group !== name)
+      : [...selectedExactGroups.value, name];
   await search();
 }
 async function toggleRolePermissionGroup(name: string) {
@@ -298,7 +304,7 @@ function confirmRemove(record: SystemRecord) {
 watch(
   () => filters.group,
   (value) => {
-    if (value && (!Array.isArray(value) || value.length)) {
+    if (value && (!Array.isArray(value) || value.length > 0)) {
       filters.group_exact = undefined;
       filters.groups_exact = undefined;
     }
@@ -313,6 +319,7 @@ const visibleColumnKeys = ref<string[]>([
   ...(props.resource === 'user'
     ? [
         'username',
+        'email',
         'role',
         'status',
         'login_count',
@@ -340,37 +347,32 @@ const listFields = computed(() => {
     ],
     dictionary: ['enabled', 'description', 'value', 'created_at', 'updated_at'],
   };
-  const columns =
-    props.resource === 'action' && viewMode.value === 'matrix'
-      ? []
-      : viewMode.value === 'cards'
-        ? (cards[props.resource] ?? [])
-        : config.value.columns
-            .filter(
-              (column) =>
-                visibleColumnKeys.value.includes(column.key) &&
-                (viewMode.value !== 'matrix' ||
-                  ['button', 'menu', 'name', 'resource'].includes(column.key)),
-            )
-            .flatMap((column) =>
-              column.display === 'role'
-                ? ['role_summary']
-                : column.display === 'users'
-                  ? ['member_count', 'member_preview']
-                  : [column.dataIndex],
-            );
-  const deletionFields =
-    !canAssignPermissions.value &&
-    ['role', 'user-group'].includes(props.resource) &&
-    (canDelete.value || hasButtonAccess('delete-selected'))
-      ? [
-          'action_codes',
-          ...(props.resource === 'user-group' ? ['member_count'] : []),
-        ]
-      : [];
-  return [
-    ...new Set([...base[props.resource], ...columns, ...deletionFields]),
-  ].join(',');
+  function resolveColumns(): string[] {
+    if (props.resource === 'action' && viewMode.value === 'matrix') {
+      return [];
+    }
+    if (viewMode.value === 'cards') {
+      return cards[props.resource] ?? [];
+    }
+    return config.value.columns
+      .filter(
+        (column) =>
+          visibleColumnKeys.value.includes(column.key) &&
+          (viewMode.value !== 'matrix' ||
+            ['button', 'menu', 'name', 'resource'].includes(column.key)),
+      )
+      .flatMap((column) => {
+        if (column.display === 'role') {
+          return ['role_summary'];
+        }
+        if (column.display === 'users') {
+          return ['member_count', 'member_preview'];
+        }
+        return [column.dataIndex];
+      });
+  }
+  const columns = resolveColumns();
+  return [...new Set([...base[props.resource], ...columns])].join(',');
 });
 watch(listFields, () => {
   void loadData();
@@ -434,26 +436,35 @@ function applyRouteFilters() {
   selectedDay.value = '';
   selectedDayKind.value = 'created';
   for (const [field, value] of routeFilters) {
-    filters[field.key] =
-      field.type === 'category' || field.type === 'status'
-        ? Number(value)
-        : field.type === 'enabled'
-          ? value
-          : field.type === 'status-multi-select'
-            ? [
-                ...new Set(
-                  value
-                    .split(',')
-                    .map(Number)
-                    .filter(
-                      (item) =>
-                        Number.isInteger(item) && item >= 0 && item <= 2,
-                    ),
-                ),
-              ]
-            : field.type === 'input-multi-select'
-              ? normalizeMultiFilterValue(field.key, value.split(','))
-              : normalizeTextFilterValue(field.key, value);
+    switch (field.type) {
+      case 'category':
+      case 'status': {
+        filters[field.key] = Number(value);
+        break;
+      }
+      case 'enabled': {
+        filters[field.key] = value;
+        break;
+      }
+      case 'status-multi-select': {
+        const statuses = value
+          .split(',')
+          .map(Number)
+          .filter((item) => Number.isInteger(item) && item >= 0 && item <= 2);
+        filters[field.key] = [...new Set(statuses)];
+        break;
+      }
+      case 'input-multi-select': {
+        filters[field.key] = normalizeMultiFilterValue(
+          field.key,
+          value.split(','),
+        );
+        break;
+      }
+      default: {
+        filters[field.key] = normalizeTextFilterValue(field.key, value);
+      }
+    }
   }
   return true;
 }
@@ -474,39 +485,34 @@ watch(
   },
 );
 
+const unlockingUserIDs = new Set<number>();
+
 async function unlockUser(record: Recordable<any>) {
-  if (!hasButtonAccess('unlock')) return;
-  const metadata = { ...(record.metadata || {}) };
-  delete metadata.lock_expired_at;
-  await updateUser(Number(record.id), { metadata, status: 1 });
-  message.success($t('system.messages.unlocked'));
-  await refreshAll();
+  const id = Number(record.id);
+  if (!hasButtonAccess('unlock') || unlockingUserIDs.has(id)) return;
+  unlockingUserIDs.add(id);
+  try {
+    await unlockUserAccount(id);
+    message.success($t('system.messages.unlocked'));
+    await refreshAll();
+  } finally {
+    unlockingUserIDs.delete(id);
+  }
 }
 
-function confirmResetMFA(record: Recordable<any>) {
-  if (props.resource !== 'user' || !canRead.value) return;
+function confirmResetTOTP(record: Recordable<any>) {
+  if (!canResetTOTP.value) return;
   confirmSensitiveOperation({
-    title: `${$t('mfa.reset')} · ${record.username}`,
-    content: $t('mfa.resetConfirm'),
+    title: `${buttonLabel('reset-totp', 'verification.reset')} · ${record.username}`,
+    content: $t('verification.resetConfirm'),
     onOk: async () => {
-      await resetUserMFAApi(Number(record.id));
-      message.success($t('mfa.resetSuccess'));
-      if (Number(useUserStore().userInfo?.userId) === Number(record.id)) {
-        await useAuthStore().logout();
-      } else {
-        await refreshAll();
-      }
+      await resetUserTOTPApi(Number(record.id));
+      message.success($t('verification.resetSuccess'));
+      await (Number(useUserStore().userInfo?.userId) === Number(record.id)
+        ? useAuthStore().logout()
+        : refreshAll());
     },
   });
-}
-
-async function unlockPasswordChange(record: Recordable<any>) {
-  if (!hasButtonAccess('unlock-password')) return;
-  const metadata = { ...(record.metadata || {}) };
-  delete metadata.password_change_failures;
-  await updateUser(Number(record.id), { metadata });
-  message.success($t('system.messages.passwordUnlocked'));
-  await refreshAll();
 }
 
 async function removeRecords(ids: number[], control = 'delete') {
@@ -558,8 +564,8 @@ const recordActions: ManagementRecordActions = {
   openApproval,
   openLock,
   unlockUser,
-  unlockPasswordChange,
-  confirmResetMFA,
+  openResetPassword: (record) => userDialogs.value?.openResetPassword(record),
+  confirmResetTOTP,
   confirmRemove,
   removeRecords,
   removeSelected,
@@ -573,11 +579,6 @@ const recordActions: ManagementRecordActions = {
       class="system-management-page flex flex-col gap-4"
       :class="{ 'bg-background p-4': isFullscreen }"
     >
-      <header class="system-page-heading">
-        <div>
-          <h1>{{ config.title }}</h1>
-        </div>
-      </header>
       <SystemOverview
         v-if="canRead && props.resource !== 'dictionary'"
         :resource="props.resource"
@@ -741,13 +742,15 @@ const recordActions: ManagementRecordActions = {
           :groups="permissionGroups"
           :selected="selectedExactGroups"
           :total="summary?.total"
-          :editable="canManagePermission('action', 'update')"
+          editable
           :show-create="hasButtonAccess('create-group')"
           :show-delete="hasButtonAccess('delete-group')"
+          :show-edit="hasButtonAccess('edit-group')"
           :allow-reorder="hasButtonAccess('reorder-groups')"
           :loading="summaryLoading"
           @select="selectPermissionGroup"
           @create="openGroupEditor()"
+          @edit="openGroupEditor"
           @remove="removeGroup"
         />
         <ManagementResults
@@ -779,7 +782,7 @@ const recordActions: ManagementRecordActions = {
       :loading="loading"
       :groups="permissionGroups.map((group) => group.name)"
       :refresh="refreshAll"
-      :reset-mfa="confirmResetMFA"
+      :reset-totp="confirmResetTOTP"
     />
     <ManagementUserDialogs
       v-if="resource === 'user'"
@@ -791,6 +794,7 @@ const recordActions: ManagementRecordActions = {
     <ActionGroupDialog
       v-if="props.resource === 'action'"
       v-model:open="groupDialogOpen"
+      :original-word="editingGroup"
       :existing-words="permissionGroups.map((group) => group.name)"
       @saved="groupSaved"
     />
@@ -801,99 +805,96 @@ const recordActions: ManagementRecordActions = {
 .system-management-page:fullscreen {
   overflow: auto;
 }
+
 .system-management-page {
   min-width: 0;
   padding: 3px 0 8px;
 }
-.system-page-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 2px;
-}
-.system-page-heading h1 {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.35;
-  font-weight: 650;
-}
+
 .system-results-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
+
 .system-results-layout.with-group-nav {
   grid-template-columns: 190px minmax(0, 1fr);
 }
+
 .system-day-filter {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
+  align-items: center;
 }
+
 .system-scope-clear {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 12px;
   height: 12px;
-  flex-shrink: 0;
   padding: 0;
-  border: 0;
-  border-radius: calc(var(--radius) * 0.375);
-  background: none;
   color: inherit;
   cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.375);
 }
+
 .system-scope-clear :deep(svg) {
   display: block;
   width: 12px;
   height: 12px;
 }
+
 .system-scope-clear:hover {
   background: hsl(var(--muted));
 }
+
 .system-scope-clear:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 1px;
 }
+
 .system-active-scope {
-  margin-bottom: 16px;
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 6px;
-  flex: 1;
   min-width: 0;
+  margin-bottom: 16px;
 }
+
 .system-active-scope :deep(.ant-tag) {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
-  padding-inline: 6px;
+  align-items: center;
   max-width: 100%;
+  padding-inline: 6px;
   margin: 0;
-  white-space: normal;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
+
 .system-active-scope :deep(.ant-tag-close-icon) {
   display: inline-flex;
-  align-items: center;
   flex-shrink: 0;
+  align-items: center;
   margin-inline-start: 0;
   line-height: 1;
 }
+
 @media (max-width: 1000px) {
   .system-results-layout.with-group-nav {
     grid-template-columns: 160px minmax(0, 1fr);
   }
 }
+
 @media (max-width: 700px) {
   .system-results-layout.with-group-nav {
     grid-template-columns: 1fr;
-  }
-  .system-page-heading h1 {
-    font-size: 22px;
   }
 }
 </style>

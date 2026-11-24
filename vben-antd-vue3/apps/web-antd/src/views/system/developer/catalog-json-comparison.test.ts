@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import { compareJson } from './catalog-json-comparison';
 
 describe('catalog JSON comparison', () => {
@@ -24,7 +25,7 @@ describe('catalog JSON comparison', () => {
       ['messages', 'en-US', 'admin:system.user'],
       ['messages', 'en-US', 'admin:system.user'],
     ]);
-    const changed = result.rows[result.blocks[0]!.start]!;
+    const changed = required(result.rows[required(result.blocks[0]).start]);
     expect(changed.local?.text).toContain('Local');
     expect(changed.online?.text).toContain('Online');
   });
@@ -79,7 +80,7 @@ describe('catalog JSON comparison', () => {
     const result = compareJson(value, value);
     const tokens = result.rows.flatMap((row) => row.local?.tokens ?? []);
     expect(new Set(tokens.map((token) => token.kind))).toEqual(
-      new Set(['plain', 'key', 'string', 'number', 'literal']),
+      new Set(['key', 'literal', 'number', 'plain', 'string']),
     );
     for (const row of result.rows)
       expect(row.local?.tokens.map((token) => token.text).join('')).toBe(

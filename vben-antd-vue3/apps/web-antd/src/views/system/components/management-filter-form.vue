@@ -6,6 +6,7 @@ import type { ManagementPermissions } from './use-management-permissions';
 import { computed, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
+import { $placeholder } from '@vben/locales';
 
 import { Button, FormItem, Select, Space, Tag } from 'ant-design-vue';
 
@@ -67,10 +68,12 @@ function resourceRules(value: string) {
         v-model:value="filters[field.key]"
         allow-clear
         :mode="field.type === 'status-multi-select' ? 'multiple' : undefined"
-        :placeholder="$t('system.common.select', { field: field.label })"
+        :placeholder="
+          $placeholder('system.common.select', { field: field.label })
+        "
         class="system-filter-control"
         :data-testid="`system-filter-${field.key}`"
-        style="--filter-width: 280px"
+        :style="{ '--filter-width': '280px' }"
         :options="[
           { label: $t('system.status.pending'), value: 0 },
           { label: $t('system.status.active'), value: 1 },
@@ -84,10 +87,12 @@ function resourceRules(value: string) {
         v-else-if="field.type === 'enabled'"
         v-model:value="filters[field.key]"
         allow-clear
-        :placeholder="$t('system.common.select', { field: field.label })"
+        :placeholder="
+          $placeholder('system.common.select', { field: field.label })
+        "
         class="system-filter-control"
         :data-testid="`system-filter-${field.key}`"
-        style="--filter-width: 160px"
+        :style="{ '--filter-width': '160px' }"
         :options="[
           { label: $t('system.enabled.yes'), value: 'true' },
           { label: $t('system.enabled.no'), value: 'false' },
@@ -100,10 +105,12 @@ function resourceRules(value: string) {
         v-else-if="field.type === 'category'"
         v-model:value="filters[field.key]"
         allow-clear
-        :placeholder="$t('system.common.select', { field: field.label })"
+        :placeholder="
+          $placeholder('system.common.select', { field: field.label })
+        "
         class="system-filter-control"
         :data-testid="`system-filter-${field.key}`"
-        style="--filter-width: 160px"
+        :style="{ '--filter-width': '160px' }"
         :options="[
           { label: $t('system.category.permission'), value: 0 },
           { label: $t('system.category.jwt'), value: 1 },
@@ -118,13 +125,15 @@ function resourceRules(value: string) {
         allow-clear
         class="system-multi-filter system-filter-control"
         :data-testid="`system-filter-${field.key}`"
-        style="--filter-width: 280px"
+        :style="{ '--filter-width': '280px' }"
         :default-active-first-option="false"
         :filter-option="false"
         mode="tags"
         :not-found-content="null"
         :options="filterSuggestionOptions(field.key)"
-        :placeholder="$t('system.common.enter', { field: field.label })"
+        :placeholder="
+          $placeholder('system.common.enter', { field: field.label })
+        "
         :show-action="['focus']"
         :token-separators="[',']"
         @blur="handleFilterBlur(field.key)"
@@ -175,7 +184,7 @@ function resourceRules(value: string) {
             <Tag v-else class="m-0 min-w-0 truncate">{{ value }}</Tag>
             <button
               :aria-label="$t('system.suggestions.removeHistory', { value })"
-              class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               tabindex="-1"
               type="button"
               @click.prevent.stop="
@@ -231,7 +240,9 @@ function resourceRules(value: string) {
         :dropdown-match-select-width="true"
         :options="filterSuggestionOptions(field.key)"
         :loading="!!filterSuggestionsLoading[filterHistoryKey(field.key)]"
-        :placeholder="$t('system.common.enter', { field: field.label })"
+        :placeholder="
+          $placeholder('system.common.enter', { field: field.label })
+        "
         @blur="handleFilterBlur()"
         @focus="handleFilterFocus"
         @search="searchBackendFilterSuggestions(field.key, $event)"
@@ -280,8 +291,8 @@ function resourceRules(value: string) {
 
 :deep(.system-multiline-filter-tag) {
   display: inline-flex;
-  align-items: center;
   gap: 4px;
+  align-items: center;
   height: auto;
   padding-block: 2px;
   text-align: left;

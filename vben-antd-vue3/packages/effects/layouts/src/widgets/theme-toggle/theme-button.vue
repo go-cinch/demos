@@ -32,7 +32,7 @@ const bindProps = computed(() => {
         variant: 'heavy' as const,
       }
     : {
-        class: 'rounded-full',
+        class: 'rounded-md',
         size: 'icon' as const,
         style: { padding: '7px' },
         variant: 'icon' as const,

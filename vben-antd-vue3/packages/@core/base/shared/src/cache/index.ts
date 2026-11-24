@@ -3,3 +3,4 @@ export * from './local-storage-driver';
 export * from './memory-storage-driver';
 export * from './storage-manager';
 export type * from './types';
+export * from './user-cache';

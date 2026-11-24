@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
+import { required } from '../../../../../scripts/test-utils/required';
 import {
   createAction,
   createDictionary,
@@ -20,8 +21,15 @@ import {
   listRoles,
   listUserGroups,
   listUsers,
+  lockUserAccount,
+  publishDictionaryCatalog,
+  reorderActionGroups,
+  resetUserPassword,
+  reviewUser,
   systemDetailFields,
+  unlockUserAccount,
   updateAction,
+  updateActionGroup,
   updateDictionary,
   updateRole,
   updateUser,
@@ -150,14 +158,15 @@ describe('createUser', () => {
   });
 
   it('encrypts credentials and posts the user fields to /user', async () => {
-    await createUser('idempotency-key', {
+    const draft = {
       action_codes: ['ABCDEFGH'],
       metadata: { source: 'admin' },
       password: 'secret1',
       role_id: 2,
       status: 0,
       username: ' operator ',
-    });
+    };
+    await createUser('idempotency-key', draft);
 
     expect(createRegistrationPasswordCredentialApi).toHaveBeenCalledWith(
       'secret1',
@@ -172,7 +181,10 @@ describe('createUser', () => {
         role_id: 2,
         username: 'operator',
       },
-      { headers: { 'x-idempotent': 'idempotency-key' }, mfaRetryCredential: expect.any(Function) },
+      {
+        headers: { 'x-idempotent': 'idempotency-key' },
+        verificationRetryCredential: expect.any(Function),
+      },
     );
     const requestBody = post.mock.calls[0]?.[1];
     expect(requestBody).toHaveProperty('username', 'operator');
@@ -199,38 +211,40 @@ describe('updateUser', () => {
     request.mockResolvedValue({ id: 1 });
   });
 
-  it('encrypts a changed password before patching the user', async () => {
-    await updateUser(7, {
-      password: 'secret2',
-      role_id: 2,
-      username: 'operator',
-    });
-
+  it('sends an encrypted password only to the reset action, including on verification retry', async () => {
+    await resetUserPassword(7, ' secret2 ');
     expect(createRegistrationPasswordCredentialApi).toHaveBeenCalledWith(
       'secret2',
     );
-    expect(request).toHaveBeenCalledWith('/user/7', {
-      data: {
+    expect(post).toHaveBeenCalledWith(
+      '/user/7/reset-password',
+      {
         challenge_id: 'challenge-id',
         credential: 'encrypted-credential',
-        role_id: 2,
-        username: 'operator',
       },
-      method: 'PATCH',
-      mfaRetryCredential: expect.any(Function),
-    });
-    expect(request.mock.calls[0]?.[1]?.data).not.toHaveProperty('password');
+      { verificationRetryCredential: expect.any(Function) },
+    );
+    await required(post.mock.calls[0])[2].verificationRetryCredential();
+    expect(createRegistrationPasswordCredentialApi).toHaveBeenCalledTimes(2);
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it('patches non-password fields without requesting a challenge', async () => {
-    await updateUser(7, { password: '', status: 1 });
-
-    expect(createRegistrationPasswordCredentialApi).not.toHaveBeenCalled();
+  it('sends only the state transition inputs to their individual actions', async () => {
+    await lockUserAccount(7, 0);
+    expect(post).toHaveBeenCalledWith('/user/7/lock', { lock_expired_at: 0 });
+    await unlockUserAccount(7);
+    expect(post).toHaveBeenCalledWith('/user/7/unlock');
+    await reviewUser(7, 'reject', 'Duplicate');
     expect(request).toHaveBeenCalledWith('/user/7', {
-      data: { status: 1 },
+      data: { review_decision: 'reject', reject_reason: 'Duplicate' },
       method: 'PATCH',
     });
-    expect(request.mock.calls[0]?.[1]?.data).not.toHaveProperty('password');
+    await updateUser(7, { role_id: 2 });
+    expect(request).toHaveBeenCalledWith('/user/7', {
+      data: { role_id: 2 },
+      method: 'PATCH',
+    });
+    expect(createRegistrationPasswordCredentialApi).not.toHaveBeenCalled();
   });
 });
 
@@ -328,11 +342,17 @@ describe('management resource contracts', () => {
 
   it('hydrates sparse rows through detail endpoints, with bounded group fields', async () => {
     await getSystemRecord('user', 7);
-    expect(get).toHaveBeenLastCalledWith('/user/7', { params: { f: systemDetailFields.user } });
-    expect(systemDetailFields.user!.split(',')).toContain('role_summary');
-    expect(systemDetailFields.user!.split(',')).not.toContain('role');
+    expect(get).toHaveBeenLastCalledWith('/user/7', {
+      params: { f: systemDetailFields.user },
+    });
+    expect(required(systemDetailFields.user).split(',')).toContain(
+      'role_summary',
+    );
+    expect(required(systemDetailFields.user).split(',')).not.toContain('role');
     await getSystemRecord('role', 9);
-    expect(get).toHaveBeenLastCalledWith('/role/9', { params: { f: systemDetailFields.role } });
+    expect(get).toHaveBeenLastCalledWith('/role/9', {
+      params: { f: systemDetailFields.role },
+    });
     await getSystemRecord('dictionary', 3);
     expect(get).toHaveBeenLastCalledWith('/dictionary/3', { params: {} });
     await getSystemRecord('user-group', 8);
@@ -365,24 +385,34 @@ describe('management resource contracts', () => {
     await expect(
       createAction('action-once', { name: record.name }),
     ).resolves.toBe(record);
-    await expect(
-      updateAction(7, { group: 'admin:users' }),
-    ).resolves.toBe(record);
+    await expect(updateAction(7, { group: 'admin:users' })).resolves.toBe(
+      record,
+    );
     request.mockResolvedValue({ id: 3, key: 'OTHER_SETTINGS' });
     await updateDictionary(3, { value: { enabled: true } });
     expect(refreshI18nCatalog).not.toHaveBeenCalled();
     request.mockRejectedValue(new Error('conflict'));
     post.mockRejectedValue(new Error('conflict'));
-    await expect(updateDictionary(3, { value: {} })).rejects.toThrow('conflict');
-    await expect(updateAction(7, { names: { 'en-US': 'Users' } })).rejects.toThrow('conflict');
-    await expect(createAction('once', { names: { 'en-US': 'Users' } })).rejects.toThrow('conflict');
+    await expect(updateDictionary(3, { value: {} })).rejects.toThrow(
+      'conflict',
+    );
+    await expect(
+      updateAction(7, { names: { 'en-US': 'Users' } }),
+    ).rejects.toThrow('conflict');
+    await expect(
+      createAction('once', { names: { 'en-US': 'Users' } }),
+    ).rejects.toThrow('conflict');
     expect(refreshI18nCatalog).not.toHaveBeenCalled();
   });
 
   it('refreshes i18n once after each successful localized action save', async () => {
     const record = { id: 7, name: 'Read users' };
     let finish!: (value: typeof record) => void;
-    post.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    post.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const pending = createAction('once', { names: { 'en-US': 'Users' } });
     expect(refreshI18nCatalog).not.toHaveBeenCalled();
     finish(record);
@@ -405,14 +435,15 @@ describe('management resource contracts', () => {
       resource_renames: { a: 'b' },
       feature_renames: { x: 'y' },
     };
-    await updateDictionary(3, update);
-    expect(request).toHaveBeenLastCalledWith('/dictionary/3', {
+    await publishDictionaryCatalog(update);
+    expect(request).toHaveBeenLastCalledWith('/dictionary/catalog', {
       method: 'PATCH',
       data: update,
+      suppressErrorMessage: true,
     });
     expect(refreshI18nCatalog).toHaveBeenCalledOnce();
     request.mockRejectedValue(new Error('conflict'));
-    await expect(updateDictionary(3, update)).rejects.toThrow('conflict');
+    await expect(publishDictionaryCatalog(update)).rejects.toThrow('conflict');
     expect(refreshI18nCatalog).toHaveBeenCalledOnce();
   });
 
@@ -423,10 +454,48 @@ describe('management resource contracts', () => {
     await expect(
       createUser('once', { username: 'reader', password: 'secret' }),
     ).rejects.toThrow('challenge failed');
-    await expect(updateUser(7, { password: 'secret' })).rejects.toThrow(
+    await expect(resetUserPassword(7, 'secret')).rejects.toThrow(
       'challenge failed',
     );
     expect(post).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
   });
+});
+
+it('writes group commands only to the action service routes and refreshes after success', async () => {
+  const data = {
+    operation: 'create' as const,
+    word: 'admin:test:new',
+    names: { 'en-US': 'New' },
+  };
+  await updateActionGroup(data);
+  expect(request).toHaveBeenLastCalledWith('/action/group', {
+    method: 'PATCH',
+    data,
+  });
+  await reorderActionGroups(['admin:test:new'], []);
+  expect(request).toHaveBeenLastCalledWith('/action/group/order', {
+    method: 'PATCH',
+    data: { order: ['admin:test:new'], expected_order: [] },
+  });
+  expect(refreshI18nCatalog).toHaveBeenCalledTimes(2);
+  request.mockRejectedValueOnce(new Error('conflict'));
+  await expect(updateActionGroup(data)).rejects.toThrow('conflict');
+  expect(refreshI18nCatalog).toHaveBeenCalledTimes(2);
+  const stale = {
+    response: { status: 409, data: { error_code: 'ACTION_GROUP_CONFLICT' } },
+  };
+  request.mockRejectedValueOnce(stale);
+  await expect(reorderActionGroups([], [])).rejects.toBe(stale);
+  expect(refreshI18nCatalog).toHaveBeenCalledTimes(3);
+});
+
+it('omits an empty translation object when creating an ordinary action', async () => {
+  await createAction('new', { word: 'admin:read:test:new', names: {} });
+  expect(post).toHaveBeenLastCalledWith(
+    '/action',
+    { word: 'admin:read:test:new' },
+    { headers: { 'x-idempotent': 'new' } },
+  );
+  expect(refreshI18nCatalog).not.toHaveBeenCalled();
 });

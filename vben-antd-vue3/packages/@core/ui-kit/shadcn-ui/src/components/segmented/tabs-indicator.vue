@@ -23,7 +23,7 @@ const forwardedProps = useForwardProps(delegatedProps);
     v-bind="forwardedProps"
     :class="
       cn(
-        'absolute bottom-0 left-0 z-10 size-full translate-x-(--reka-tabs-indicator-position) rounded-full py-1 transition-[width,transform] duration-300',
+        'absolute bottom-0 left-0 z-10 size-full translate-x-(--reka-tabs-indicator-position) rounded-md py-1 transition-[width,transform] duration-300',
         props.class,
       )
     "

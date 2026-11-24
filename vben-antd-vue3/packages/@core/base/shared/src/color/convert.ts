@@ -23,9 +23,10 @@ function convertToHsl(color: string): string {
  * @param {string} color 输入的颜色。
  * @returns {string} 可以作为CSS变量使用的HSL格式的颜色字符串。
  */
-function convertToHslCssVar(color: string): string {
+function convertToHslCssVar(color: string, precision = 0): string {
   const { a, h, l, s } = new TinyColor(color).toHsl();
-  const hsl = `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+  const format = (value: number) => Number(value.toFixed(precision));
+  const hsl = `${format(h)} ${format(s * 100)}% ${format(l * 100)}%`;
   return a < 1 ? `${hsl} / ${a}` : hsl;
 }
 

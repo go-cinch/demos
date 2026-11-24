@@ -8,7 +8,9 @@ export function unmountGlobalLoading() {
     clearTimeout(fallback);
     loading.removeEventListener('transitionend', remove);
     loading.remove();
-    document.querySelectorAll('[data-app-loading^="inject"]').forEach((element) => element.remove());
+    document
+      .querySelectorAll('[data-app-loading^="inject"]')
+      .forEach((element) => element.remove());
   };
   loading.addEventListener('transitionend', remove, { once: true });
   fallback = setTimeout(remove, 1000);

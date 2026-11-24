@@ -132,7 +132,7 @@ defineExpose({
         data-slot="dialog-close"
         :class="
           cn(
-            'flex-center text-foreground/80 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 right-3 h-6 w-6 rounded-full px-1 text-lg opacity-70 transition-opacity hover:opacity-100 focus:outline-hidden disabled:pointer-events-none',
+            'flex-center text-foreground/80 hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 right-3 h-6 w-6 rounded-sm px-1 text-lg opacity-70 transition-opacity hover:opacity-100 focus:outline-hidden disabled:pointer-events-none',
             props.closeClass,
           )
         "

@@ -6,12 +6,13 @@ import { nextTick, ref, useTemplateRef } from 'vue';
 import { SliderCaptcha } from '@vben/common-ui';
 
 import { createSliderCaptchaChallengeApi, verifySliderCaptchaApi } from '#/api';
-import { isBadGatewayError } from '#/api/request-error';
+import { isTransportFailure } from '#/api/request-error';
+import { showRequestErrorToast } from '#/api/request-feedback';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
 const props = defineProps<{
-  purpose: 'login' | 'register';
+  purpose: 'email_login' | 'login' | 'register';
   username: string;
 }>();
 
@@ -46,9 +47,9 @@ function handleStart() {
   );
   const currentChallenge = challengePromise;
   void currentChallenge.catch((error) => {
-    if (challengePromise === currentChallenge && isBadGatewayError(error)) {
+    if (challengePromise === currentChallenge && isTransportFailure(error)) {
       challengeFailure = error;
-      errorMessage.value = $t('app.errors.serverLost');
+      showRequestErrorToast(error);
     }
   });
 }
@@ -62,9 +63,8 @@ function handleMove(data: SliderRotateVerifyPassingData) {
 }
 
 async function handleEnd() {
-  if (isBadGatewayError(challengeFailure)) {
-    errorMessage.value = $t('app.errors.serverLost');
-    reset(false);
+  if (challengeFailure && isTransportFailure(challengeFailure)) {
+    reset(true);
     return;
   }
   const root = rootRef.value;
@@ -115,7 +115,8 @@ async function handleEnd() {
     verified.value = true;
     sliderRef.value?.showPassedAtEnd();
   } catch (error) {
-    errorMessage.value = $t(isBadGatewayError(error) ? 'app.errors.serverLost' : 'app.captcha.sliderFailed');
+    if (isTransportFailure(error)) showRequestErrorToast(error);
+    else errorMessage.value = $t('app.captcha.sliderFailed');
     reset(false);
   } finally {
     pending.value = false;
@@ -154,7 +155,11 @@ defineExpose({ resume });
       @move="handleMove"
       @start="handleStart"
     />
-    <p v-if="errorMessage" class="absolute mt-1 text-sm leading-5 text-destructive" role="alert">
+    <p
+      v-if="errorMessage"
+      class="absolute mt-1 text-sm leading-5 text-destructive"
+      role="alert"
+    >
       {{ errorMessage }}
     </p>
   </div>

@@ -1,6 +1,14 @@
-import type { ServiceRequestConfig } from '#/api/request-types';
+import type {
+  RequestErrorFeedback,
+  ServiceRequestConfig,
+} from '#/api/request-types';
+
+import { $t } from '@vben/locales';
+
+import { message } from 'ant-design-vue';
 
 import { authRequestClient } from '#/api/request';
+import { quietRequest } from '#/api/request-types';
 import { refreshI18nCatalog } from '#/locales/catalog';
 
 import { createRegistrationPasswordCredentialApi } from '../core/auth';
@@ -91,6 +99,7 @@ export interface RoleRecord {
 }
 
 export interface UserRecord {
+  email?: null | string;
   permission_sources?: UserPermissionSource[];
   action_codes: string[];
   actions: ActionRecord[];
@@ -137,8 +146,6 @@ export interface UserGroupRecord {
   word: string;
 }
 
-
-
 export interface DictionaryRecord {
   created_at: number;
   description: string;
@@ -168,13 +175,11 @@ export interface RolePayload {
   word?: string;
 }
 
-export interface UserPayload {
+export interface UpdateUserPayload {
   action_codes?: string[];
   action_bindings?: ActionResourceBinding[];
   metadata?: Record<string, unknown>;
-  password?: string;
   role_id?: number;
-  status?: 0 | 1 | 2;
   username?: string;
 }
 
@@ -188,9 +193,8 @@ interface CreateUserRequest {
   username: string;
 }
 
-interface UpdateUserRequest extends Omit<UserPayload, 'password'> {
-  challenge_id?: string;
-  credential?: string;
+export interface UserPayload extends UpdateUserPayload {
+  password?: string;
 }
 
 export interface UserGroupPayload {
@@ -202,8 +206,6 @@ export interface UserGroupPayload {
   user_ids?: number[];
   word?: string;
 }
-
-
 
 export interface DictionaryPayload {
   expected_value?: unknown;
@@ -221,16 +223,28 @@ function list<T>(resource: string, params: PageParams) {
   return authRequestClient.get<PageResult<T>>(`/${resource}`, { params });
 }
 
-function create<T, P>(resource: string, idempotencyKey: string, data: P) {
+function create<T, P>(
+  resource: string,
+  idempotencyKey: string,
+  data: P,
+  feedback?: RequestErrorFeedback,
+) {
   return authRequestClient.post<T>(`/${resource}`, data, {
+    ...feedback,
     headers: { 'x-idempotent': idempotencyKey },
   });
 }
 
-function update<T, P>(resource: string, id: number, data: P) {
+function update<T, P>(
+  resource: string,
+  id: number,
+  data: P,
+  feedback?: RequestErrorFeedback,
+) {
   return authRequestClient.request<T>(`/${resource}/${id}`, {
     data,
     method: 'PATCH',
+    ...feedback,
   });
 }
 
@@ -250,33 +264,116 @@ export function getAction(id: number, params?: { f: string }) {
     params: params ?? {},
   });
 }
+export type ActionGroupChange =
+  | { operation: 'create'; word: string; names: Record<string, string> }
+  | {
+      operation: 'delete';
+      word: string;
+      expected_names: Record<string, string>;
+    }
+  | {
+      operation: 'update';
+      word: string;
+      original_word: string;
+      names: Record<string, string>;
+      expected_names: Record<string, string>;
+    };
+
+async function writeActionGroups(
+  path: '/action/group' | '/action/group/order',
+  data: ActionGroupChange | { order: string[]; expected_order: string[] },
+) {
+  const refresh = () =>
+    refreshI18nCatalog(() =>
+      message.warning($t('developer.translationRefreshFailed')),
+    );
+  try {
+    await authRequestClient.request(path, { method: 'PATCH', data });
+  } catch (error) {
+    const response = (
+      error as {
+        response?: { status?: number; data?: { error_code?: string } };
+      }
+    )?.response;
+    if (
+      response?.status === 409 &&
+      response.data?.error_code === 'ACTION_GROUP_CONFLICT'
+    )
+      await refresh();
+    throw error;
+  }
+  await refresh();
+}
+
+export function updateActionGroup(data: ActionGroupChange) {
+  return writeActionGroups('/action/group', data);
+}
+
+export function reorderActionGroups(order: string[], expectedOrder: string[]) {
+  return writeActionGroups('/action/group/order', {
+    order,
+    expected_order: expectedOrder,
+  });
+}
+
 export const listActionGroups = (keyword = '') =>
   authRequestClient.get<ActionGroupResult>('/action/group', {
     params: keyword ? { keyword } : {},
   });
-export const createAction = async (idempotencyKey: string, data: ActionPayload) => {
-  const record = await create<ActionRecord, ActionPayload>('action', idempotencyKey, data);
-  if (data.names !== undefined) await refreshI18nCatalog();
+export const createAction = async (
+  idempotencyKey: string,
+  data: ActionPayload,
+  feedback?: RequestErrorFeedback,
+) => {
+  const { names, ...fields } = data;
+  const hasNames = names && Object.keys(names).length > 0;
+  const record = await create<ActionRecord, ActionPayload>(
+    'action',
+    idempotencyKey,
+    hasNames ? data : fields,
+    feedback,
+  );
+  if (hasNames) await refreshI18nCatalog();
   return record;
 };
-export const updateAction = async (id: number, data: ActionPayload) => {
-  const record = await update<ActionRecord, ActionPayload>('action', id, data);
-  if (data.names !== undefined || data.word !== undefined) await refreshI18nCatalog();
+export const updateAction = async (
+  id: number,
+  data: ActionPayload,
+  feedback?: RequestErrorFeedback,
+) => {
+  const record = await update<ActionRecord, ActionPayload>(
+    'action',
+    id,
+    data,
+    feedback,
+  );
+  if (data.names !== undefined || data.word !== undefined)
+    await refreshI18nCatalog();
   return record;
 };
 export const deleteActions = (ids: number[]) => remove('action', ids);
 
 export const listRoles: ListApi<RoleRecord> = (params: PageParams = {}) =>
   list<RoleRecord>('role', params);
-export const createRole = (idempotencyKey: string, data: RolePayload) =>
-  create<RoleRecord, RolePayload>('role', idempotencyKey, data);
-export const updateRole = (id: number, data: RolePayload) =>
-  update<RoleRecord, RolePayload>('role', id, data);
+export const createRole = (
+  idempotencyKey: string,
+  data: RolePayload,
+  feedback?: RequestErrorFeedback,
+) => create<RoleRecord, RolePayload>('role', idempotencyKey, data, feedback);
+export const updateRole = (
+  id: number,
+  data: RolePayload,
+  feedback?: RequestErrorFeedback,
+) => update<RoleRecord, RolePayload>('role', id, data, feedback);
 export const deleteRoles = (ids: number[]) => remove('role', ids);
 
 export const listUsers: ListApi<UserRecord> = (params: PageParams = {}) =>
   list<UserRecord>('user', params);
-export const createUser = async (idempotencyKey: string, data: UserPayload) => {
+export const createUser = async (
+  idempotencyKey: string,
+  data: UserPayload,
+  feedback?: RequestErrorFeedback,
+) => {
   const username = data.username?.trim();
   if (!username || !data.password) {
     throw new TypeError('Username and password are required');
@@ -292,25 +389,52 @@ export const createUser = async (idempotencyKey: string, data: UserPayload) => {
     ...encrypted,
   };
   const options = {
+    ...feedback,
     headers: { 'x-idempotent': idempotencyKey },
-    mfaRetryCredential: () => createRegistrationPasswordCredentialApi(password),
+    verificationRetryCredential: () =>
+      createRegistrationPasswordCredentialApi(password),
   } satisfies ServiceRequestConfig;
   return authRequestClient.post<UserRecord>('/user', request, options);
 };
-export const updateUser = async (id: number, data: UserPayload) => {
-  const { password, ...fields } = data;
-  let request: UpdateUserRequest = fields;
-  if (password) {
-    const encrypted = await createRegistrationPasswordCredentialApi(password);
-    request = { ...fields, ...encrypted };
-    const options = {
-      method: 'PATCH', data: request,
-      mfaRetryCredential: () => createRegistrationPasswordCredentialApi(password),
-    } satisfies ServiceRequestConfig;
-    return authRequestClient.request<UserRecord>(`/user/${id}`, options);
-  }
-  return update<UserRecord, UpdateUserRequest>('user', id, request);
-};
+export const updateUser = (
+  id: number,
+  data: UpdateUserPayload,
+  feedback?: RequestErrorFeedback,
+) => update<UserRecord, UpdateUserPayload>('user', id, data, feedback);
+
+export const reviewUser = (
+  id: number,
+  decision: 'approve' | 'reject',
+  reason: string,
+) =>
+  update(
+    'user',
+    id,
+    decision === 'reject'
+      ? { review_decision: decision, reject_reason: reason }
+      : { review_decision: decision },
+  );
+
+export const lockUserAccount = (id: number, lockExpiredAt: number) =>
+  authRequestClient.post<UserRecord>(`/user/${id}/lock`, {
+    lock_expired_at: lockExpiredAt,
+  });
+
+export const unlockUserAccount = (id: number) =>
+  authRequestClient.post<UserRecord>(`/user/${id}/unlock`);
+
+export async function resetUserPassword(id: number, newPassword: string) {
+  const password = newPassword.trim();
+  const encrypt = () => createRegistrationPasswordCredentialApi(password);
+  const options: ServiceRequestConfig = {
+    verificationRetryCredential: encrypt,
+  };
+  return authRequestClient.post<UserRecord>(
+    `/user/${id}/reset-password`,
+    await encrypt(),
+    options,
+  );
+}
 export const deleteUsers = (ids: number[]) => remove('user', ids);
 
 const groupFields = 'actions,member_count,member_preview';
@@ -324,23 +448,25 @@ export const listUserGroupMembers = (id: number, params: PageParams = {}) =>
 export const createUserGroup = (
   idempotencyKey: string,
   data: UserGroupPayload,
+  feedback?: RequestErrorFeedback,
 ) =>
   authRequestClient.post<UserGroupRecord>('/user-group', data, {
+    ...feedback,
     headers: { 'x-idempotent': idempotencyKey },
     params: { f: groupFields },
   });
-export const updateUserGroup = (id: number, data: UserGroupPayload) =>
+export const updateUserGroup = (
+  id: number,
+  data: UserGroupPayload,
+  feedback?: RequestErrorFeedback,
+) =>
   authRequestClient.request<UserGroupRecord>(`/user-group/${id}`, {
     data,
     method: 'PATCH',
+    ...feedback,
     params: { f: groupFields },
   });
 export const deleteUserGroups = (ids: number[]) => remove('user-group', ids);
-
-
-
-
-
 
 export const listDictionaries: ListApi<DictionaryRecord> = (
   params: PageParams = {},
@@ -348,27 +474,49 @@ export const listDictionaries: ListApi<DictionaryRecord> = (
 export const createDictionary = (
   idempotencyKey: string,
   data: DictionaryPayload,
+  feedback?: RequestErrorFeedback,
 ) =>
   create<DictionaryRecord, DictionaryPayload>(
     'dictionary',
     idempotencyKey,
     data,
+    feedback,
   );
-export const updateDictionary = async (id: number, data: DictionaryPayload) => {
-  const result = await update<DictionaryRecord, DictionaryPayload>(
-    'dictionary',
-    id,
-    data,
+export const updateDictionary = (
+  id: number,
+  data: DictionaryPayload,
+  feedback?: RequestErrorFeedback,
+) =>
+  update<DictionaryRecord, DictionaryPayload>('dictionary', id, data, feedback);
+
+export async function publishDictionaryCatalog(
+  data: Pick<
+    DictionaryPayload,
+    'feature_renames' | 'group_renames' | 'resource_renames'
+  > & {
+    expected_value: unknown;
+    value: unknown;
+  },
+) {
+  const result = await authRequestClient.request<DictionaryRecord>(
+    '/dictionary/catalog',
+    {
+      ...quietRequest,
+      method: 'PATCH',
+      data,
+    },
   );
-  // Group edits and developer publishing share this single post-save refresh.
-  if (result.key === 'I18N_CATALOG') await refreshI18nCatalog();
+  await refreshI18nCatalog(() =>
+    message.warning($t('developer.translationRefreshFailed')),
+  );
   return result;
-};
+}
 export const deleteDictionaries = (ids: number[]) => remove('dictionary', ids);
 
 // Details and editors hydrate independently of a sparse list row.
 export const systemDetailFields: Record<string, string> = {
-  action: 'id,created_at,updated_at,code,name,names,group,word,scope,config,resource,menu,button',
+  action:
+    'id,created_at,updated_at,code,name,names,group,word,scope,config,resource,menu,button',
   role: 'id,created_at,updated_at,name,word,action_codes,actions',
   user: 'id,created_at,updated_at,username,code,role_id,role_summary,last_logged_in_at,login_count,status,metadata,wrong,action_codes,actions,permission_sources',
   'user-group': groupFields,
@@ -429,7 +577,9 @@ export interface EffectivePermissionPaths {
   http: { method: string; path: string }[];
   grpc: string[];
 }
-export const getPermissionCatalog = (fields = 'scopes,operations,resource_catalog,defined_actions') =>
+export const getPermissionCatalog = (
+  fields = 'scopes,operations,resource_catalog,defined_actions',
+) =>
   authRequestClient.get<PermissionCatalog>('/action/catalog', {
     params: { f: fields },
   });

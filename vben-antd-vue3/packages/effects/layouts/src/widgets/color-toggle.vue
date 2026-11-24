@@ -5,7 +5,7 @@ import { Palette } from '@vben/icons';
 import {
   COLOR_PRESETS,
   preferences,
-  updatePreferences,
+  updateUserPreferences as updatePreferences,
 } from '@vben/preferences';
 
 import { VbenIconButton } from '@vben-core/shadcn-ui';

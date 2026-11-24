@@ -9,17 +9,20 @@ defineOptions({
   name: 'PreferenceSwitchItem',
 });
 
-withDefaults(defineProps<{ disabled?: boolean; tip?: string }>(), {
-  disabled: false,
-  tip: '',
-});
+const props = withDefaults(
+  defineProps<{ disabled?: boolean; tip?: string }>(),
+  {
+    disabled: false,
+    tip: '',
+  },
+);
 
 const checked = defineModel<boolean>();
 
 const slots = useSlots();
 
 function handleClick() {
-  checked.value = !checked.value;
+  if (!props.disabled) checked.value = !checked.value;
 }
 </script>
 
@@ -50,6 +53,6 @@ function handleClick() {
     <span v-if="$slots.shortcut" class="mr-2 ml-auto text-xs opacity-60">
       <slot name="shortcut"></slot>
     </span>
-    <Switch v-model="checked" @click.stop />
+    <Switch v-model="checked" :disabled="disabled" @click.stop />
   </div>
 </template>

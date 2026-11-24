@@ -128,7 +128,7 @@ export function useTiptapToolbar(options: UseTiptapToolbarOptions) {
 
   function getToolbarButtonClass(action: ToolbarAction) {
     return cn(
-      'text-muted-foreground relative rounded-[10px] border border-transparent bg-transparent shadow-none',
+      'text-muted-foreground relative rounded-md border border-transparent bg-transparent shadow-none',
       'transition-[transform,color,background-color,border-color,box-shadow] duration-200 ease-out',
       'enabled:hover:border-border enabled:hover:-translate-y-px disabled:opacity-45',
       'enabled:hover:bg-accent enabled:hover:text-foreground',

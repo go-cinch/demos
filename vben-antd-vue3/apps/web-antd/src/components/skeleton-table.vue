@@ -15,16 +15,21 @@ const props = defineProps<{
   scroll?: TableProps['scroll'];
 }>();
 const initial = computed(() => props.loading && !props.dataSource?.length);
-const placeholderRows = computed(() => Array.from(
-  { length: (props.pagination && props.pagination.pageSize) || 10 },
-  (_, index) => ({ id: `skeleton-${index}` }),
-));
+const placeholderRows = computed(() =>
+  Array.from(
+    { length: (props.pagination && props.pagination.pageSize) || 10 },
+    (_, index) => ({ id: `skeleton-${index}` }),
+  ),
+);
 </script>
 
 <template>
   <Table
     v-bind="$attrs"
-    v-skeleton="{ loading: !!loading, targets: '.ant-table-tbody > tr:not(.ant-table-measure-row) > td' }"
+    v-skeleton="{
+      loading: !!loading,
+      targets: '.ant-table-tbody > tr:not(.ant-table-measure-row) > td',
+    }"
     class="skeleton-table"
     :data-source="initial ? placeholderRows : dataSource"
     :loading="false"
@@ -35,7 +40,9 @@ const placeholderRows = computed(() => Array.from(
       <slot :name="name" v-bind="scope || {}"></slot>
     </template>
     <template #bodyCell="scope">
-      <span v-if="initial" class="skeleton-table-placeholder" aria-hidden="true">&nbsp;</span>
+      <span v-if="initial" class="skeleton-table-placeholder" aria-hidden="true"
+        >&nbsp;</span
+      >
       <slot v-else name="bodyCell" v-bind="scope">{{ scope.text }}</slot>
     </template>
   </Table>
@@ -51,7 +58,9 @@ const placeholderRows = computed(() => Array.from(
   scrollbar-gutter: stable;
 }
 
-.skeleton-table :deep(.ant-spin-container) { padding-bottom: 64px; }
+.skeleton-table :deep(.ant-spin-container) {
+  padding-bottom: 64px;
+}
 
 .skeleton-table :deep(.ant-table-pagination) {
   position: absolute;

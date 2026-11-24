@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   authorizedAssignmentPayload,
   authorizedEditorPayload,
-  canDeleteAssignedRecord,
   canManageDefinition,
   isAssignmentField,
   isHighRiskAction,
@@ -72,7 +72,7 @@ describe('assignment and definition capabilities remain separate', () => {
   });
 });
 
-describe('credential and deletion boundaries', () => {
+describe('credential and grant boundaries', () => {
   it('keeps ordinary initial credentials but omits existing credentials and assignments without capabilities', () => {
     const payload = {
       username: 'new-user',
@@ -106,39 +106,6 @@ describe('credential and deletion boundaries', () => {
     expect(authorizedEditorPayload('user', payload, true, true, true)).toEqual(
       payload,
     );
-  });
-  it('requires assignment authority to delete a role/group with grants or memberships, and rejects unknown rows', () => {
-    expect(canDeleteAssignedRecord('role', {}, false)).toBe(false);
-    expect(canDeleteAssignedRecord('role', { action_codes: [] }, false)).toBe(
-      true,
-    );
-    expect(
-      canDeleteAssignedRecord('role', { action_codes: ['READ'] }, false),
-    ).toBe(false);
-    expect(
-      canDeleteAssignedRecord('user-group', { action_codes: [] }, false),
-    ).toBe(false);
-    expect(
-      canDeleteAssignedRecord(
-        'user-group',
-        { action_codes: [], member_count: 0 },
-        false,
-      ),
-    ).toBe(true);
-    expect(
-      canDeleteAssignedRecord(
-        'user-group',
-        { action_codes: [], member_count: 1 },
-        false,
-      ),
-    ).toBe(false);
-    expect(
-      canDeleteAssignedRecord(
-        'user-group',
-        { action_codes: ['ALL'], member_count: 1 },
-        true,
-      ),
-    ).toBe(true);
   });
   it('labels the grant capability as high risk without treating ordinary write permissions as grants', () => {
     expect(isHighRiskAction('admin:grant:system:permission-admin')).toBe(false);

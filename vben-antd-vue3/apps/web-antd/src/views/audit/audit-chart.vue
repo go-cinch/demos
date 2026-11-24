@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { EchartsUIType, ECOption } from '@vben/plugins/echarts';
+
 import { nextTick, onMounted, ref, watch } from 'vue';
+
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
 const props = withDefaults(
   defineProps<{ option: ECOption; label: string; height?: string }>(),
-  { height: '210px' }
+  { height: '210px' },
 );
 const emit = defineEmits<{
   select: [number];

@@ -9,20 +9,50 @@ import { ref } from 'vue';
 import {
   $t,
   $te,
-  i18n,
-  loadLocaleMessages,
-  loadBundledLocaleMessages,
   setupI18n as coreSetup,
+  i18n,
+  loadBundledLocaleMessages,
+  loadLocaleMessages,
   loadLocalesMapFromDir,
+  normalizePlaceholder,
 } from '@vben/locales';
-import { preferences } from '@vben/preferences';
+import { preferencesManager, updatePreferences } from '@vben/preferences';
 
 import antdEnLocale from 'ant-design-vue/es/locale/en_US';
 import antdDefaultLocale from 'ant-design-vue/es/locale/zh_CN';
 import dayjs from 'dayjs';
-import { catalogMessages, catalogDefaultLocale, refreshI18nCatalog, registerCatalogFallback, resolveCatalogLocale } from './catalog';
 
-const antdLocale = ref<Locale>(antdDefaultLocale);
+import { pendingSelection } from '#/store/global-preference';
+
+import {
+  catalogDefaultLocale,
+  catalogMessages,
+  refreshI18nCatalog,
+  registerCatalogFallback,
+  resolveCatalogLocale,
+} from './catalog';
+
+function conciseControlLocale<T extends object>(locale: T): T {
+  return Object.fromEntries(
+    Object.entries(locale).map(([key, value]) => {
+      let localizedValue = value;
+      if (/placeholder$/i.test(key)) {
+        if (Array.isArray(value)) {
+          localizedValue = value.map((item) => normalizePlaceholder(item));
+        } else if (typeof value === 'string') {
+          localizedValue = normalizePlaceholder(value);
+        }
+      } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+        localizedValue = conciseControlLocale(value);
+      }
+      return [key, localizedValue];
+    }),
+  ) as T;
+}
+
+const conciseAntdEnLocale = conciseControlLocale(antdEnLocale);
+const conciseAntdDefaultLocale = conciseControlLocale(antdDefaultLocale);
+const antdLocale = ref<Locale>(conciseAntdDefaultLocale);
 
 const modules = import.meta.glob('./langs/**/*.json');
 
@@ -43,7 +73,10 @@ async function loadMessages(lang: SupportedLanguagesType) {
   ]);
   // Both inputs come from bundled files; never capture a live dictionary as fallback.
   // Application namespaces are disjoint from core namespaces.
-  registerCatalogFallback(lang, { ...coreMessages, ...(appLocaleMessages?.default ?? {}) });
+  registerCatalogFallback(lang, {
+    ...coreMessages,
+    ...appLocaleMessages?.default,
+  });
   return catalogMessages(lang);
 }
 
@@ -87,14 +120,14 @@ async function loadDayjsLocale(lang: SupportedLanguagesType) {
  * @param lang
  */
 async function loadAntdLocale(lang: SupportedLanguagesType) {
-  antdLocale.value = antdEnLocale;
+  antdLocale.value = conciseAntdEnLocale;
   switch (lang) {
     case 'en-US': {
-      antdLocale.value = antdEnLocale;
+      antdLocale.value = conciseAntdEnLocale;
       break;
     }
     case 'zh-CN': {
-      antdLocale.value = antdDefaultLocale;
+      antdLocale.value = conciseAntdDefaultLocale;
       break;
     }
   }
@@ -102,7 +135,13 @@ async function loadAntdLocale(lang: SupportedLanguagesType) {
 
 async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await refreshI18nCatalog();
-  const locale = resolveCatalogLocale(options.defaultLocale ?? preferences.app.locale ?? catalogDefaultLocale());
+  const locale = resolveCatalogLocale(
+    options.defaultLocale ??
+      pendingSelection('language')?.value ??
+      preferencesManager.getInitialPreferences().app.locale ??
+      catalogDefaultLocale(),
+  );
+  updatePreferences({ app: { locale } });
   i18n.global.fallbackLocale.value = catalogDefaultLocale();
   // Load the fallback catalog even when the first visit starts in Chinese.
   await coreSetup(app, {
@@ -114,18 +153,23 @@ async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await loadLocaleMessages(locale);
 }
 
-function catalogLabel(kind: 'actions' | 'buttons' | 'groups' | 'menus' | 'scopes', key: string) {
+function catalogLabel(
+  kind: 'actions' | 'buttons' | 'groups' | 'menus' | 'scopes',
+  key: string,
+) {
   if ($te(`${kind}.${key}`)) return $t(`${kind}.${key}`);
   if (kind === 'actions') {
     const [scope, operation, ...resource] = key.split(':');
     const resourceKey = `resources.${scope}:${resource.join(':')}`;
     const operationKey = `operations.${operation}`;
     if (resource.length >= 2 && $te(resourceKey) && $te(operationKey)) {
-      const separator = String(i18n.global.locale.value).startsWith('zh') ? '' : ' ';
+      const separator = String(i18n.global.locale.value).startsWith('zh')
+        ? ''
+        : ' ';
       return `${$t(operationKey)}${separator}${$t(resourceKey)}`;
     }
   }
   return key;
 }
-export { $t, antdLocale, setupI18n, catalogLabel };
+export { $t, antdLocale, catalogLabel, setupI18n };
 export { refreshI18nCatalog } from './catalog';

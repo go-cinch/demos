@@ -99,15 +99,6 @@ export const useAccessStore = defineStore('core-access', {
       this.lockScreenPassword = undefined;
     },
   },
-  persist: {
-    // 持久化
-    pick: [
-      'accessCodes',
-      'refreshToken',
-      'isLockScreen',
-      'lockScreenPassword',
-    ],
-  },
   state: (): AccessState => ({
     accessCodes: [],
     accessMenus: [],

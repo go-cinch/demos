@@ -1,0 +1,164 @@
+.catalog-editor-scroll {
+  max-height: calc(100dvh - 200px);
+  padding-right: 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.catalog-tree .ant-tree-treenode-draggable {
+  cursor: grab;
+}
+
+.catalog-tree .ant-tree-treenode.dragging {
+  opacity: 0.45;
+}
+
+.catalog-word-migration {
+  padding: 16px 20px;
+  margin: 20px 0;
+  background: hsl(var(--primary) / 4%);
+  border: 1px solid hsl(var(--primary) / 25%);
+  border-radius: var(--radius);
+}
+
+.catalog-word-migration > strong {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-word-migration > p {
+  margin: 8px 0 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-word-migration-list {
+  max-height: 180px;
+  overflow: auto;
+}
+
+.catalog-word-migration-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+}
+
+.catalog-word-migration-list > div > code {
+  overflow-wrap: anywhere;
+}
+
+.catalog-word-migration-list > div > code:first-child {
+  color: hsl(var(--muted-foreground));
+  text-decoration: line-through;
+}
+
+.catalog-word-changed {
+  display: inline-block;
+  border-radius: calc(var(--radius) * 0.5);
+  animation: catalog-word-change 2.2s ease-out;
+}
+
+@keyframes catalog-word-change {
+  0%,
+  35% {
+    background: hsl(42deg 100% 65% / 45%);
+    box-shadow: 0 0 0 4px hsl(42deg 100% 65% / 18%);
+  }
+
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-word-changed {
+    background: hsl(42deg 100% 65% / 25%);
+    animation: none;
+  }
+}
+
+.catalog-tree-title > .catalog-reference-order-actions {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  margin-left: auto;
+  overflow: visible;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.catalog-tree-reference:hover .catalog-reference-order-actions,
+.catalog-tree-reference:focus-within .catalog-reference-order-actions {
+  opacity: 1;
+}
+
+.catalog-reference-order-actions + small {
+  margin-left: 0;
+}
+
+.catalog-tree-title {
+  position: relative;
+}
+
+.catalog-tree-title[draggable='true'] {
+  cursor: grab;
+  user-select: none;
+}
+
+.catalog-tree-dragging {
+  opacity: 0.4;
+}
+
+.catalog-tree-drop-before::before,
+.catalog-tree-drop-after::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 2px;
+  pointer-events: none;
+  content: '';
+  background: hsl(var(--primary));
+  border-radius: calc(var(--radius) * 0.25);
+}
+
+.catalog-tree-drop-before::before {
+  top: -3px;
+}
+
+.catalog-tree-drop-after::after {
+  bottom: -3px;
+}
+
+.catalog-tree-drop-inside {
+  outline: 2px solid hsl(var(--primary) / 60%);
+  outline-offset: 1px;
+  background: hsl(var(--primary) / 12%);
+  border-radius: calc(var(--radius) * 0.625);
+}
+
+.catalog-reference-order-actions .ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+}
+
+.catalog-reference-order-actions .ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  line-height: 1;
+}
+
+.catalog-reference-order-actions .ant-btn svg {
+  display: block;
+}

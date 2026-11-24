@@ -23,12 +23,20 @@
     "start": "Click to start verification"
   },
   "errors": {
+    "methodNotAllowed": "This request method is not supported.",
+    "conflict": "The request conflicts with the current state. Refresh and try again.",
+    "tooManyRequests": "Too many requests. Please try again later.",
+    "sessionRestore": "Unable to restore your session. Please retry.",
     "failed": "Request failed. Please try again later.",
     "serverLost": "The server seems to be lost~",
     "statisticsLoad": "Unable to load statistics. Please retry.",
     "dataLoad": "Unable to load data. Please retry."
   },
+  "onboarding": { "skip": "Skip" },
   "resetPassword": {
+    "adminRequired": "Your administrator reset your password. Choose a new password to continue.",
+    "adminOptional": "Your administrator reset your password. You can change it now or skip this step to keep using it.",
+    "optionalDescription": "You can change your password or skip this step and continue.",
     "title": "Reset password",
     "description": "Before continuing after your first login or an administrator reset, choose a new password different from your current one.",
     "submit": "Reset and continue",

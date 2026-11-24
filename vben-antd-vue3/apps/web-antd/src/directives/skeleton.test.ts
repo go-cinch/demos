@@ -8,10 +8,14 @@ import { vSkeleton } from './skeleton';
 const Region = defineComponent({
   props: { loading: Boolean, child: Boolean },
   setup(props) {
-    return () => withDirectives(h('section', [
-      h('input', { value: 'draft' }),
-      props.child ? h('p', 'Async content') : null,
-    ]), [[vSkeleton, props.loading]]);
+    return () =>
+      withDirectives(
+        h('section', [
+          h('input', { value: 'draft' }),
+          props.child ? h('p', 'Async content') : null,
+        ]),
+        [[vSkeleton, props.loading]],
+      );
   },
 });
 

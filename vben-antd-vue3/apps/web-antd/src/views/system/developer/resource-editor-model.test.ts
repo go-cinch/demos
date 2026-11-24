@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import { fixture } from './__fixtures__/catalog';
 import {
   applyResourceEditor,
@@ -9,11 +10,11 @@ import {
 
 function catalog() {
   const value = fixture();
-  value.messages['en-US']!.frontend = {
+  required(value.messages['en-US']).frontend = {
     resources: { 'admin:system:user': 'Users' },
     features: { 'admin:system:user:query': 'Query' },
   };
-  value.messages['zh-CN']!.frontend = {
+  required(value.messages['zh-CN']).frontend = {
     resources: { 'admin:system:user': '用户' },
     features: { 'admin:system:user:query': '查询' },
   };
@@ -31,17 +32,17 @@ describe('resource editor model', () => {
       path: '/system/user',
       operations: ['read'],
     });
-    draft.features[0]!.http[0]!.path = '/changed';
-    draft.features[0]!.buttons.push('admin:btn:system:user:new');
-    draft.entries[0]!.operations.push('update');
+    required(required(draft.features[0]).http[0]).path = '/changed';
+    required(draft.features[0]).buttons.push('admin:btn:system:user:new');
+    required(draft.entries[0]).operations.push('update');
     expect(value).toEqual(before);
   });
 
   it('saves entry paths and feature labels without changing the source', () => {
     const value = catalog();
     const draft = createResourceEditor(value, 'admin', 'admin:system:user');
-    draft.entries[0]!.path = '/people';
-    draft.features[0]!.en = 'Search users';
+    required(draft.entries[0]).path = '/people';
+    required(draft.features[0]).en = 'Search users';
     const next = applyResourceEditor(value, 'admin', draft);
     expect(
       next.resource_catalog.resources['admin:system:user']?.entries?.[
@@ -95,7 +96,7 @@ describe('resource editor model', () => {
   it('rejects reserved identifiers, duplicate entries, invalid positions and parent edits', () => {
     const value = catalog();
     const draft = createResourceEditor(value, 'admin', 'admin:system:user');
-    draft.entries.push({ ...draft.entries[0]! });
+    draft.entries.push({ ...required(draft.entries[0]) });
     expect(() => applyResourceEditor(value, 'admin', draft)).toThrow(
       'duplicate',
     );

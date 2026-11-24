@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { actionWordPattern } from './action-config';
 describe('permission word validation', () => {
   it('accepts fixed operations and system capabilities', () => {

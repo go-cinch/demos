@@ -20,10 +20,10 @@ import {
   Search,
   Settings,
 } from '@vben/icons';
-import { $t, loadLocaleMessages } from '@vben/locales';
+import { $t, loadLocaleMessages, notifyLocaleSelected } from '@vben/locales';
 import {
   preferences,
-  updatePreferences,
+  updateUserPreferences as updatePreferences,
   usePreferences,
 } from '@vben/preferences';
 import { useAccessStore } from '@vben/stores';
@@ -51,6 +51,7 @@ import { GlobalSearch } from '../global-search';
 import { LockScreenModal } from '../lock-screen';
 import { Notification } from '../notification';
 import { Preferences } from '../preferences';
+import { useOpenPreferences } from '../preferences/use-open-preferences';
 import { ThemeToggle } from '../theme-toggle';
 import { TimezoneButton } from '../timezone';
 
@@ -138,6 +139,7 @@ const [LogoutModal, logoutModalApi] = useVbenModal({
 const refTrigger = useTemplateRef('refTrigger');
 const refContent = useTemplateRef('refContent');
 const refPreferences = useTemplateRef('refPreferences');
+const openPreferences = useOpenPreferences();
 const refGlobalSearch = useTemplateRef('refGlobalSearch');
 const refTimezone = useTemplateRef('refTimezone');
 const refNotification = useTemplateRef('refNotification');
@@ -259,7 +261,8 @@ function handleSubmitLogout() {
 
 // 设置 - 打开偏好设置抽屉
 function handleOpenSettings() {
-  refPreferences.value?.open();
+  if (openPreferences) openPreferences();
+  else refPreferences.value?.open();
 }
 
 // 刷新当前页面
@@ -312,6 +315,7 @@ async function handleLocaleChange(event: Event, value: string) {
   // 菜单项来自运行时语言列表（可为自定义语言），此处为运行时边界断言
   const locale = value as SupportedLanguagesType;
   updatePreferences({ app: { locale } });
+  notifyLocaleSelected(locale);
   await loadLocaleMessages(locale);
   showLanguageList.value = false;
   openPopover.value = false;
@@ -354,7 +358,6 @@ if (preferences.shortcutKeys.enable) {
     :confirm-text="$t('common.confirm')"
     :fullscreen-button="false"
     :title="$t('common.prompt')"
-    centered
     content-class="px-8 min-h-10"
     footer-class="border-none mb-3 mr-3"
     header-class="border-none"
@@ -363,7 +366,7 @@ if (preferences.shortcutKeys.enable) {
   </LogoutModal>
 
   <Preferences
-    v-if="preferencesButtonPosition.userDropdown"
+    v-if="preferencesButtonPosition.userDropdown && !openPreferences"
     ref="refPreferences"
     :show-button="false"
     @clear-preferences-and-logout="emit('clearPreferencesAndLogout')"
@@ -384,7 +387,12 @@ if (preferences.shortcutKeys.enable) {
   />
 
   <DropdownMenu v-model:open="openPopover" :modal="false">
-    <DropdownMenuTrigger data-testid="user-avatar" :aria-label="resolvedAvatarAlt" ref="refTrigger" :disabled="props.trigger === 'hover'">
+    <DropdownMenuTrigger
+      data-testid="user-avatar"
+      :aria-label="resolvedAvatarAlt"
+      ref="refTrigger"
+      :disabled="props.trigger === 'hover'"
+    >
       <div class="mr-2 ml-1 cursor-pointer rounded-full p-1.5 hover:bg-accent">
         <div class="flex-center hover:text-accent-foreground">
           <VbenAvatar

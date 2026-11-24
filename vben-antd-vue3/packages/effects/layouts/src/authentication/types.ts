@@ -1,1 +1,6 @@
-export type ToolbarType = 'color' | 'language' | 'layout' | 'theme';
+export type ToolbarType =
+  | 'color'
+  | 'language'
+  | 'layout'
+  | 'theme'
+  | 'timezone';

@@ -27,6 +27,18 @@ describe('update payload', () => {
     ).toEqual({});
   });
 
+  it('keeps dictionary values that change between an object and an array', () => {
+    expect(buildChangedPayload({ value: {} }, { value: [] })).toEqual({
+      value: [],
+    });
+    expect(buildChangedPayload({ value: [] }, { value: {} })).toEqual({
+      value: {},
+    });
+    expect(
+      buildChangedPayload({ value: { items: {} } }, { value: { items: [] } }),
+    ).toEqual({ value: { items: [] } });
+  });
+
   it('preserves an explicit collection clear', () => {
     expect(
       buildChangedPayload(
@@ -47,13 +59,19 @@ describe('update payload', () => {
   });
 });
 
-
 describe('user group incremental payload', () => {
   it('never replaces unloaded members, including a name-only save', async () => {
     const { buildUserGroupChanges } = await import('./update-payload');
     const initial = { name: 'Group', user_ids: { added: [], removed: [] } };
-    expect(buildUserGroupChanges(initial, { ...initial, name: 'Renamed' })).toEqual({ name: 'Renamed' });
-    expect(buildUserGroupChanges(initial, { ...initial, user_ids: { added: [1001], removed: [23] } })).toEqual({ add_user_ids: [1001], remove_user_ids: [23] });
+    expect(
+      buildUserGroupChanges(initial, { ...initial, name: 'Renamed' }),
+    ).toEqual({ name: 'Renamed' });
+    expect(
+      buildUserGroupChanges(initial, {
+        ...initial,
+        user_ids: { added: [1001], removed: [23] },
+      }),
+    ).toEqual({ add_user_ids: [1001], remove_user_ids: [23] });
     expect(buildUserGroupChanges(initial, initial)).toEqual({});
   });
 });

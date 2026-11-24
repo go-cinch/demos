@@ -1,6 +1,9 @@
 import type { Preferences } from './types';
 
-import { generatorColorVariables } from '@vben-core/shared/color';
+import {
+  convertToHslCssVar,
+  generatorColorVariables,
+} from '@vben-core/shared/color';
 import { updateCSSVariables as executeUpdateCSSVariables } from '@vben-core/shared/utils';
 
 import { BUILT_IN_THEME_PRESETS } from './constants';
@@ -58,8 +61,7 @@ function updateCSSVariables(preferences: Preferences) {
     Reflect.has(theme, 'colorSuccess') ||
     Reflect.has(theme, 'colorWarning')
   ) {
-    // preferences.theme.colorPrimary = builtinTypeColorPrimary || colorPrimary;
-    updateMainColorVariables(preferences);
+    updateMainColorVariables(preferences, builtinTypeColorPrimary);
   }
 
   // 更新圆角
@@ -85,7 +87,10 @@ function updateCSSVariables(preferences: Preferences) {
  * 更新主要的 CSS 变量
  * @param  preference - 当前偏好设置对象，它的颜色值将被转换成 HSL 格式并设置为 CSS 变量。
  */
-function updateMainColorVariables(preference: Preferences) {
+function updateMainColorVariables(
+  preference: Preferences,
+  builtinPrimary: string,
+) {
   if (!preference.theme) {
     return;
   }
@@ -93,11 +98,16 @@ function updateMainColorVariables(preference: Preferences) {
     preference.theme;
 
   const colorVariables = generatorColorVariables([
-    { color: colorPrimary, name: 'primary' },
+    { color: builtinPrimary || colorPrimary, name: 'primary' },
     { alias: 'warning', color: colorWarning, name: 'yellow' },
     { alias: 'success', color: colorSuccess, name: 'green' },
     { alias: 'destructive', color: colorDestructive, name: 'red' },
   ]);
+
+  // The custom picker's RGB value must survive conversion to a CSS token.
+  if (!builtinPrimary && colorPrimary) {
+    colorVariables['--primary-500'] = convertToHslCssVar(colorPrimary, 4);
+  }
 
   // 要设置的 CSS 变量映射
   const colorMappings = {

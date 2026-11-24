@@ -85,7 +85,8 @@ export async function vue(): Promise<Linter.Config[]> {
         'vue/dot-location': ['error', 'property'],
         'vue/dot-notation': ['error', { allowKeywords: true }],
         'vue/eqeqeq': ['error', 'smart'],
-        'vue/html-closing-bracket-newline': 'error',
+        // Oxfmt owns template wrapping, including whitespace-sensitive inline elements.
+        'vue/html-closing-bracket-newline': 'off',
         'vue/html-indent': 'off',
         // 'vue/html-indent': ['error', 2],
         'vue/html-quotes': ['error', 'double'],
@@ -103,7 +104,7 @@ export async function vue(): Promise<Linter.Config[]> {
         ],
         'vue/max-attributes-per-line': 'off',
         'vue/multi-word-component-names': 'off',
-        'vue/multiline-html-element-content-newline': 'error',
+        'vue/multiline-html-element-content-newline': 'off',
         'vue/no-empty-pattern': 'error',
         'vue/no-extra-parens': ['error', 'functions'],
         'vue/no-irregular-whitespace': 'error',
@@ -146,6 +147,11 @@ export async function vue(): Promise<Linter.Config[]> {
           },
         ],
       },
+    },
+    {
+      files: ['**/*.test.ts', '**/__tests__/**/*.ts'],
+      // Component test harnesses mount multiple local fixture components.
+      rules: { 'vue/one-component-per-file': 'off' },
     },
   ];
 }

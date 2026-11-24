@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { clientLabel, operationLabel, successful } from './audit-utils';
+import {
+  auditOutcome,
+  clientLabel,
+  operationLabel,
+  outcomeColor,
+  successful,
+} from './audit-utils';
 
 vi.mock('#/locales', () => ({
   $t: (key: string, params?: { module: string }) =>
@@ -20,6 +26,13 @@ describe('audit record presentation', () => {
   ] as const)('classifies HTTP status %s', (status, expected) => {
     expect(successful({ status })).toBe(expected);
   });
+  it('displays the recorded MFA step separately from a denied login', () => {
+    expect(auditOutcome({ status: 403, outcome: 'mfa_challenge' })).toBe(
+      'mfa_challenge',
+    );
+    expect(auditOutcome({ status: 403, outcome: 'failure' })).toBe('failure');
+    expect(outcomeColor.mfa_challenge).toBe('warning');
+  });
   it.each([
     ['Windows Chrome/120 Safari/537 Edg/120', 'Edge / Windows'],
     ['Android Linux Chrome/120 Safari/537', 'Chrome / Android'],
@@ -30,6 +43,20 @@ describe('audit record presentation', () => {
     expect(clientLabel(agent)).toBe(expected);
   });
   it('uses authentication labels and translates create, delete and update operations', () => {
+    expect(
+      operationLabel({
+        module: 'auth',
+        method: 'POST',
+        operation: 'confirm_email_unlink',
+      }),
+    ).toBe('audit.operationTypes.confirm_email_unlink');
+    expect(
+      operationLabel({
+        module: 'auth',
+        method: 'POST',
+        operation: 'view_email_unlink_result',
+      }),
+    ).toBe('audit.operationTypes.view_email_unlink_result');
     expect(operationLabel({ module: 'auth', method: 'POST' })).toBe(
       'audit.modules.auth',
     );

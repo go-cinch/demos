@@ -1,10 +1,13 @@
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import type { VueWrapper } from '@vue/test-utils';
+
+import { flushPromises, mount } from '@vue/test-utils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { listActions, listUsers } from '#/api';
 import { msgApi } from '#/api/msg';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import AssociationEditor from './association-editor.vue';
 
 vi.mock('#/api', () => ({ listActions: vi.fn(), listUsers: vi.fn() }));
@@ -35,7 +38,7 @@ const action = (code: string) => ({
   updated_at: 1,
 });
 const result = (codes: string[], p = 1, t = codes.length) => ({
-  items: codes.map(action),
+  items: codes.map((item) => action(item)),
   p,
   s: 20,
   t,
@@ -51,7 +54,7 @@ function setup(
       kind,
       records: value
         .filter((key): key is string => typeof key === 'string')
-        .map(action),
+        .map((item) => action(item)),
       'onUpdate:value': (next: (number | string)[]) => {
         void wrapper.setProps({ value: next });
       },
@@ -96,8 +99,8 @@ describe('association editor', () => {
     setup(['A']);
     await open();
     const inputs = wrapper.findAll('input[type="checkbox"]');
-    expect(inputs[0]!.attributes('disabled')).toBeDefined();
-    await inputs[1]!.setValue(true);
+    expect(required(inputs[0]).attributes('disabled')).toBeDefined();
+    await required(inputs[1]).setValue(true);
     expect(wrapper.findAll('article')).toHaveLength(1);
     await wrapper.get('footer button').trigger('click');
     await flushPromises();
@@ -129,47 +132,49 @@ describe('association editor', () => {
     setup();
     await open();
     const rows = wrapper.findAll('.association-results > .association-result');
-    expect(rows[0]!.find('[data-permission-field="resource"]').exists()).toBe(
-      false,
-    );
-    expect(rows[0]!.get('[data-permission-field="scope"]').text()).toContain(
-      'action-editor.scope',
-    );
     expect(
-      rows[0]!.get('[data-permission-field="operation"]').text(),
+      required(rows[0]).find('[data-permission-field="resource"]').exists(),
+    ).toBe(false);
+    expect(
+      required(rows[0]).get('[data-permission-field="scope"]').text(),
+    ).toContain('action-editor.scope');
+    expect(
+      required(rows[0]).get('[data-permission-field="operation"]').text(),
     ).toContain('action-editor.operation');
     expect(
-      rows[0]!
+      required(rows[0])
         .findAll('[data-permission-field="menu"] code')
         .map((node) => node.text()),
     ).toEqual(['/reports', '/reports/detail']);
     expect(
-      rows[0]!
+      required(rows[0])
         .findAll('[data-permission-field="button"] code')
         .map((node) => node.text()),
     ).toEqual(['reports.read', 'reports.export']);
-    expect(rows[0]!.get('.result-risk').text()).toContain(
+    expect(required(rows[0]).get('.result-risk').text()).toContain(
       'system-editor.highRiskPermission',
     );
-    expect(rows[1]!.find('.result-risk').exists()).toBe(false);
-    expect(rows[2]!.get('.result-risk').text()).toContain(
+    expect(required(rows[1]).find('.result-risk').exists()).toBe(false);
+    expect(required(rows[2]).get('.result-risk').text()).toContain(
       'system-editor.highRiskPermission',
     );
     expect(
-      rows[2]!.get('[data-permission-field="menu"] .result-rule-values').text(),
+      required(rows[2])
+        .get('[data-permission-field="menu"] .result-rule-values')
+        .text(),
     ).toBe('—');
     expect(
-      rows[2]!
+      required(rows[2])
         .get('[data-permission-field="button"] .result-rule-values')
         .text(),
     ).toBe('—');
     expect(
-      rows[0]!.get('input[type="checkbox"]').attributes('disabled'),
+      required(rows[0]).get('input[type="checkbox"]').attributes('disabled'),
     ).toBeUndefined();
   });
   it('removes only the association and restores its original ordering with undo', async () => {
     setup(['A', 'B']);
-    await wrapper.findAll('.remove-association')[0]!.trigger('click');
+    await required(wrapper.findAll('.remove-association')[0]).trigger('click');
     await flushPromises();
     expect(wrapper.props('value')).toEqual(['B']);
     await wrapper.get('.association-undo button').trigger('click');
@@ -180,7 +185,7 @@ describe('association editor', () => {
   it('discards pending choices when the picker closes', async () => {
     setup();
     await open();
-    await wrapper.findAll('input[type="checkbox"]')[0]!.setValue(true);
+    await required(wrapper.findAll('input[type="checkbox"]')[0]).setValue(true);
     await wrapper.get('.association-picker header button').trigger('click');
     await open();
     expect(wrapper.props('value')).toEqual([]);
@@ -218,11 +223,11 @@ describe('association editor', () => {
     vi.mocked(listActions).mockRejectedValueOnce(new Error('offline'));
     setup(['A']);
     await open();
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+    expect(wrapper.find('.load-warning').exists()).toBe(true);
     expect(wrapper.props('value')).toEqual(['A']);
-    await wrapper.get('[role="alert"] button').trigger('click');
+    await wrapper.get('.load-warning button').trigger('click');
     await flushPromises();
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.find('.load-warning').exists()).toBe(false);
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(2);
   });
   it('loads later pages without dropping first-page results', async () => {
@@ -312,7 +317,7 @@ it('filters already joined members on the server without loading their IDs', asy
   });
 });
 
-it('Escape dismisses suggestions without clearing the member query or results', async () => {
+it('escape dismisses suggestions without clearing the member query or results', async () => {
   vi.mocked(listUsers).mockResolvedValue({
     items: [
       {

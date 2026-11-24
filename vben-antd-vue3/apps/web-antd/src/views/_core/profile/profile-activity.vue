@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { AuditPreview, AuditKind } from '#/api/audit';
+import type { AuditKind, AuditPreview } from '#/api/audit';
+import type { LoadFailure } from '#/api/request-error';
 
 import {
   computed,
@@ -13,7 +14,6 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { usePermissions } from '#/composables/use-permissions';
 import { IconifyIcon } from '@vben/icons';
 import { preferences } from '@vben/preferences';
 import { useTimezoneStore, useUserStore } from '@vben/stores';
@@ -22,13 +22,16 @@ import { formatDateTime } from '@vben/utils';
 import { Button, Card, Empty, Segmented, Skeleton, Tag } from 'ant-design-vue';
 
 import { auditApi, auditProfileFields } from '#/api/audit';
+import { loadFailure } from '#/api/request-error';
 import LoadWarning from '#/components/load-warning.vue';
+import { usePermissions } from '#/composables/use-permissions';
 import { $t } from '#/locales';
 
 import {
+  auditOutcome,
   clientLabel,
   operationLabel,
-  successful,
+  outcomeColor,
 } from '../../audit/audit-utils';
 
 const router = useRouter();
@@ -36,9 +39,7 @@ const user = useUserStore();
 const timezone = useTimezoneStore();
 const { hasPage } = usePermissions();
 const kinds = computed(() =>
-  (['login', 'operation'] as const).filter((kind) =>
-    hasPage(`/audit/${kind}`),
-  ),
+  (['login', 'operation'] as const).filter((kind) => hasPage(`/audit/${kind}`)),
 );
 const kind = ref<AuditKind>('login');
 const options = computed(() =>
@@ -46,7 +47,7 @@ const options = computed(() =>
 );
 const rows = shallowRef<AuditPreview[]>([]);
 const loading = ref(false);
-const error = ref(false);
+const error = ref<LoadFailure>(false);
 let active = true;
 let generation = 0;
 function time(value: number) {
@@ -54,9 +55,12 @@ function time(value: number) {
   return formatDateTime(value);
 }
 function title(event: AuditPreview) {
+  if (event.operation === 'logout') return $t('audit.operationTypes.logout');
+  if (kind.value === 'login' && auditOutcome(event) === 'mfa_challenge')
+    return $t('audit.loginAttempt');
   if (kind.value === 'login')
     return $t(
-      successful(event)
+      auditOutcome(event) === 'success'
         ? 'profile-center.loginSuccess'
         : 'profile-center.loginFailure',
     );
@@ -69,9 +73,10 @@ async function load() {
   rows.value = [];
   error.value = false;
   loading.value = false;
-  if (!active || !user.userInfo?.username || !kinds.value.length) return;
+  const firstKind = kinds.value[0];
+  if (!active || !user.userInfo?.username || !firstKind) return;
   if (!kinds.value.includes(kind.value)) {
-    kind.value = kinds.value[0]!;
+    kind.value = firstKind;
     return;
   }
   loading.value = true;
@@ -88,8 +93,8 @@ async function load() {
       time_zone: timezone.timezone,
     });
     if (run === generation && active) rows.value = data.items;
-  } catch {
-    if (run === generation && active) error.value = true;
+  } catch (requestError) {
+    if (run === generation && active) error.value = loadFailure(requestError);
   } finally {
     if (run === generation) loading.value = false;
   }
@@ -157,26 +162,30 @@ onBeforeUnmount(deactivate);
         :image="Empty.PRESENTED_IMAGE_SIMPLE"
         :description="$t('profile-center.noActivityAccess')"
       />
-      <LoadWarning v-else-if="error">
-        <template #action>
-          <Button size="small" @click="load">{{ $t('audit.retry') }}</Button>
-        </template>
-      </LoadWarning>
+      <LoadWarning
+        v-else-if="error"
+        :failure="error"
+        :retry-label="$t('audit.retry')"
+        retry-size="small"
+        @retry="load"
+      />
       <Skeleton v-else-if="loading" active :paragraph="{ rows: 8 }" />
       <ol v-else-if="rows.length" class="activity-timeline">
         <li v-for="event in rows" :key="event.id" data-testid="profile-event">
           <span
             class="event-icon"
-            :class="{ failed: !successful(event) }"
+            :class="auditOutcome(event).replaceAll('_', '-')"
             aria-hidden="true"
           >
             <IconifyIcon
               :icon="
-                successful(event)
-                  ? kind === 'login'
-                    ? 'lucide:log-in'
-                    : 'lucide:check'
-                  : 'lucide:x'
+                auditOutcome(event) === 'mfa_challenge'
+                  ? 'lucide:shield'
+                  : auditOutcome(event) === 'success'
+                    ? kind === 'login'
+                      ? 'lucide:log-in'
+                      : 'lucide:check'
+                    : 'lucide:x'
               "
             />
           </span>
@@ -187,10 +196,8 @@ onBeforeUnmount(deactivate);
                   $t(`audit.modules.${event.module}`)
                 }}</span>
                 <span>{{ title(event) }}</span>
-                <Tag :color="successful(event) ? 'success' : 'error'">
-                  {{
-                    $t(successful(event) ? 'audit.success' : 'audit.failure')
-                  }}
+                <Tag :color="outcomeColor[auditOutcome(event)]">
+                  {{ $t(`audit.${auditOutcome(event)}`) }}
                 </Tag>
               </div>
               <time>{{ time(event.occurred_at) }}</time>
@@ -227,7 +234,7 @@ onBeforeUnmount(deactivate);
                 >{{ $t('audit.httpStatus') }} {{ event.status }}</span
               >
             </div>
-            <div v-if="!successful(event)" class="event-error">
+            <div v-if="auditOutcome(event) === 'failure'" class="event-error">
               {{ $t('audit.errorInfo') }} ·
               {{ event.error_code || $t('audit.requestFailed') }}
             </div>
@@ -244,9 +251,9 @@ onBeforeUnmount(deactivate);
       <span v-if="!loading && !error && rows.length" class="activity-range">
         {{ $t('profile-center.activityRange', { count: rows.length }) }}
       </span>
-      <Button type="link" size="small" @click="openAudit">{{
-        $t('profile-center.viewAudit')
-      }}</Button>
+      <Button type="link" size="small" @click="openAudit">
+        {{ $t('profile-center.viewAudit') }}
+      </Button>
     </div>
   </Card>
 </template>
@@ -254,90 +261,111 @@ onBeforeUnmount(deactivate);
 h2 {
   margin: 0;
 }
+
 .activity-kind,
 .activity-range {
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
+
 .activity-body {
   min-height: 220px;
   padding: 6px 24px 4px;
 }
+
 .activity-timeline {
   padding: 0;
   margin: 0;
   list-style: none;
 }
+
 .activity-timeline li {
   position: relative;
   display: flex;
   gap: 14px;
   padding-bottom: 20px;
 }
+
 .activity-timeline li:not(:last-child)::before {
   position: absolute;
   top: 32px;
   bottom: 4px;
   left: 13px;
   width: 1px;
-  background: hsl(var(--border));
   content: '';
+  background: hsl(var(--border));
 }
+
 .event-icon {
   display: grid;
-  place-items: center;
   flex: none;
+  place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
   color: #24875f;
   background: #2a9e7414;
+  border-radius: 50%;
 }
-.event-icon.failed {
+
+.event-icon.failure {
   color: #d03e50;
   background: #d03e5012;
 }
+
 .dark .event-icon {
   color: #7ad7b3;
 }
-.dark .event-icon.failed {
+
+.dark .event-icon.failure {
   color: #ff8fa1;
 }
+
+.event-icon.mfa-challenge {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+}
+
 .event-copy {
   flex: 1;
   min-width: 0;
   padding-top: 2px;
 }
+
 .event-heading {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px 18px;
   flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: baseline;
+  justify-content: space-between;
   font-size: 14px;
 }
+
 .event-title {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
   font-weight: 500;
 }
+
 .event-module {
-  color: hsl(var(--muted-foreground));
   font-weight: 400;
-}
-.event-heading time {
   color: hsl(var(--muted-foreground));
+}
+
+.event-heading time {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground));
 }
+
 .event-title :deep(.ant-tag) {
   margin: 0;
   font-size: 12px;
-  line-height: 18px;
   font-weight: 400;
+  line-height: 18px;
 }
+
 .event-details {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -346,62 +374,74 @@ h2 {
   font-size: 12px;
   line-height: 1.6;
 }
+
 .event-details > div {
   min-width: 0;
 }
+
 .event-details dt {
   color: hsl(var(--muted-foreground));
 }
+
 .event-details dd {
   margin: 2px 0 0;
-  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
+
 .event-request {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  gap: 8px;
+  align-items: baseline;
   padding: 6px 10px;
-  border-radius: var(--radius);
-  background: hsl(var(--muted) / 50%);
+  margin-top: 10px;
   font-size: 12px;
+  background: hsl(var(--muted) / 50%);
+  border-radius: var(--radius);
 }
+
 .request-method {
   font-weight: 600;
 }
+
 .request-path {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
 .request-status {
   margin-left: auto;
   color: hsl(var(--muted-foreground));
 }
+
 .event-error {
   margin-top: 8px;
-  color: hsl(var(--destructive));
   font-size: 12px;
+  color: hsl(var(--destructive));
   overflow-wrap: anywhere;
 }
+
 .activity-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  justify-content: space-between;
   padding: 12px 24px;
   border-top: 1px solid hsl(var(--border));
 }
+
 .activity-footer :deep(.ant-btn) {
   margin-left: auto;
 }
+
 @media (max-width: 1100px) {
   .event-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
 @media (max-width: 760px) {
   .activity-body {
     padding-inline: 18px;

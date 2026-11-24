@@ -2,20 +2,18 @@
 import type { BuiltinThemePreset } from '@vben/preferences';
 import type { BuiltinThemeType } from '@vben/types';
 
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { UserRoundPen } from '@vben/icons';
 import { $t } from '@vben/locales';
 import { BUILT_IN_THEME_PRESETS } from '@vben/preferences';
-import { convertToHsl, TinyColor } from '@vben/utils';
+import { TinyColor } from '@vben/utils';
 
 import { useThrottleFn } from '@vueuse/core';
 
 defineOptions({
   name: 'PreferenceBuiltinTheme',
 });
-
-const props = defineProps<{ isDark: boolean }>();
 
 const colorInput = ref();
 const modelValue = defineModel<BuiltinThemeType>({ default: 'default' });
@@ -94,28 +92,13 @@ function handleSelect(theme: BuiltinThemePreset) {
 
 function handleInputChange(e: Event) {
   const target = e.target as HTMLInputElement;
-  updateThemeColorPrimary(convertToHsl(target.value));
+  modelValue.value = 'custom';
+  updateThemeColorPrimary(target.value);
 }
 
 function selectColor() {
   colorInput.value?.[0]?.click?.();
 }
-
-watch(
-  () => [modelValue.value, props.isDark] as [BuiltinThemeType, boolean],
-  ([themeType, isDark]) => {
-    const theme = builtinThemePresets.value.find(
-      (item) => item.type === themeType,
-    );
-    if (theme) {
-      const primaryColor = isDark
-        ? theme.darkPrimaryColor || theme.primaryColor
-        : theme.primaryColor;
-
-      themeColorPrimary.value = primaryColor || theme.color;
-    }
-  },
-);
 </script>
 
 <template>

@@ -1,18 +1,33 @@
 import type { ECOption } from '@vben/plugins/echarts';
+
 import type { AuditSummary } from '#/api/audit';
+
 import { formatDateTime } from '@vben/utils';
+
 import { $t } from '#/locales';
+// Older summaries still delimit each bucket with the next start or the query end.
+export function trendBuckets(summary?: AuditSummary) {
+  if (!summary?.trend) return [];
+  return summary.trend.map((bucket, index, trend) => ({
+    ...bucket,
+    ended_at: bucket.ended_at ?? trend[index + 1]?.at ?? summary.to,
+  }));
+}
+
+const fullViewport = { start: 0, end: 100 };
+
 export function activityOption(
   summary: AuditSummary | undefined,
-  primary: string,
-  failure: string,
+  colors: { colorPrimary: string; colorError: string; colorWarning: string },
   selected?: { from: number; to: number },
   modules = false,
-  viewport = { start: 0, end: 100 },
+  viewport = fullViewport,
   result = '',
 ): ECOption {
-  const visibleSeries = (series: Extract<NonNullable<ECOption['series']>, unknown[]>) =>
-    series.filter((item) => !result || item.name === $t(`audit.${result}`));
+  const { colorPrimary: primary, colorError: failure, colorWarning } = colors;
+  const visibleSeries = (
+    series: Extract<NonNullable<ECOption['series']>, unknown[]>,
+  ) => series.filter((item) => !result || item.name === $t(`audit.${result}`));
   if (modules)
     return {
       color: [primary, failure],
@@ -43,8 +58,8 @@ export function activityOption(
         },
       ]),
     };
-  const buckets = summary?.trend ?? [];
-  const isHour = summary?.bucket_ms === 3600000;
+  const buckets = trendBuckets(summary);
+  const isHour = summary?.bucket_ms === 3_600_000;
   return {
     color: [primary, failure],
     animationDuration: 200,
@@ -80,6 +95,18 @@ export function activityOption(
       },
     ],
     series: visibleSeries([
+      ...(buckets.some((b) => b.mfa_challenge)
+        ? [
+            {
+              name: $t('audit.mfa_challenge'),
+              type: 'bar' as const,
+              color: colorWarning,
+              stack: 'events',
+              barMaxWidth: 22,
+              data: buckets.map((b) => b.mfa_challenge ?? 0),
+            },
+          ]
+        : []),
       {
         name: $t('audit.success'),
         color: primary,
@@ -91,9 +118,7 @@ export function activityOption(
           value: b.success,
           itemStyle: {
             opacity:
-              !selected ||
-              (b.at < selected.to &&
-                b.at + (summary?.bucket_ms ?? 0) > selected.from)
+              !selected || (b.at < selected.to && b.ended_at > selected.from)
                 ? 0.9
                 : 0.3,
           },
@@ -109,9 +134,7 @@ export function activityOption(
           value: b.failure,
           itemStyle: {
             opacity:
-              !selected ||
-              (b.at < selected.to &&
-                b.at + (summary?.bucket_ms ?? 0) > selected.from)
+              !selected || (b.at < selected.to && b.ended_at > selected.from)
                 ? 0.9
                 : 0.3,
           },

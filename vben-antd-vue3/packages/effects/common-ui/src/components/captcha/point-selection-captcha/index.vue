@@ -90,7 +90,7 @@ function handleClick(e: MouseEvent) {
         POINT_TOGGLE_RADIUS * POINT_TOGGLE_RADIUS
       );
     });
-    if (selectedIndex >= 0) {
+    if (selectedIndex !== -1) {
       removeSelectedPoint(selectedIndex);
       e.stopPropagation();
       e.preventDefault();

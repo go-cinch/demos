@@ -9,6 +9,8 @@ import type {
 } from './management-types';
 import type { ManagementPermissions } from './use-management-permissions';
 
+import type { LoadFailure } from '#/api/request-error';
+
 import { computed, ref, toRef } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
@@ -17,6 +19,7 @@ import { Button, Checkbox, Pagination, Space } from 'ant-design-vue';
 
 import LoadWarning from '#/components/load-warning.vue';
 import Table from '#/components/skeleton-table.vue';
+import TableColumnSelector from '#/components/table-column-selector.vue';
 import { useOperationConfirmation } from '#/composables/use-operation-confirmation';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
@@ -35,7 +38,7 @@ const props = defineProps<{
   permissions: ManagementPermissions;
   actions: RecordActions;
   loading: boolean;
-  loadError: boolean;
+  loadError: LoadFailure;
   pagination: { current: number; pageSize: number; total: number };
   isFullscreen: boolean;
 }>();
@@ -59,6 +62,7 @@ const managementTableRef = ref<InstanceType<typeof Table>>();
 const records = toRef(props, 'records');
 const {
   canRead,
+  canResetTOTP,
   canCreate,
   canUpdate,
   canDelete,
@@ -71,7 +75,7 @@ const {
 const {
   openEditor,
   openDetail,
-  confirmResetMFA,
+  confirmResetTOTP,
   confirmRemove,
   removeSelected,
 } = props.actions;
@@ -85,11 +89,8 @@ const {
   rowSelection,
   tableRowClassName,
   columnOptions,
-  allColumnsSelected,
-  columnsIndeterminate,
   showSelectionColumn,
-  toggleAllColumns,
-  toggleColumn,
+  setVisibleColumns,
 } = useManagementTable(
   props,
   computed(() => ({ columns: props.columns })),
@@ -149,7 +150,9 @@ function selectAllCards(checked: boolean) {
           </Button>
           <Button
             v-if="
-              hasButtonAccess('delete-selected') && selectedRowKeys.length > 0
+              (viewMode === 'cards' || showSelectionColumn) &&
+              hasButtonAccess('delete-selected') &&
+              selectedRowKeys.length > 0
             "
             :disabled="loading"
             danger
@@ -208,36 +211,26 @@ function selectAllCards(checked: boolean) {
           @fullscreen="toggleFullscreen()"
         >
           <template #columns>
-            <div class="flex w-48 flex-col gap-2">
-              <Checkbox
-                :checked="allColumnsSelected"
-                :indeterminate="columnsIndeterminate"
-                @change="toggleAllColumns"
-              >
-                {{ $t('system.common.selectAll') }}
-              </Checkbox>
-              <div class="border-border border-t"></div>
-              <Checkbox
-                v-for="column in columnOptions"
-                :key="column.value"
-                :checked="visibleColumnKeys.includes(column.value)"
-                @change="toggleColumn(column.value)"
-              >
-                {{ column.label }}
-              </Checkbox>
-            </div>
+            <TableColumnSelector
+              class="w-48"
+              :model-value="visibleColumnKeys"
+              :options="columnOptions"
+              select-all
+              @update:model-value="setVisibleColumns"
+            />
           </template>
         </ManagementToolbar>
       </div>
 
-      <LoadWarning v-if="loadError" data-testid="management-load-error">
-        <template #action>
-          <Button size="small" @click="loadData">
-            {{ $t('system-insights.retry') }}
-          </Button>
-        </template>
-      </LoadWarning>
-      <template v-if="viewMode === 'cards'">
+      <LoadWarning
+        v-if="loadError"
+        :failure="loadError"
+        data-testid="management-load-error"
+        :retry-label="$t('system-insights.retry')"
+        retry-size="small"
+        @retry="loadData"
+      />
+      <template v-else-if="viewMode === 'cards'">
         <div class="system-card-selection">
           <Checkbox
             :checked="
@@ -268,8 +261,13 @@ function selectAllCards(checked: boolean) {
           :can-remove-record="canRemoveRecord"
           :can-select-record="canSelectRecord"
           :can-detail="canDetail"
+          :reset-totp-label="
+            canResetTOTP
+              ? buttonLabel('reset-totp', 'verification.reset')
+              : undefined
+          "
           :loading="loading"
-          @reset-mfa="confirmResetMFA"
+          @reset-totp="confirmResetTOTP"
           @detail="openDetail"
           @edit="openEditor"
           @remove="confirmRemove"
@@ -345,37 +343,43 @@ function selectAllCards(checked: boolean) {
 .system-results-card {
   min-width: 0;
 }
+
 .system-results-card :deep(.ant-card-body) {
   padding: 18px;
 }
+
 .system-result-caption {
   display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
   margin-bottom: 15px;
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
+
 .system-view-switch {
   margin-left: auto;
 }
+
 .system-card-selection {
   display: flex;
-  align-items: center;
   gap: 12px;
+  align-items: center;
+  margin: 4px 0 14px;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
-  margin: 4px 0 14px;
 }
+
 .system-card-pagination {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
   flex-wrap: wrap;
   row-gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
+
 :deep(.system-table-row-striped > td) {
   background-color: rgb(127 127 127 / 6%) !important;
 }

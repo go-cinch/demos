@@ -23,7 +23,10 @@ const segmentedOptions = computed(() =>
     :options="segmentedOptions"
   >
     <template #label="{ value: optionValue, payload }">
-      <span :data-testid="`${testId}-${optionValue}`" class="management-view-label">
+      <span
+        :data-testid="`${testId}-${optionValue}`"
+        class="management-view-label"
+      >
         <IconifyIcon :icon="payload.icon" aria-hidden="true" />
         {{ payload.label }}
       </span>
@@ -34,12 +37,14 @@ const segmentedOptions = computed(() =>
 <style scoped>
 .management-view-label {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
+  align-items: center;
 }
+
 .management-view-switch :deep(.ant-segmented-item-selected) {
   color: hsl(var(--primary));
 }
+
 .management-view-switch :deep(.ant-segmented-item:has(input:focus-visible)) {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;

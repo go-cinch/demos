@@ -5,24 +5,16 @@ import fsp from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readPackageJSON } from '@vben/node-utils';
-
 /**
  * 用于生成将loading样式注入到项目中
  * 为多app提供loading样式，无需在每个 app -> index.html单独引入
  */
 async function viteInjectAppLoadingPlugin(
-  isBuild: boolean,
-  env: Record<string, any> = {},
+  _isBuild: boolean,
+  _env: Record<string, any> = {},
   loadingTemplate = 'loading.html',
 ): Promise<PluginOption | undefined> {
   const loadingHtml = await getLoadingRawByHtmlTemplate(loadingTemplate);
-  const { version } = await readPackageJSON(process.cwd());
-  const envRaw = isBuild ? 'prod' : 'dev';
-  const cacheName = `'${env.VITE_APP_NAMESPACE}-${version}-${envRaw}-preferences-theme'`;
-
-  // 获取缓存的主题
-  // 保证黑暗主题下，刷新页面时，loading也是黑暗主题
   const injectScript = `
   <script data-app-loading="inject-js">
   (function () {
@@ -34,10 +26,7 @@ async function viteInjectAppLoadingPlugin(
     function ready() { clearTimeout(deadline); }
     window.addEventListener('vben:app-ready', ready, { once: true });
   })();
-  try {
-    var theme = localStorage.getItem(${cacheName});
-    document.documentElement.classList.toggle('dark', /dark/.test(theme));
-  } catch {}
+  document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
 </script>
 `;
 

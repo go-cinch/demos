@@ -38,12 +38,10 @@
   "user": {
     "entity": "User",
     "title": "User Management",
-    "keepPassword": "Leave blank to keep the current password",
     "approve": "Approve",
     "reject": "Reject",
     "lock": "Lock",
     "unlock": "Unlock",
-    "unlockPassword": "Unlock Password Change",
     "lockLabel": "Lock:",
     "permanent": "Permanent",
     "lockUntil": "Until a specific time",
@@ -54,7 +52,11 @@
     "decision": "Decision",
     "reason": "Reason",
     "rejectionPlaceholder": "Enter the registration rejection reason",
-    "lockTitle": "Lock User “{name}”"
+    "lockTitle": "Lock User “{name}”",
+    "resetPassword": "Reset password",
+    "confirmReset": "Confirm reset",
+    "confirmPassword": "Confirm new password",
+    "resetConsequence": "This ends the user’s current sessions. They will need the new password to sign in."
   },
   "userGroup": {
     "entity": "User Group",
@@ -133,21 +135,25 @@
     "rejected": "Registration rejected",
     "locked": "User locked successfully",
     "unlocked": "User unlocked successfully",
-    "passwordUnlocked": "Self-service password change unlocked"
+    "passwordReset": "Password reset"
   },
   "confirm": {
     "deleteSelected": "Delete selected records?",
     "deleteDescription": "The selected {count} records will be deleted.",
     "unlock": "Unlock “{name}”?",
-    "unlockPassword": "Unlock self-service password changes for “{name}”?",
     "delete": "Delete “{name}”?"
   },
   "validation": {
     "required": "{field} is required",
     "dictionaryKey": "Use uppercase letters, digits, and underscore-separated segments",
     "json": "Enter valid JSON",
+    "metadataObject": "Enter a JSON object.",
+    "metadataKey": "Use lowercase snake_case for the key “{key}”.",
     "rejectionRequired": "Please enter a rejection reason",
-    "futureLock": "Please select a future lock expiration time"
+    "futureLock": "Please select a future lock expiration time",
+    "managedMetadata": "The system manages “{key}”. Remove it from the editable metadata.",
+    "passwordMismatch": "The passwords do not match",
+    "passwordConfirmation": "Enter the new password again"
   },
   "menu": {
     "system": "System",

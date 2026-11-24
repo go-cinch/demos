@@ -13,8 +13,8 @@ import { isBoolean, isFunction } from '@vben/utils';
 
 import {
   IndexedDBDriver,
-  LocalStorageDriver,
   StorageManager,
+  userCache,
 } from '@vben-core/shared/cache';
 
 import { useDebounceFn } from '@vueuse/core';
@@ -32,20 +32,27 @@ function createWebStorageAdapter(
   key: string,
   ttl?: number,
 ): ViewedRowStorageAdapter {
-  const manager = new StorageManager({
-    driver: new LocalStorageDriver({ storageType }),
-  });
-
+  const cache = userCache
+    .current(storageType === 'sessionStorage' ? 'session' : 'local')
+    .child('viewed-row');
   return {
     async getKeys() {
-      const stored = await manager.getItem<Array<number | string>>(key);
-      return stored ?? [];
+      const entry = cache.get<{
+        expiry: null | number;
+        value: Array<number | string>;
+      }>(key);
+      if (!entry) return [];
+      if (entry.expiry && entry.expiry < Date.now()) {
+        cache.removeItem(key);
+        return [];
+      }
+      return Array.isArray(entry.value) ? entry.value : [];
     },
     async removeKeys() {
-      await manager.removeItem(key);
+      cache.removeItem(key);
     },
     async setKeys(keys) {
-      await manager.setItem(key, keys, ttl);
+      cache.set(key, { expiry: ttl ? Date.now() + ttl : null, value: keys });
     },
   };
 }
@@ -57,7 +64,7 @@ function createWebStorageAdapter(
 function createIndexedDBAdapter(
   opts: Extract<ViewedRowPersistOptions, { type: 'indexedDB' }>,
 ): ViewedRowStorageAdapter {
-  const prefix = opts.key;
+  const prefix = userCache.current().key(`viewed-row/${opts.key}`);
   const manager = new StorageManager({
     driver: new IndexedDBDriver({
       dbName: opts.dbName || 'viewed-table-db',
@@ -139,7 +146,9 @@ function createStorageAdapter(
       return toRaw(persist.storage);
     }
     case 'indexedDB': {
-      return createIndexedDBAdapter(persist);
+      return userCache.account === null
+        ? null
+        : createIndexedDBAdapter(persist);
     }
     case 'localStorage': {
       return createWebStorageAdapter('localStorage', persist.key, persist.ttl);

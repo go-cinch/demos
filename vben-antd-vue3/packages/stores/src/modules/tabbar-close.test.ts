@@ -1,9 +1,11 @@
 import type { TabDefinition } from '@vben-core/typings';
 
 import { createMemoryHistory, createRouter } from 'vue-router';
+
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../scripts/test-utils/required';
 import { registerTabCloseGuard } from '../tab-close-guards';
 import { useTabbarStore } from './tabbar';
 
@@ -51,7 +53,7 @@ describe('closing tabs with unsaved state', () => {
           }),
       ),
     );
-    const pending = store.closeTab(tabs[1]!, router);
+    const pending = store.closeTab(required(tabs[1]), router);
     expect(store.tabs).toHaveLength(3);
     expect(router.currentRoute.value.path).toBe('/editor');
     decide(false);
@@ -63,11 +65,11 @@ describe('closing tabs with unsaved state', () => {
   it('navigates before removing the active tab and preserves it on route cancellation', async () => {
     const { store, router, tabs } = await setup();
     const removeGuard = router.beforeEach((to) => to.path !== '/other');
-    await store.closeTab(tabs[1]!, router);
+    await store.closeTab(required(tabs[1]), router);
     expect(store.tabs).toHaveLength(3);
     expect(router.currentRoute.value.path).toBe('/editor');
     removeGuard();
-    await store.closeTab(tabs[1]!, router);
+    await store.closeTab(required(tabs[1]), router);
     expect(store.tabs.map((tab) => tab.path)).toEqual(['/home', '/other']);
     expect(router.currentRoute.value.path).toBe('/other');
   });
@@ -77,7 +79,8 @@ describe('closing tabs with unsaved state', () => {
     async (operation) => {
       const { store, tabs } = await setup('/home');
       cleanup.push(registerTabCloseGuard('/editor', () => false));
-      const target = operation === 'closeLeftTabs' ? tabs[2]! : tabs[0]!;
+      const target =
+        operation === 'closeLeftTabs' ? required(tabs[2]) : required(tabs[0]);
       await store[operation](target);
       expect(store.tabs.map((tab) => tab.path)).toEqual([
         '/home',

@@ -17,55 +17,120 @@ import {
   refreshI18nCatalog,
 } from './catalog';
 
-const transport = vi.hoisted(() => ({ get: vi.fn(), request: vi.fn() }));
-vi.mock('#/api/request', () => ({ authRequestClient: transport }));
-vi.mock('#/api/core/auth', () => ({ createRegistrationPasswordCredentialApi: vi.fn() }));
+vi.mock('#/store/system-properties', () => ({
+  loadSystemProperties: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { publicGet, request } = vi.hoisted(() => ({
+  publicGet: vi.fn(),
+  request: vi.fn(),
+}));
+vi.mock('#/api/request', () => ({
+  authRequestClient: { request },
+  authSilentPublicRequestClient: { get: publicGet },
+}));
+vi.mock('#/api/core/auth', () => ({
+  createRegistrationPasswordCredentialApi: vi.fn(),
+}));
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
 
-it('updates visible groups with one i18n request per successful save', async () => {
-  i18n.global.locale.value = 'en-US';
-  let stored: I18nCatalog = {
+function catalog(
+  groups: Record<string, string>,
+  order = Object.keys(groups),
+): I18nCatalog {
+  return {
     schema_version: 2,
     default_locale: 'en-US',
     locales: [{ tag: 'en-US', name: 'English', enabled: true }],
-    messages: { 'en-US': { frontend: { groups: { 'admin:old': 'Old' } } } },
-    group_order: ['admin:old'],
+    messages: { 'en-US': { frontend: { groups } } },
+    group_order: order,
   };
-  const record = () => ({ id: 7, key: 'I18N_CATALOG', enabled: true, value: structuredClone(stored) });
-  const fetcher = vi.fn(async () => ({ ok: true, json: async () => structuredClone(stored) }));
-  vi.stubGlobal('fetch', fetcher);
-  transport.get.mockImplementation(async () => ({ items: [record()] }));
-  transport.request.mockImplementation(async (_url: string, config: { data: { value: I18nCatalog } }) => {
-    stored = structuredClone(config.data.value);
-    return record();
-  });
+}
 
+it('updates visible groups with one i18n request per successful save', async () => {
+  i18n.global.locale.value = 'en-US';
+  const original = { 'admin:old': 'Old' };
+  const renamed = { ...original, 'admin:renamed': 'Renamed' };
+  publicGet.mockResolvedValueOnce(catalog(original));
   await refreshI18nCatalog();
-  expect(fetcher).toHaveBeenCalledOnce();
+  expect(publicGet).toHaveBeenCalledOnce();
 
+  publicGet.mockResolvedValueOnce(catalog({ ...original, 'admin:new': 'New' }));
   await createPermissionGroup('admin:new', { 'en-US': 'New' });
+  expect(request).toHaveBeenCalledWith('/action/group', {
+    method: 'PATCH',
+    data: { operation: 'create', word: 'admin:new', names: { 'en-US': 'New' } },
+  });
   expect(catalogGroupWords()).toContain('admin:new');
   expect(catalogGroupNames('admin:new')).toEqual({ 'en-US': 'New' });
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(publicGet).toHaveBeenCalledTimes(2);
 
-  await savePermissionGroup('admin:renamed', { 'en-US': 'Renamed' }, 'admin:new');
+  publicGet.mockResolvedValueOnce(catalog(renamed));
+  await savePermissionGroup(
+    'admin:renamed',
+    { 'en-US': 'Renamed' },
+    'admin:new',
+  );
+  expect(request).toHaveBeenLastCalledWith('/action/group', {
+    method: 'PATCH',
+    data: {
+      operation: 'update',
+      original_word: 'admin:new',
+      word: 'admin:renamed',
+      expected_names: { 'en-US': 'New' },
+      names: { 'en-US': 'Renamed' },
+    },
+  });
   expect(catalogGroupWords()).not.toContain('admin:new');
   expect(catalogGroupNames('admin:renamed')).toEqual({ 'en-US': 'Renamed' });
-  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(publicGet).toHaveBeenCalledTimes(3);
 
+  publicGet.mockResolvedValueOnce(
+    catalog(renamed, ['admin:renamed', 'admin:old']),
+  );
   await savePermissionGroupOrder(['admin:renamed', 'admin:old']);
+  expect(request).toHaveBeenLastCalledWith('/action/group/order', {
+    method: 'PATCH',
+    data: {
+      expected_order: ['admin:old', 'admin:renamed'],
+      order: ['admin:renamed', 'admin:old'],
+    },
+  });
   expect(catalogGroupOrder()).toEqual(['admin:renamed', 'admin:old']);
-  expect(fetcher).toHaveBeenCalledTimes(4);
+  expect(publicGet).toHaveBeenCalledTimes(4);
 
+  publicGet.mockResolvedValueOnce(catalog(original));
   await deletePermissionGroup('admin:renamed');
+  expect(request).toHaveBeenLastCalledWith('/action/group', {
+    method: 'PATCH',
+    data: {
+      operation: 'delete',
+      word: 'admin:renamed',
+      expected_names: { 'en-US': 'Renamed' },
+    },
+  });
   expect(catalogGroupWords()).toEqual(['admin:old']);
-  expect(fetcher).toHaveBeenCalledTimes(5);
+  expect(publicGet).toHaveBeenCalledTimes(5);
 
-  transport.request.mockRejectedValueOnce(new Error('conflict'));
-  await expect(createPermissionGroup('admin:failed', { 'en-US': 'Failed' })).rejects.toThrow('conflict');
+  request.mockRejectedValueOnce(new Error('offline'));
+  await expect(
+    createPermissionGroup('admin:failed', { 'en-US': 'Failed' }),
+  ).rejects.toThrow('offline');
   expect(catalogGroupWords()).toEqual(['admin:old']);
-  expect(fetcher).toHaveBeenCalledTimes(5);
+  expect(publicGet).toHaveBeenCalledTimes(5);
+
+  const conflict = {
+    response: { status: 409, data: { error_code: 'ACTION_GROUP_CONFLICT' } },
+  };
+  request.mockRejectedValueOnce(conflict);
+  publicGet.mockResolvedValueOnce(
+    catalog({ ...original, 'admin:other': 'Concurrent edit' }),
+  );
+  await expect(
+    createPermissionGroup('admin:failed', { 'en-US': 'Failed' }),
+  ).rejects.toBe(conflict);
+  expect(publicGet).toHaveBeenCalledTimes(6);
+  expect(catalogGroupWords()).toEqual(['admin:old', 'admin:other']);
 });

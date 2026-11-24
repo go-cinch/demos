@@ -1,6 +1,8 @@
+import type { VueWrapper } from '@vue/test-utils';
+
 import type { ActionConfig } from '#/api/system';
 
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 
 import { CheckboxGroup, Tree } from 'ant-design-vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +13,9 @@ import {
 } from '#/api/system';
 import { refreshI18nCatalog } from '#/locales';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import ActionEditor from './action-editor.vue';
+import { referenceTreeKey } from './resource-references';
 // Group persistence has its own API tests; this suite exercises the permission editor.
 vi.mock('./action-group-dialog.vue', () => ({
   default: { template: '<div />' },
@@ -33,6 +37,7 @@ vi.mock('#/locales/catalog', () => ({
   catalogLanguages: () => [{ enabled: true, name: 'English', tag: 'en-US' }],
 }));
 vi.mock('@vben/locales', () => ({
+  $placeholder: (key: string) => key,
   $te: () => false,
   i18n: { global: { locale: { value: 'en-US' } } },
 }));
@@ -60,8 +65,16 @@ const data = {
               'admin:system:user:detail',
             ],
           },
+          create: { entry_keys: [], button_keys: [] },
           update: { entry_keys: [], button_keys: ['admin:system:user:edit'] },
+          delete: { entry_keys: [], button_keys: [] },
         },
+      },
+      'admin:shortcuts': {
+        kind: 'directory' as const,
+        sort: 20,
+        references: ['admin:system:user'],
+        reference_operations: { 'admin:system:user': ['read'] },
       },
     },
     buttons: {
@@ -89,6 +102,7 @@ function mountEditor() {
   wrapper = mount(ActionEditor, {
     props: {
       'onUpdate:config': (config: ActionConfig) => wrapper.setProps({ config }),
+      'onUpdate:group': (group: string) => wrapper.setProps({ group }),
       'onUpdate:word': (word: string) => wrapper.setProps({ word }),
     },
   });
@@ -102,7 +116,7 @@ async function selectResource(key: string) {
 function currentConfig(): ActionConfig {
   const config = wrapper.props('config');
   expect(config).toBeDefined();
-  return config!;
+  return required(config);
 }
 
 async function selectOperation(operation: string, checked: boolean) {
@@ -110,7 +124,15 @@ async function selectOperation(operation: string, checked: boolean) {
     .findAll('.operation-row')
     .find((item) => item.get('th').text() === operation);
   expect(row, `Missing operation row: ${operation}`).toBeDefined();
-  await row!.get('th input[type="checkbox"]').setValue(checked);
+  await required(row).get('th input[type="checkbox"]').setValue(checked);
+  await flushPromises();
+}
+
+async function selectReadFeatures(features: string[]) {
+  wrapper
+    .get('.operation-row')
+    .getComponent(CheckboxGroup)
+    .vm.$emit('change', features);
   await flushPromises();
 }
 
@@ -124,6 +146,54 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe('permission resource editor', () => {
+  it('clears scoped bindings and preserves manual words across every empty scope', async () => {
+    mountEditor();
+    await flushPromises();
+    const word = () =>
+      wrapper.get<HTMLInputElement>('[data-testid="action-word-input"]');
+    const selectScope = async (scope: string) => {
+      const button = wrapper
+        .findAll('[data-testid="action-scope"] button')
+        .find((option) => option.get('small').text() === scope);
+      expect(button, scope).toBeDefined();
+      await required(button).trigger('click');
+      await flushPromises();
+    };
+    for (const scope of ['h5', 'mini', 'app']) {
+      await wrapper.setProps({ group: 'admin:system:user' });
+      await selectResource('admin:system:user');
+      expect(word().element.value, scope).toBe('admin:read:system:user');
+      await selectScope(scope);
+      expect(word().element.value, scope).toBe('');
+      expect(wrapper.props('group'), scope).toBe('');
+      expect(currentConfig(), scope).toEqual({
+        bindings: [],
+        ui: [],
+        endpoints: [],
+      });
+      expect(wrapper.text(), scope).toContain('action-editor.noResources');
+      await selectScope('admin');
+    }
+    const manual = 'admin:read:e2e:manual';
+    await word().setValue(manual);
+    for (const scope of ['h5', 'mini', 'app']) {
+      await wrapper.setProps({ group: 'admin:system:user' });
+      await selectResource('admin:system:user');
+      await selectScope(scope);
+      expect(word().element.value, scope).toBe(manual);
+      expect(wrapper.props('group'), scope).toBe('');
+      expect(currentConfig(), scope).toEqual({
+        bindings: [],
+        ui: [],
+        endpoints: [],
+      });
+      expect(wrapper.emitted('validity')?.at(-1)).toEqual([
+        'action-editor.wordScopeMismatch',
+      ]);
+      await selectScope('admin');
+      expect(wrapper.emitted('validity')?.at(-1)).toEqual(['']);
+    }
+  });
   it('opens without an invalid configuration alert and clears selection when scope changes', async () => {
     mountEditor();
     await flushPromises();
@@ -133,9 +203,9 @@ describe('permission resource editor', () => {
     expect(wrapper.emitted('update:word')?.at(-1)).toEqual([
       'admin:read:system:user',
     ]);
-    await wrapper
-      .findAll('[data-testid="action-scope"] button')[1]!
-      .trigger('click');
+    await required(
+      wrapper.findAll('[data-testid="action-scope"] button')[1],
+    ).trigger('click');
     await flushPromises();
     expect(wrapper.emitted('update:word')?.at(-1)).toEqual(['']);
     expect(currentConfig()).toEqual({ bindings: [], ui: [], endpoints: [] });
@@ -146,11 +216,10 @@ describe('permission resource editor', () => {
     mountEditor();
     await flushPromises();
     await selectResource('admin:system:user');
-    wrapper
-      .findAll('.operation-row')[0]!
-      .getComponent(CheckboxGroup)
-      .vm.$emit('change', ['admin:system:user:query']);
-    await flushPromises();
+    for (const operation of ['create', 'update', 'delete']) {
+      await selectOperation(operation, false);
+    }
+    await selectReadFeatures(['admin:system:user:query']);
     expect(currentConfig().endpoints).toEqual([
       { protocol: 'http', method: 'GET', path: '/user' },
     ]);
@@ -196,25 +265,135 @@ describe('permission resource editor', () => {
     expect(wrapper.text()).not.toContain('GET /user');
     expect(getEffectivePermissionPaths).not.toHaveBeenCalled();
   });
-  it(
-    'blocks submission when permissions fail to load and retries without refreshing i18n',
-    async () => {
-      vi.mocked(getPermissionCatalog).mockRejectedValueOnce(new Error('offline'));
-      mountEditor();
-      await flushPromises();
-      expect(wrapper.text()).toContain('action-editor.catalogError');
-      expect(wrapper.emitted('validity')?.at(-1)).toEqual([
-        'action-editor.catalogError',
-      ]);
-      await wrapper.get('.ant-alert button').trigger('click');
-      await flushPromises();
-      expect(getPermissionCatalog).toHaveBeenCalledTimes(2);
-      expect(refreshI18nCatalog).not.toHaveBeenCalled();
-      expect(wrapper.find('[role="alert"]').exists()).toBe(false);
-      expect(wrapper.findComponent(Tree).exists()).toBe(true);
-      expect(wrapper.emitted('validity')?.at(-1)).not.toEqual([
-        'action-editor.catalogError',
-      ]);
-    },
-  );
+  it('selects all available operations and reflects changes from the right pane in the resource tree', async () => {
+    mountEditor();
+    await flushPromises();
+    const key = 'admin:system:user';
+    const marker = () =>
+      wrapper
+        .get(`[data-permission-resource-key="${key}"]`)
+        .find('.selection-marker');
+    const selectedKeys = () => wrapper.getComponent(Tree).props('selectedKeys');
+    expect(marker().exists()).toBe(false);
+
+    await selectResource(key);
+    expect(currentConfig().bindings).toEqual([
+      {
+        resource_key: key,
+        operation: 'read',
+        feature_keys: [`${key}:query`, `${key}:detail`],
+      },
+      { resource_key: key, operation: 'create', feature_keys: [] },
+      { resource_key: key, operation: 'update', feature_keys: [`${key}:edit`] },
+      { resource_key: key, operation: 'delete', feature_keys: [] },
+    ]);
+    expect(selectedKeys()).toContain(key);
+    expect(selectedKeys()).toContain('admin:system');
+
+    await selectReadFeatures([`${key}:query`]);
+    expect(marker().attributes('aria-label')).toBe(
+      'action-editor.partialSelection',
+    );
+    expect(selectedKeys()).not.toContain('admin:system');
+    await selectReadFeatures([`${key}:query`, `${key}:detail`]);
+    expect(selectedKeys()).toContain(key);
+
+    await selectOperation('delete', false);
+    expect(marker().attributes('aria-label')).toBe(
+      'action-editor.partialSelection',
+    );
+    await selectOperation('delete', true);
+    expect(selectedKeys()).toContain(key);
+
+    await wrapper.get('.select-all input[type="checkbox"]').setValue(false);
+    await flushPromises();
+    expect(marker().exists()).toBe(false);
+    expect(wrapper.find('.selected-resource').exists()).toBe(true);
+    await selectResource(key);
+    expect(selectedKeys()).toContain(key);
+
+    await selectResource(key);
+    expect(marker().exists()).toBe(false);
+    expect(currentConfig().bindings).toEqual([]);
+  });
+  it('keeps a wildcard control separate from the default CRUD selection', async () => {
+    const key = 'admin:system:user';
+    vi.mocked(getPermissionCatalog).mockResolvedValue({
+      ...data,
+      resource_catalog: {
+        ...data.resource_catalog,
+        resources: {
+          ...data.resource_catalog.resources,
+          [key]: {
+            ...data.resource_catalog.resources[key],
+            permission_scope: '*',
+          },
+        },
+      },
+    });
+    mountEditor();
+    await flushPromises();
+    await selectResource(key);
+    expect(currentConfig().bindings?.map(({ operation }) => operation)).toEqual(
+      ['read', 'create', 'update', 'delete'],
+    );
+    expect(currentConfig().permission_scope).toBeUndefined();
+    expect(wrapper.getComponent(Tree).props('selectedKeys')).toContain(key);
+  });
+  it('completes only the operations allowed by a menu reference', async () => {
+    mountEditor();
+    await flushPromises();
+    const key = 'admin:system:user';
+    const reference = referenceTreeKey('admin:shortcuts', key);
+    const selectedKeys = () => wrapper.getComponent(Tree).props('selectedKeys');
+    await selectResource(reference);
+    expect(currentConfig().bindings?.map(({ operation }) => operation)).toEqual(
+      ['read'],
+    );
+    expect(selectedKeys()).toContain(reference);
+    expect(selectedKeys()).not.toContain(key);
+
+    await selectReadFeatures([`${key}:query`]);
+    expect(selectedKeys()).not.toContain(reference);
+    await selectResource(reference);
+    expect(currentConfig().bindings).toEqual([
+      {
+        resource_key: key,
+        operation: 'read',
+        feature_keys: [`${key}:query`, `${key}:detail`],
+      },
+    ]);
+    expect(selectedKeys()).toContain(reference);
+    expect(selectedKeys()).not.toContain(key);
+  });
+  it('blocks submission when permissions fail to load and retries without refreshing i18n', async () => {
+    vi.mocked(getPermissionCatalog).mockRejectedValueOnce(new Error('offline'));
+    mountEditor();
+    await flushPromises();
+    expect(wrapper.get('.load-warning button').isVisible()).toBe(true);
+    expect(wrapper.emitted('validity')?.at(-1)).toEqual([
+      'action-editor.catalogError',
+    ]);
+    await wrapper.get('.load-warning button').trigger('click');
+    await flushPromises();
+    expect(getPermissionCatalog).toHaveBeenCalledTimes(2);
+    expect(refreshI18nCatalog).not.toHaveBeenCalled();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.findComponent(Tree).exists()).toBe(true);
+    expect(wrapper.emitted('validity')?.at(-1)).not.toEqual([
+      'action-editor.catalogError',
+    ]);
+  });
+});
+
+it('shows the inline group creator only with the group creation control', async () => {
+  mountEditor();
+  await flushPromises();
+  const trigger =
+    '[data-permission-key="admin:btn:system:action:create-group"]';
+  expect(required(wrapper).element.querySelector(trigger) !== null).toBe(false);
+  await required(wrapper).setProps({ canCreateGroup: true });
+  expect(required(wrapper).element.querySelector(trigger) !== null).toBe(true);
+  await required(wrapper).setProps({ canCreateGroup: false });
+  expect(required(wrapper).element.querySelector(trigger) !== null).toBe(false);
 });

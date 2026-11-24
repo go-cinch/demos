@@ -1,37 +1,49 @@
 <script setup lang="ts">
+import type { Catalog } from './catalog-model';
+
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
+
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
-import { formatDateTime } from '@vben/utils';
 import { registerTabCloseGuard } from '@vben/stores';
+import { formatDateTime } from '@vben/utils';
+
 import {
   Alert,
   Button,
   Drawer,
   Empty,
+  message,
   Modal,
   Result,
   Skeleton,
-  Tabs,
   TabPane,
+  Tabs,
   Tag,
-  message,
 } from 'ant-design-vue';
+
+import { showRequestErrorToast } from '#/api/request-feedback';
 import { $t } from '#/locales';
+import { refreshI18nCatalog } from '#/locales/catalog';
 import { useAuthStore } from '#/store';
-import CatalogResources from './catalog-resources.vue';
-import CatalogGroups from './catalog-groups.vue';
-import CatalogMessages from './catalog-messages.vue';
-import CatalogScopes from './catalog-scopes.vue';
-import CatalogLanguages from './catalog-languages.vue';
-import CatalogDiff from './catalog-diff.vue';
-import { isCatalog, normalizeCatalog } from './catalog-model';
-import { repairResourcePreviewDraft } from './resource-preview';
-import type { Catalog } from './catalog-model';
-import { useCatalogDraft } from './use-catalog-draft';
+
 import { legacyGroupRenames } from '../components/action-group-model';
-import { legacyResourceRenames, pendingResourceRenames, readRenameMap } from './resource-renames';
+import CatalogDiff from './catalog-diff.vue';
+import CatalogDraftScope from './catalog-draft-scope.vue';
+import CatalogGroups from './catalog-groups.vue';
+import CatalogLanguages from './catalog-languages.vue';
+import CatalogMessages from './catalog-messages.vue';
+import { isCatalog, normalizeCatalog } from './catalog-model';
+import CatalogResources from './catalog-resources.vue';
+import CatalogScopes from './catalog-scopes.vue';
+import { repairResourcePreviewDraft } from './resource-preview';
+import {
+  legacyResourceRenames,
+  pendingResourceRenames,
+  readRenameMap,
+} from './resource-renames';
+import { useCatalogDraft } from './use-catalog-draft';
 
 const t = (key: string) => $t(`developer.${key}`);
 const draft = useCatalogDraft();
@@ -46,7 +58,16 @@ const {
 } = draft;
 const content = ref<HTMLElement>();
 async function refreshGroupCatalog() {
-  if (!canEdit.value || state.draft?.ui.resourceEditor || state.draft?.ui.groupEditor || state.draft?.ui.buffer || !(await draft.refresh()) || !state.draft || !state.online) return;
+  if (
+    !canEdit.value ||
+    state.draft?.ui.resourceEditor ||
+    state.draft?.ui.groupEditor ||
+    state.draft?.ui.buffer ||
+    !(await draft.refresh()) ||
+    !state.draft ||
+    !state.online
+  )
+    return;
   draft.mergeOnlineUpdates();
 }
 const draftInfo = ref(false);
@@ -81,7 +102,7 @@ async function navigate(action: () => void): Promise<boolean> {
     });
   });
 }
-function selectTab(key: string | number) {
+function selectTab(key: number | string) {
   if (state.draft?.ui.tab === String(key)) return;
   void navigate(() => {
     if (state.draft) state.draft.ui.tab = String(key);
@@ -120,6 +141,23 @@ function confirmDiscard() {
     onOk: draft.discard,
   });
 }
+async function showPublicationResult(result: 'matched' | boolean) {
+  if (!result) return;
+  message.success(
+    t(result === 'matched' ? 'publicationMatched' : 'submitSuccess'),
+  );
+  if (result === 'matched') {
+    await refreshI18nCatalog(() =>
+      message.warning(t('translationRefreshFailed')),
+    );
+  }
+  void useAuthStore()
+    .fetchUserInfo({ fresh: true })
+    .catch(showRequestErrorToast);
+}
+async function recheckPublication() {
+  if (await draft.checkPublication()) await showPublicationResult('matched');
+}
 async function submit() {
   if (state.draft?.ui.resourceEditor || state.draft?.ui.groupEditor) return;
   if (!(await draft.refresh()) || !state.draft) return;
@@ -133,10 +171,7 @@ async function submit() {
     okText: t('submit'),
     cancelText: t('cancel'),
     async onOk() {
-      if (await draft.publish()) {
-        message.success(t('submitSuccess'));
-        await useAuthStore().fetchUserInfo({ fresh: true });
-      }
+      await showPublicationResult(await draft.publish());
     },
   });
 }
@@ -169,18 +204,35 @@ async function importDraft(event: Event) {
         resourceRenames = readRenameMap(ui.resourceRenames);
         featureRenames = readRenameMap(ui.featureRenames);
       }
-      if ('ui' in data && data.ui && typeof data.ui === 'object' && 'groupRenames' in data.ui && data.ui.groupRenames && typeof data.ui.groupRenames === 'object' && !Array.isArray(data.ui.groupRenames)) {
+      if (
+        'ui' in data &&
+        data.ui &&
+        typeof data.ui === 'object' &&
+        'groupRenames' in data.ui &&
+        data.ui.groupRenames &&
+        typeof data.ui.groupRenames === 'object' &&
+        !Array.isArray(data.ui.groupRenames)
+      ) {
         const entries = Object.entries(data.ui.groupRenames);
-        if (entries.some(([, value]) => typeof value !== 'string')) throw new Error('groupRenames');
+        if (entries.some(([, value]) => typeof value !== 'string'))
+          throw new Error('groupRenames');
         groupRenames = Object.fromEntries(entries) as Record<string, string>;
       }
     }
     if (!imported) throw new Error('schema');
-    groupRenames = { ...legacyGroupRenames(state.draft.base, imported), ...groupRenames };
+    groupRenames = {
+      ...legacyGroupRenames(state.draft.base, imported),
+      ...groupRenames,
+    };
     const renames = legacyResourceRenames(state.draft.base, imported);
     resourceRenames = { ...renames.resources, ...resourceRenames };
     featureRenames = { ...renames.features, ...featureRenames };
-    const pendingRenames = pendingResourceRenames(state.draft.base, imported, resourceRenames, featureRenames);
+    const pendingRenames = pendingResourceRenames(
+      state.draft.base,
+      imported,
+      resourceRenames,
+      featureRenames,
+    );
     resourceRenames = pendingRenames.resources;
     featureRenames = pendingRenames.features;
     Modal.confirm({
@@ -190,7 +242,11 @@ async function importDraft(event: Event) {
       cancelText: t('cancel'),
       onOk() {
         if (state.draft) {
-          state.draft.document = repairResourcePreviewDraft(normalizeCatalog(imported), state.draft.base, state.online ?? state.draft.base);
+          state.draft.document = repairResourcePreviewDraft(
+            normalizeCatalog(imported),
+            state.draft.base,
+            state.online ?? state.draft.base,
+          );
           state.draft.ui.groupRenames = groupRenames;
           state.draft.ui.resourceRenames = resourceRenames;
           state.draft.ui.featureRenames = featureRenames;
@@ -212,11 +268,7 @@ async function useExternal() {
 }
 </script>
 <template>
-  <Page
-    :title="t('title')"
-    :description="t('subtitle')"
-    content-class="developer-page"
-  >
+  <Page content-class="developer-page">
     <Result
       v-if="!canReadDeveloper"
       status="403"
@@ -227,6 +279,7 @@ async function useExternal() {
       <div class="catalog-toolbar">
         <div class="catalog-draft-state">
           <span
+            v-if="state.draft || state.storageError"
             role="status"
             aria-live="polite"
             data-testid="draft-status"
@@ -258,9 +311,9 @@ async function useExternal() {
         </div>
         <div class="catalog-actions">
           <Button :disabled="!state.draft" @click="draftInfo = true">
-            <template #icon
-              ><IconifyIcon icon="lucide:file-pen-line"
-            /></template>
+            <template #icon>
+              <IconifyIcon icon="lucide:file-pen-line" />
+            </template>
             {{ t('localDraft') }}
           </Button>
           <Button
@@ -269,9 +322,9 @@ async function useExternal() {
             data-permission-key="admin:btn:system:developer:compare-online"
             @click="openDiff"
           >
-            <template #icon
-              ><IconifyIcon icon="lucide:git-compare-arrows"
-            /></template>
+            <template #icon>
+              <IconifyIcon icon="lucide:git-compare-arrows" />
+            </template>
             {{ t('compareOnline') }}
             <span class="catalog-change-count">{{ changes.length }}</span>
           </Button>
@@ -304,39 +357,73 @@ async function useExternal() {
         :message="t('restored')"
         @close="state.restored = false"
       />
-      <Alert v-if="state.error" type="error" show-icon :message="t(state.error)"
-        ><template #action
-          ><Button
+      <Alert
+        v-if="state.publicationCheck"
+        type="warning"
+        show-icon
+        :message="
+          t(
+            state.publicationCheck === 'checking'
+              ? 'publicationChecking'
+              : 'publicationUnknown',
+          )
+        "
+      >
+        <template v-if="state.publicationCheck === 'unknown'" #action>
+          <Button @click="recheckPublication">{{
+            t('publicationRecheck')
+          }}</Button>
+        </template>
+      </Alert>
+      <Alert
+        v-else-if="state.error"
+        type="error"
+        show-icon
+        :message="
+          t(
+            ['gateway', 'loadFailed'].includes(state.error)
+              ? state.draft
+                ? 'loadFailed'
+                : 'initialLoadFailed'
+              : state.error,
+          )
+        "
+      >
+        <template #action>
+          <Button
             :loading="state.loading"
             @click="state.ready ? draft.refresh() : draft.initialize()"
-            >{{ t('retry') }}</Button
-          ></template
-        ></Alert
-      >
+          >
+            {{ t('retry') }}
+          </Button>
+        </template>
+      </Alert>
       <Alert
         v-if="state.storageError && !state.external"
         type="error"
         show-icon
         :message="t('storageFailedHint')"
-        ><template #action
-          ><Button @click="draft.persist">{{ t('retry') }}</Button
-          ><Button @click="draft.exportDraft">{{
-            t('exportDraft')
-          }}</Button></template
-        ></Alert
       >
+        <template #action>
+          <Button @click="draft.persist">{{ t('retry') }}</Button
+          ><Button @click="draft.exportDraft">
+            {{ t('exportDraft') }}
+          </Button>
+        </template>
+      </Alert>
       <Alert
         v-if="state.external"
         type="warning"
         show-icon
         :message="t('externalHint')"
-        ><template #action
-          ><Button @click="draft.exportDraft">{{ t('exportMine') }}</Button
-          ><Button data-testid="load-external-draft" @click="useExternal">{{
-            t('loadExternal')
-          }}</Button></template
-        ></Alert
       >
+        <template #action>
+          <Button @click="draft.exportDraft">{{ t('exportMine') }}</Button
+          ><Button data-testid="load-external-draft" @click="useExternal">
+            {{ t('loadExternal') }}
+          </Button>
+        </template>
+      </Alert>
       <Skeleton
         v-if="state.loading && !state.draft"
         active
@@ -351,98 +438,105 @@ async function useExternal() {
             (state.draft!.ui.scroll = (event.target as HTMLElement).scrollTop)
         "
       >
-        <Tabs
-          :active-key="state.draft.ui.tab"
-          :animated="false"
-          class="catalog-tabs"
-          @change="selectTab"
-        >
-          <TabPane key="languages">
-            <template #tab
-              ><span class="catalog-tab-label"
-                ><IconifyIcon icon="lucide:languages" />{{
-                  t('languages')
-                }}</span
-              ></template
-            >
-            <CatalogLanguages
-              :catalog="state.draft.document"
-              :disabled="!canEdit"
-            />
-          </TabPane>
-          <TabPane key="scopes">
-            <template #tab>
-              <span class="catalog-tab-label">
-                <IconifyIcon icon="lucide:layers" />{{ t('scopes') }}
-              </span>
-            </template>
-            <CatalogScopes
-              :catalog="state.draft.document"
-              :ui="state.draft.ui"
-              :disabled="!canEdit"
-            />
-          </TabPane>
-          <TabPane key="resources">
-            <template #tab
-              ><span class="catalog-tab-label"
-                ><IconifyIcon icon="lucide:folder-tree" />{{
-                  t('resources')
-                }}</span
-              ></template
-            >
-            <CatalogResources
-              :catalog="state.draft.document"
-              :ui="state.draft.ui"
-              :disabled="!canEdit"
-              :navigate="navigate"
-          /></TabPane>
-          <TabPane key="groups">
-            <template #tab><span class="catalog-tab-label"><IconifyIcon icon="lucide:folder-key" />{{ t('permissionGroups') }}</span></template>
-            <CatalogGroups :base="state.draft.base" :catalog="state.draft.document" :ui="state.draft.ui" v-model:renames="state.draft.ui.groupRenames" :active="state.draft.ui.tab === 'groups'" :disabled="!canEdit" @update:catalog="state.draft.document = $event" @refresh-catalog="refreshGroupCatalog" />
-          </TabPane>
-          <TabPane key="messages">
-            <template #tab
-              ><span class="catalog-tab-label"
-                ><IconifyIcon icon="lucide:message-square-text" />{{
-                  t('messages')
-                }}</span
-              ></template
-            >
-            <CatalogMessages
-              :catalog="state.draft.document"
-              :ui="state.draft.ui"
-              :disabled="!canEdit"
-              @open-resources="selectTab('resources')"
-          /></TabPane>
-          <TabPane key="diff">
-            <template #tab
-              ><span class="catalog-tab-label"
-                ><IconifyIcon icon="lucide:git-compare-arrows" />{{
-                  t('diff')
-                }}</span
-              ></template
-            >
-            <CatalogDiff
-              v-if="state.online"
-              :base="state.draft.base"
-              :document="state.draft.document"
-              :online="state.online"
-              :ui="state.draft.ui"
-              :changes="changes"
-              :conflicts="conflicts"
-              :problems="problems"
-              :fetched-at="state.fetchedAt"
-              :disabled="!canEdit"
-              :loading="state.loading"
-              @refresh="draft.refresh"
-              @rebase="draft.rebase"
-              @export="draft.exportDraft"
-            />
-            <Empty v-else :description="t('loadFailed')"
-              ><Button @click="draft.refresh">{{ t('retry') }}</Button></Empty
-            >
-          </TabPane>
-        </Tabs>
+        <CatalogDraftScope :draft="state.draft">
+          <Tabs
+            :active-key="state.draft.ui.tab"
+            :animated="false"
+            class="catalog-tabs"
+            @change="selectTab"
+          >
+            <TabPane key="languages">
+              <template #tab>
+                <span class="catalog-tab-label"
+                  ><IconifyIcon icon="lucide:languages" />{{
+                    t('languages')
+                  }}</span
+                >
+              </template>
+              <CatalogLanguages :disabled="!canEdit" />
+            </TabPane>
+            <TabPane key="scopes">
+              <template #tab>
+                <span class="catalog-tab-label">
+                  <IconifyIcon icon="lucide:layers" />{{ t('scopes') }}
+                </span>
+              </template>
+              <CatalogScopes :disabled="!canEdit" />
+            </TabPane>
+            <TabPane key="resources">
+              <template #tab>
+                <span class="catalog-tab-label"
+                  ><IconifyIcon icon="lucide:folder-tree" />{{
+                    t('resources')
+                  }}</span
+                >
+              </template>
+              <CatalogResources :disabled="!canEdit" :navigate="navigate" />
+            </TabPane>
+            <TabPane key="groups">
+              <template #tab
+                ><span class="catalog-tab-label"
+                  ><IconifyIcon icon="lucide:folder-key" />{{
+                    t('permissionGroups')
+                  }}</span
+                ></template
+              >
+              <CatalogGroups
+                :base="state.draft.base"
+                :catalog="state.draft.document"
+                v-model:renames="state.draft.ui.groupRenames"
+                :active="state.draft.ui.tab === 'groups'"
+                :disabled="!canEdit"
+                @update:catalog="state.draft.document = $event"
+                @refresh-catalog="refreshGroupCatalog"
+              />
+            </TabPane>
+            <TabPane key="messages">
+              <template #tab>
+                <span class="catalog-tab-label"
+                  ><IconifyIcon icon="lucide:message-square-text" />{{
+                    t('messages')
+                  }}</span
+                >
+              </template>
+              <CatalogMessages
+                :disabled="!canEdit"
+                @open-resources="selectTab('resources')"
+              />
+            </TabPane>
+            <TabPane key="diff">
+              <template #tab>
+                <span class="catalog-tab-label"
+                  ><IconifyIcon icon="lucide:git-compare-arrows" />{{
+                    t('diff')
+                  }}</span
+                >
+              </template>
+              <CatalogDiff
+                v-if="state.online"
+                :base="state.draft.base"
+                :document="state.draft.document"
+                :online="state.online"
+                :changes="changes"
+                :conflicts="conflicts"
+                :problems="problems"
+                :fetched-at="state.fetchedAt"
+                :disabled="!canEdit"
+                :loading="state.loading"
+                @refresh="draft.refresh"
+                @rebase="draft.rebase"
+                @export="draft.exportDraft"
+              />
+              <Empty
+                v-else
+                v-show="!state.error"
+                :description="t('loadFailed')"
+              >
+                <Button @click="draft.refresh">{{ t('retry') }}</Button>
+              </Empty>
+            </TabPane>
+          </Tabs>
+        </CatalogDraftScope>
       </div>
       <div v-if="state.draft" class="catalog-bottom">
         <span class="catalog-local-hint"
@@ -492,9 +586,9 @@ async function useExternal() {
           <p class="catalog-muted">{{ t('storageIsolation') }}</p>
           <div class="catalog-actions">
             <Button @click="draft.exportDraft">{{ t('exportDraft') }}</Button
-            ><Button :disabled="!canEdit" @click="importFile?.click()">{{
-              t('import')
-            }}</Button>
+            ><Button :disabled="!canEdit" @click="importFile?.click()">
+              {{ t('import') }}
+            </Button>
           </div>
           <input
             ref="importFile"
@@ -508,8 +602,9 @@ async function useExternal() {
             danger
             :disabled="!canEdit || !state.online"
             @click="confirmDiscard"
-            >{{ t('discardDraft') }}</Button
           >
+            {{ t('discardDraft') }}
+          </Button>
         </div>
       </Drawer>
     </template>

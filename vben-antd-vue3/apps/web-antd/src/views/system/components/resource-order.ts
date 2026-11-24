@@ -1,5 +1,7 @@
 import type { ResourceCatalog, ResourceChildOrder } from '#/api/system';
 
+import { requiredEntry } from '#/utils/required-entry';
+
 export const childOrderKey = (item: ResourceChildOrder) =>
   `${item.kind}:${item.key}`;
 
@@ -14,7 +16,7 @@ export function resourceChildren(
       ([key, node]) =>
         key.startsWith(`${scope}:`) && (node.parent ?? '') === parent,
     )
-    .sort(([a, x], [b, y]) => x.sort - y.sort || a.localeCompare(b))
+    .toSorted(([a, x], [b, y]) => x.sort - y.sort || a.localeCompare(b))
     .map(([key]) => ({ kind: 'node', key }));
   const references: ResourceChildOrder[] = (
     catalog.resources[parent]?.references ?? []
@@ -28,7 +30,7 @@ export function resourceChildren(
   for (const item of catalog.resources[parent]?.child_order ?? []) {
     const id = childOrderKey(item);
     if (available.has(id)) {
-      result.push(available.get(id)!);
+      result.push(requiredEntry(available.get(id), 'resource catalog entry'));
       available.delete(id);
     }
   }
@@ -50,12 +52,19 @@ export function storeResourceOrder(
         .map((item) => item.key);
   }
   if (owner?.reference_operations)
-    owner.reference_operations = Object.fromEntries(Object.entries(owner.reference_operations).filter(([target]) => owner.references?.includes(target)));
+    owner.reference_operations = Object.fromEntries(
+      Object.entries(owner.reference_operations).filter(([target]) =>
+        owner.references?.includes(target),
+      ),
+    );
   if (renumber)
     order
       .filter((item) => item.kind === 'node')
       .forEach((item, index) => {
         if (catalog.resources[item.key])
-          catalog.resources[item.key]!.sort = (index + 1) * 10;
+          requiredEntry(
+            catalog.resources[item.key],
+            'resource catalog entry',
+          ).sort = index;
       });
 }

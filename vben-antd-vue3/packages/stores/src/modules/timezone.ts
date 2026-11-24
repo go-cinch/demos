@@ -1,6 +1,8 @@
+import type { TimezoneChoice } from '@vben-core/preferences';
+
 import { ref, unref } from 'vue';
 
-import { DEFAULT_TIME_ZONE_OPTIONS } from '@vben-core/preferences';
+import { DEFAULT_TIMEZONE_CHOICES } from '@vben-core/preferences';
 import {
   getCurrentTimezone,
   setCurrentTimezone,
@@ -10,12 +12,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 
 interface TimezoneHandler {
   getTimezone?: () => Promise<null | string | undefined>;
-  getTimezoneOptions?: () => Promise<
-    {
-      label: string;
-      value: string;
-    }[]
-  >;
+  getTimezoneOptions?: () => Promise<TimezoneChoice[]>;
   setTimezone?: (timezone: string) => Promise<void>;
 }
 
@@ -26,14 +23,7 @@ interface TimezoneHandler {
 const getDefaultTimezoneHandler = (): TimezoneHandler => {
   return {
     getTimezoneOptions: () => {
-      return Promise.resolve(
-        DEFAULT_TIME_ZONE_OPTIONS.map((item) => {
-          return {
-            label: item.label,
-            value: item.timezone,
-          };
-        }),
-      );
+      return Promise.resolve(DEFAULT_TIMEZONE_CHOICES);
     },
   };
 };
@@ -59,69 +49,72 @@ const getTimezoneHandler = () => {
 /**
  * timezone支持模块
  */
-const useTimezoneStore = defineStore(
-  'core-timezone',
-  () => {
-    const timezoneRef = ref(getCurrentTimezone());
+const useTimezoneStore = defineStore('core-timezone', () => {
+  const timezoneRef = ref(getCurrentTimezone());
 
-    /**
-     * 初始化时区
-     * Initialize the timezone
-     */
-    async function initTimezone() {
-      const timezoneHandler = getTimezoneHandler();
-      const timezone = await timezoneHandler.getTimezone?.();
-      if (timezone) {
-        timezoneRef.value = timezone;
-      }
-      // 设置dayjs默认时区
-      setCurrentTimezone(unref(timezoneRef));
-    }
-
-    /**
-     * 设置时区
-     * Set the timezone
-     * @param timezone 时区字符串
-     */
-    async function setTimezone(timezone: string) {
-      const timezoneHandler = getTimezoneHandler();
-      await timezoneHandler.setTimezone?.(timezone);
+  /**
+   * 初始化时区
+   * Initialize the timezone
+   */
+  async function initTimezone() {
+    const timezoneHandler = getTimezoneHandler();
+    const timezone = await timezoneHandler.getTimezone?.();
+    if (timezone) {
       timezoneRef.value = timezone;
-      // 设置dayjs默认时区
-      setCurrentTimezone(timezone);
     }
+    // 设置dayjs默认时区
+    setCurrentTimezone(unref(timezoneRef));
+  }
 
-    /**
-     * 获取时区选项
-     * Get the timezone options
-     */
-    async function getTimezoneOptions() {
-      const timezoneHandler = getTimezoneHandler();
-      return (await timezoneHandler.getTimezoneOptions?.()) || [];
-    }
+  /**
+   * 设置时区
+   * Set the timezone
+   * @param timezone 时区字符串
+   */
+  function applyTimezone(timezone?: string) {
+    setCurrentTimezone(timezone || undefined);
+    timezoneRef.value = getCurrentTimezone();
+  }
 
-    initTimezone().catch((error) => {
-      console.error('Failed to initialize timezone during store setup:', error);
-    });
+  async function setTimezone(timezone: string) {
+    const timezoneHandler = getTimezoneHandler();
+    await timezoneHandler.setTimezone?.(timezone);
+    applyTimezone(timezone);
+  }
 
-    function $reset() {
-      timezoneRef.value = getCurrentTimezone();
-    }
+  /**
+   * 获取时区选项
+   * Get the timezone options
+   */
+  const optionsRef = ref<TimezoneChoice[]>(DEFAULT_TIMEZONE_CHOICES);
 
-    return {
-      timezone: timezoneRef,
-      setTimezone,
-      getTimezoneOptions,
-      $reset,
-    };
-  },
-  {
-    persist: {
-      // 持久化
-      pick: ['timezone'],
-    },
-  },
-);
+  async function getTimezoneOptions() {
+    const timezoneHandler = getTimezoneHandler();
+    const options = (await timezoneHandler.getTimezoneOptions?.()) || [];
+    const current = unref(timezoneRef);
+    optionsRef.value = options.some((item) => item.value === current)
+      ? options
+      : [...options, { label: current, value: current }];
+    return optionsRef.value;
+  }
+
+  initTimezone().catch((error) => {
+    console.error('Failed to initialize timezone during store setup:', error);
+  });
+
+  function $reset() {
+    timezoneRef.value = getCurrentTimezone();
+  }
+
+  return {
+    timezone: timezoneRef,
+    applyTimezone,
+    setTimezone,
+    getTimezoneOptions,
+    options: optionsRef,
+    $reset,
+  };
+});
 
 export { setTimezoneHandler, useTimezoneStore };
 

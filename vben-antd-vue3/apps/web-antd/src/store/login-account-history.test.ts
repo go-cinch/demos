@@ -1,3 +1,5 @@
+import { userCache } from '@vben/utils/cache';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,7 +9,7 @@ import {
   removeLoginAccount,
 } from './login-account-history';
 
-const key = () => `LOGIN_ACCOUNT_HISTORY_${location.hostname}`;
+const key = () => userCache.anonymous().key('login-accounts');
 
 describe('local login account history', () => {
   beforeEach(() => localStorage.clear());

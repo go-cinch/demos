@@ -4,7 +4,7 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 import type { MenuRecordRaw } from '@vben/types';
 
-import { computed, onMounted, useSlots, watch } from 'vue';
+import { computed, onMounted, useSlots, useTemplateRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { useRefresh } from '@vben/hooks';
@@ -12,6 +12,7 @@ import { $t, i18n } from '@vben/locales';
 import {
   preferences,
   updatePreferences,
+  updateUserPreferences,
   usePreferences,
 } from '@vben/preferences';
 import { useAccessStore, useTabbarStore, useTimezoneStore } from '@vben/stores';
@@ -22,6 +23,7 @@ import { VbenBackTop, VbenLogo } from '@vben-core/shadcn-ui';
 import { ELEMENT_ID_LAYOUT_SCROLL } from '@vben-core/shared/constants';
 
 import { Breadcrumb, CheckUpdates, Preferences } from '../widgets';
+import { provideOpenPreferences } from '../widgets/preferences/use-open-preferences';
 import { LayoutContent, LayoutContentSpinner } from './content';
 import { Copyright } from './copyright';
 import { LayoutFooter } from './footer';
@@ -51,6 +53,10 @@ const emit = defineEmits<{
   clickLogo: [];
   logout: [];
 }>();
+
+const preferencesDrawer =
+  useTemplateRef<InstanceType<typeof Preferences>>('preferencesDrawer');
+provideOpenPreferences(() => preferencesDrawer.value?.open());
 
 interface Props {
   /** 自定义 Logo 图片地址，不传则使用偏好设置默认值 */
@@ -204,7 +210,7 @@ function wrapperMenus(menus: MenuRecordRaw[], deep: boolean = true) {
 }
 
 function toggleSidebar() {
-  updatePreferences({
+  updateUserPreferences({
     sidebar: {
       hidden: !preferences.sidebar.hidden,
     },
@@ -266,8 +272,21 @@ function refreshAll() {
 // i18n.global.locale会在preference.app.locale变更之后才会更新，因此watchpreference.app.locale是不合适的，刷新页面时可能语言配置尚未完全加载完成
 watch(i18n.global.locale, refreshAll, { flush: 'post' });
 
-// 时区更新后，刷新页面
-watch(() => timezoneStore.timezone, refreshAll, { flush: 'post' });
+watch(
+  () => timezoneStore.timezone,
+  () => {
+    const reactiveTabs = new Set(
+      tabbarStore.tabs
+        .filter((tab) => tab.meta.reloadOnTimezoneChange === false)
+        .map((tab) => tab.name),
+    );
+    for (const name of tabbarStore.cachedTabs) {
+      if (!reactiveTabs.has(name)) tabbarStore.cachedTabs.delete(name);
+    }
+    if (route.meta.reloadOnTimezoneChange !== false) void refresh();
+  },
+  { flush: 'post' },
+);
 
 const slots: SetupContext['slots'] = useSlots();
 const headerSlots = computed(() => {
@@ -319,21 +338,22 @@ const headerSlots = computed(() => {
     @side-mouse-leave="handleSideMouseLeave"
     @toggle-sidebar="toggleSidebar"
     @update:sidebar-collapse="
-      (value: boolean) => updatePreferences({ sidebar: { collapsed: value } })
+      (value: boolean) =>
+        updateUserPreferences({ sidebar: { collapsed: value } })
     "
     @update:sidebar-enable="
-      (value: boolean) => updatePreferences({ sidebar: { enable: value } })
+      (value: boolean) => updateUserPreferences({ sidebar: { enable: value } })
     "
     @update:sidebar-expand-on-hover="
       (value: boolean) =>
-        updatePreferences({ sidebar: { expandOnHover: value } })
+        updateUserPreferences({ sidebar: { expandOnHover: value } })
     "
     @update:sidebar-extra-collapse="
       (value: boolean) =>
-        updatePreferences({ sidebar: { extraCollapse: value } })
+        updateUserPreferences({ sidebar: { extraCollapse: value } })
     "
     @update:sidebar-width="
-      (value: number) => updatePreferences({ sidebar: { width: value } })
+      (value: number) => updateUserPreferences({ sidebar: { width: value } })
     "
   >
     <!-- logo -->
@@ -489,12 +509,12 @@ const headerSlots = computed(() => {
         <slot v-if="accessStore.isLockScreen" name="lock-screen"></slot>
       </Transition>
 
-      <template v-if="preferencesButtonPosition.fixed">
-        <Preferences
-          class="fixed top-1/2 right-0 z-100 -translate-y-1/2 transform"
-          @clear-preferences-and-logout="clearPreferencesAndLogout"
-        />
-      </template>
+      <Preferences
+        ref="preferencesDrawer"
+        :show-button="preferencesButtonPosition.fixed"
+        class="fixed top-1/2 right-0 z-100 -translate-y-1/2 transform"
+        @clear-preferences-and-logout="clearPreferencesAndLogout"
+      />
       <VbenBackTop :target="layoutScrollTarget" />
     </template>
   </VbenAdminLayout>

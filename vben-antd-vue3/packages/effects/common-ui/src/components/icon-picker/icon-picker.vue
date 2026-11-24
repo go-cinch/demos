@@ -5,7 +5,7 @@ import { computed, ref, useAttrs, watch, watchEffect } from 'vue';
 
 import { usePagination } from '@vben/hooks';
 import { EmptyIcon, Grip, listIcons } from '@vben/icons';
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 
 import {
   Button,
@@ -137,7 +137,7 @@ function onKeywordChange(v: string) {
 
 const searchInputProps = computed(() => {
   return {
-    placeholder: $t('ui.iconPicker.search'),
+    placeholder: $placeholder('ui.iconPicker.search'),
     [props.modelValueProp]: keyword.value,
     [`onUpdate:${props.modelValueProp}`]: onKeywordChange,
     class: 'mx-2',
@@ -173,7 +173,7 @@ defineExpose({ toggleOpenState, open, close });
           v-if="props.inputComponent"
           :is="inputComponent"
           :[modelValueProp]="currentSelect"
-          :placeholder="$t('ui.iconPicker.placeholder')"
+          :placeholder="$placeholder('ui.iconPicker.placeholder')"
           role="combobox"
           :aria-label="$t('ui.iconPicker.placeholder')"
           aria-expanded="visible"
@@ -192,7 +192,7 @@ defineExpose({ toggleOpenState, open, close });
           <Input
             v-bind="$attrs"
             v-model="currentSelect"
-            :placeholder="$t('ui.iconPicker.placeholder')"
+            :placeholder="$placeholder('ui.iconPicker.placeholder')"
             class="h-8 w-full pr-8"
             role="combobox"
             :aria-label="$t('ui.iconPicker.placeholder')"
@@ -221,7 +221,7 @@ defineExpose({ toggleOpenState, open, close });
       <Input
         v-else
         class="mx-2 h-8 w-full"
-        :placeholder="$t('ui.iconPicker.search')"
+        :placeholder="$placeholder('ui.iconPicker.search')"
         v-model="keyword"
       />
     </div>

@@ -24,10 +24,7 @@ const logoDark = computed(() => preferences.logo.sourceDark);
     :page-title="$t('authentication.pageTitle')"
   >
     <template #illustration>
-      <AuthJourney
-        :dark="isDark"
-        :form-on-left="authPanelLeft"
-      />
+      <AuthJourney :dark="isDark" :form-on-left="authPanelLeft" />
     </template>
   </AuthPageLayout>
 </template>

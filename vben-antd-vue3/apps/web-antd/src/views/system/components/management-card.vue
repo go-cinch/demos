@@ -14,9 +14,11 @@ import { Card } from 'ant-design-vue';
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
 :deep(.system-table-row-striped > td) {
   background-color: rgb(127 127 127 / 6%) !important;
 }
+
 :deep(.ant-table-cell-fix-right) {
   background: hsl(var(--card)) !important;
 }

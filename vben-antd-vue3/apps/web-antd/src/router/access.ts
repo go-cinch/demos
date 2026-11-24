@@ -4,16 +4,23 @@ import type {
 } from '@vben/types';
 
 import type { PermissionMenu, PermissionNavigation } from '#/api/core/user';
-import { resourceNavigationRoutes } from './navigation';
 
 import { generateAccessible } from '@vben/access';
+import { userCache } from '@vben/utils/cache';
 
 import { BasicLayout, IFrameView } from '#/layouts';
 import { coreRouteNames } from '#/router/routes';
 
+import { resourceNavigationRoutes } from './navigation';
+
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
-async function generateAccess(options: GenerateMenuAndRoutesOptions & { permissionMenus?: PermissionMenu[]; navigation?: PermissionNavigation[] }) {
+async function generateAccess(
+  options: GenerateMenuAndRoutesOptions & {
+    permissionMenus?: PermissionMenu[];
+    navigation?: PermissionNavigation[];
+  },
+) {
   const pageMap: ComponentRecordType = import.meta.glob('../views/**/*.vue');
 
   const layoutMap: ComponentRecordType = {
@@ -23,10 +30,18 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions & { permissi
 
   // Remove prior business routes before rebuilding the current navigation.
   const root = options.router.getRoutes().find((route) => route.path === '/');
-  if (root) root.children = root.children.filter((route) => coreRouteNames.includes(route.name as string));
+  if (root)
+    root.children = root.children.filter((route) =>
+      coreRouteNames.includes(route.name as string),
+    );
   return await generateAccessible('frontend', {
     ...options,
-    routes: resourceNavigationRoutes(options.routes, options.permissionMenus ?? [], options.navigation ?? []),
+    isCurrent: userCache.capture(),
+    routes: resourceNavigationRoutes(
+      options.routes,
+      options.permissionMenus ?? [],
+      options.navigation ?? [],
+    ),
     // 可以指定没有权限跳转403页面
     forbiddenComponent,
     // 如果 route.meta.menuVisibleWithForbidden = true

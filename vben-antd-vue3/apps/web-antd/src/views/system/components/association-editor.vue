@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ActionRecord, UserSummary } from '#/api';
 import type { MsgUser } from '#/api/msg';
+import type { LoadFailure } from '#/api/request-error';
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -19,14 +20,15 @@ import {
 
 import { listActions, listUsers } from '#/api';
 import { msgApi } from '#/api/msg';
+import { loadFailure } from '#/api/request-error';
+import LoadWarning from '#/components/load-warning.vue';
 import SearchAutocomplete from '#/components/search-autocomplete.vue';
 import { searchSuggestionGroups } from '#/components/search-suggestions';
-import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
-import PermissionCard from './permission-card.vue';
 import { isHighRiskAction } from './assignment-policy';
+import PermissionCard from './permission-card.vue';
 import { splitLines } from './system-record-format';
 
 type Key = number | string;
@@ -41,7 +43,7 @@ const props = withDefaults(
     disabled?: boolean;
     groupId?: number;
   }>(),
-  { value: () => [], records: () => [], disabled: false },
+  { groupId: undefined, value: () => [], records: () => [], disabled: false },
 );
 const emit = defineEmits<{ 'update:value': [value: Key[]] }>();
 const formItem = Form.useInjectFormItemContext();
@@ -50,13 +52,20 @@ const query = ref('');
 const searchInput = ref<InstanceType<typeof SearchAutocomplete>>();
 const addButton = ref<InstanceType<typeof Button>>();
 const loading = ref(false);
-const failed = ref(false);
+const failed = ref<LoadFailure>(false);
 const results = ref<Entry[]>([]);
 const cache = ref(new Map<Key, Entry>());
 const pending = ref<Key[]>([]);
 const history = ref<string[]>([]);
-const searchOptions = computed(() => searchSuggestionGroups(query.value.trim() ? results.value.map(name).slice(0, 8) : [], history.value));
-function removeHistory(value: string) { history.value = history.value.filter((item) => item !== value); }
+const searchOptions = computed(() =>
+  searchSuggestionGroups(
+    query.value.trim() ? results.value.map(name).slice(0, 8) : [],
+    history.value,
+  ),
+);
+function removeHistory(value: string) {
+  history.value = history.value.filter((item) => item !== value);
+}
 const page = ref(1);
 const more = ref(false);
 const removed = ref<{ index: number; key: Key }>();
@@ -68,7 +77,8 @@ function key(item: Entry): Key {
   return 'word' in item ? item.code : item.id;
 }
 function name(item: Entry) {
-  if ('word' in item && $te(`actions.${item.word}`)) return $t(`actions.${item.word}`);
+  if ('word' in item && $te(`actions.${item.word}`))
+    return $t(`actions.${item.word}`);
   return 'name' in item ? item.name : item.username;
 }
 function entryLabel(value: Key) {
@@ -80,19 +90,49 @@ function permission(value: Key) {
   return item && 'word' in item ? item : undefined;
 }
 function secondary(item: Entry) {
-  return 'word' in item
-    ? item.word
-    : 'code' in item
-      ? item.code
-      : `#${item.id}`;
+  if ('word' in item) {
+    return item.word;
+  }
+  if ('code' in item) {
+    return item.code;
+  }
+  return `#${item.id}`;
 }
 function permissionDetails(item: ActionOption) {
-  const label = (kind: string, key: string) => $te(`${kind}.${key}`) ? $t(`${kind}.${key}`) : key;
+  const label = (kind: string, key: string) =>
+    $te(`${kind}.${key}`) ? $t(`${kind}.${key}`) : key;
   return [
-    { key: 'scope', label: 'action-editor.scope', color: 'cyan', values: [label('scopes', item.scope ?? item.word.split(':')[0] ?? '')] },
-    { key: 'operation', label: 'action-editor.operation', color: 'cyan', values: [label('action-editor.operations', item.word.split(':')[1] ?? '')] },
-    { key: 'menu', label: 'action-editor.page', color: 'blue', values: item.config?.ui.map((entry) => label('menus', entry.menu_key)) ?? splitLines(item.menu) },
-    { key: 'button', label: 'system.fields.buttonPermission', color: 'purple', values: item.config?.ui.flatMap((entry) => (entry.button_keys ?? []).map((key) => label('buttons', key))) ?? splitLines(item.button) },
+    {
+      key: 'scope',
+      label: 'action-editor.scope',
+      color: 'cyan',
+      values: [label('scopes', item.scope ?? item.word.split(':')[0] ?? '')],
+    },
+    {
+      key: 'operation',
+      label: 'action-editor.operation',
+      color: 'cyan',
+      values: [
+        label('action-editor.operations', item.word.split(':')[1] ?? ''),
+      ],
+    },
+    {
+      key: 'menu',
+      label: 'action-editor.page',
+      color: 'blue',
+      values:
+        item.config?.ui.map((entry) => label('menus', entry.menu_key)) ??
+        splitLines(item.menu),
+    },
+    {
+      key: 'button',
+      label: 'system.fields.buttonPermission',
+      color: 'purple',
+      values:
+        item.config?.ui.flatMap((entry) =>
+          (entry.button_keys ?? []).map((key) => label('buttons', key)),
+        ) ?? splitLines(item.button),
+    },
   ];
 }
 function remember(items: Entry[]) {
@@ -128,8 +168,17 @@ async function load(request: number, append = false) {
       const params = { p: page.value, q: text || undefined, s: 20 };
       const result =
         props.kind === 'action'
-          ? await listActions({ ...params, f: 'id,code,name,group,word,scope,config,resource,menu,button' })
-          : await listUsers({ ...params, f: 'id,username,code', ...(props.groupId ? { exclude_user_group_id: props.groupId } : {}) });
+          ? await listActions({
+              ...params,
+              f: 'id,code,name,group,word,scope,config,resource,menu,button',
+            })
+          : await listUsers({
+              ...params,
+              f: 'id,username,code',
+              ...(props.groupId
+                ? { exclude_user_group_id: props.groupId }
+                : {}),
+            });
       items = result.items;
       hasMore = result.p * result.s < result.t;
     }
@@ -141,8 +190,8 @@ async function load(request: number, append = false) {
     for (const item of items) unique.set(key(item), item);
     results.value = [...unique.values()];
     more.value = hasMore;
-  } catch {
-    if (request === generation) failed.value = true;
+  } catch (requestError) {
+    if (request === generation) failed.value = loadFailure(requestError);
   } finally {
     if (request === generation) loading.value = false;
   }
@@ -206,7 +255,7 @@ function segments(text: string) {
   const needle = query.value.trim();
   if (!needle) return [{ text, match: false }];
   const start = text.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase());
-  return start < 0
+  return start === -1
     ? [{ text, match: false }]
     : [
         { text: text.slice(0, start), match: false },
@@ -235,7 +284,7 @@ onBeforeUnmount(() => {
             :code="String(selectedKey)"
           >
             <template #action>
-<Button
+              <Button
                 class="remove-association"
                 :disabled="disabled"
                 :aria-label="
@@ -244,10 +293,10 @@ onBeforeUnmount(() => {
                   })
                 "
                 @click="remove(selectedKey)"
-                >
-<IconifyIcon icon="lucide:minus" />
-</Button>
-</template>
+              >
+                <IconifyIcon icon="lucide:minus" />
+              </Button>
+            </template>
           </PermissionCard>
           <article
             v-else
@@ -255,12 +304,11 @@ onBeforeUnmount(() => {
             :aria-label="entryLabel(selectedKey)"
           >
             <Avatar :size="34">
-{{
-              [...entryLabel(selectedKey)][0]?.toUpperCase()
-            }}
-</Avatar>
+              {{ [...entryLabel(selectedKey)][0]?.toUpperCase() }}
+            </Avatar>
             <div>
-              <strong>{{ entryLabel(selectedKey) }}</strong><span v-if="kind !== 'recipient'">{{
+              <strong>{{ entryLabel(selectedKey) }}</strong
+              ><span v-if="kind !== 'recipient'">{{
                 cache.get(selectedKey)
                   ? secondary(cache.get(selectedKey)!)
                   : `#${selectedKey}`
@@ -275,20 +323,19 @@ onBeforeUnmount(() => {
                 })
               "
               @click="remove(selectedKey)"
-              >
-<IconifyIcon icon="lucide:minus" />
-</Button>
+            >
+              <IconifyIcon icon="lucide:minus" />
+            </Button>
           </article>
         </template>
       </div>
       <div v-if="removed" class="association-undo" role="status">
         <span>{{
           $t('system-editor.removedItem', { name: entryLabel(removed.key) })
-        }}</span><Button type="link" size="small" :disabled="disabled" @click="undo">
-{{
-          $t('system-editor.undo')
-        }}
-</Button>
+        }}</span
+        ><Button type="link" size="small" :disabled="disabled" @click="undo">
+          {{ $t('system-editor.undo') }}
+        </Button>
       </div>
       <Button
         v-if="!open"
@@ -298,11 +345,11 @@ onBeforeUnmount(() => {
         class="association-add"
         :disabled="disabled"
         @click="show"
-        >
-<IconifyIcon icon="lucide:plus" />{{
+      >
+        <IconifyIcon icon="lucide:plus" />{{
           $t('system-editor.addItem', { entity: label })
         }}
-</Button>
+      </Button>
       <section
         v-else
         class="association-picker"
@@ -315,9 +362,9 @@ onBeforeUnmount(() => {
             type="text"
             :aria-label="$t('system-cards.close')"
             @click="close"
-            >
-<IconifyIcon icon="lucide:x" />
-</Button>
+          >
+            <IconifyIcon icon="lucide:x" />
+          </Button>
         </header>
         <div class="association-search">
           <SearchAutocomplete
@@ -335,25 +382,39 @@ onBeforeUnmount(() => {
               <Input
                 :disabled="disabled"
                 allow-clear
-                :aria-label="$t('system-editor.searchAssociation', { entity: label })"
-                :placeholder="$t(kind === 'action' ? 'system-editor.searchPermission' : kind === 'recipient' ? 'system-editor.searchRecipient' : 'system-editor.searchMember')"
-              ><template #prefix><IconifyIcon icon="lucide:search" /></template></Input>
+                :aria-label="
+                  $t('system-editor.searchAssociation', { entity: label })
+                "
+                :placeholder="
+                  $t(
+                    kind === 'action'
+                      ? 'system-editor.searchPermission'
+                      : kind === 'recipient'
+                        ? 'system-editor.searchRecipient'
+                        : 'system-editor.searchMember',
+                  )
+                "
+              >
+                <template #prefix
+                  ><IconifyIcon icon="lucide:search"
+                /></template>
+              </Input>
             </template>
           </SearchAutocomplete>
         </div>
         <LoadWarning
           v-if="failed"
+          :failure="failed"
           class="association-warning"
-          >
-<template #action>
-<Button size="small" @click="search(query, true)">
-{{
-              $t('system-cards.retry')
-            }}
-</Button>
-</template>
-</LoadWarning>
-        <div v-skeleton="loading" class="association-results" :aria-busy="loading">
+          :retry-label="$t('system-cards.retry')"
+          retry-size="small"
+          @retry="search(query, true)"
+        />
+        <div
+          v-skeleton="loading"
+          class="association-results"
+          :aria-busy="loading"
+        >
           <Checkbox
             v-for="item in results"
             :key="key(item)"
@@ -364,13 +425,25 @@ onBeforeUnmount(() => {
           >
             <span class="result-content">
               <strong class="result-title">
-                <span><span
+                <span
+                  ><span
                     v-for="(part, index) in segments(name(item))"
                     :key="index"
                     :class="{ matched: part.match }"
-                    >{{ part.text }}</span></span>
+                    >{{ part.text }}</span
+                  ></span
+                >
                 <Tag
-                  v-if="'word' in item && (isHighRiskAction(item.word, item.config?.builtin, item.config?.permission_scope, item.config?.permission_scopes) || (item.resource ?? '').includes('*'))"
+                  v-if="
+                    'word' in item &&
+                    (isHighRiskAction(
+                      item.word,
+                      item.config?.builtin,
+                      item.config?.permission_scope,
+                      item.config?.permission_scopes,
+                    ) ||
+                      (item.resource ?? '').includes('*'))
+                  "
                   color="red"
                   class="result-risk"
                 >
@@ -384,21 +457,26 @@ onBeforeUnmount(() => {
                     v-for="(part, index) in segments(item.word)"
                     :key="index"
                     :class="{ matched: part.match }"
-                    >{{ part.text }}</span>
+                    >{{ part.text }}</span
+                  >
                 </Tag>
                 <Tag :title="$t('system.fields.code')">
                   <span
                     v-for="(part, index) in segments(item.code)"
                     :key="index"
                     :class="{ matched: part.match }"
-                    >{{ part.text }}</span>
+                    >{{ part.text }}</span
+                  >
                 </Tag>
               </span>
-              <span v-else><span
+              <span v-else
+                ><span
                   v-for="(part, index) in segments(secondary(item))"
                   :key="index"
                   :class="{ matched: part.match }"
-                  >{{ part.text }}</span></span>
+                  >{{ part.text }}</span
+                ></span
+              >
               <span v-if="'word' in item" class="result-rules">
                 <span
                   v-for="field in permissionDetails(item)"
@@ -406,23 +484,35 @@ onBeforeUnmount(() => {
                   class="result-rule"
                   :data-permission-field="field.key"
                 >
-                  <Tag :color="field.color" class="result-rule-label">{{ $t(field.label) }}</Tag>
+                  <Tag :color="field.color" class="result-rule-label">{{
+                    $t(field.label)
+                  }}</Tag>
                   <span class="result-rule-values">
-                    <code v-for="(ruleValue, index) in field.values" :key="index">{{ ruleValue }}</code>
+                    <code
+                      v-for="(ruleValue, index) in field.values"
+                      :key="index"
+                      >{{ ruleValue }}</code
+                    >
                     <span v-if="!field.values.length">—</span>
                   </span>
                 </span>
               </span>
             </span>
             <Tag v-if="selected.has(key(item))">
-{{
-              $t('system-editor.alreadyAdded')
-            }}
-</Tag><span v-else-if="'group' in item" class="result-group">{{
+              {{ $t('system-editor.alreadyAdded') }} </Tag
+            ><span v-else-if="'group' in item" class="result-group">{{
               item.group
             }}</span>
           </Checkbox>
-          <div v-if="loading && !results.length" class="association-placeholders" aria-hidden="true"><div v-for="index in 5" :key="index" class="association-result"><span>────────────────</span></div></div>
+          <div
+            v-if="loading && !results.length"
+            class="association-placeholders"
+            aria-hidden="true"
+          >
+            <div v-for="index in 5" :key="index" class="association-result">
+              <span>────────────────</span>
+            </div>
+          </div>
           <p v-else-if="!failed && !results.length" class="picker-state">
             {{ $t('system-editor.noMatches') }}
           </p>
@@ -432,22 +522,21 @@ onBeforeUnmount(() => {
             block
             :disabled="loading"
             @click="loadMore"
-            >
-{{ $t('system-editor.loadMore') }}
-</Button>
+          >
+            {{ $t('system-editor.loadMore') }}
+          </Button>
         </div>
         <footer>
           <span aria-live="polite">{{
             $t('system-editor.selectedCount', { count: pending.length })
-          }}</span><Button
+          }}</span
+          ><Button
             type="primary"
             :disabled="disabled || !pending.length || loading"
             @click="add"
-            >
-{{
-              $t('system-editor.addSelected', { count: pending.length })
-            }}
-</Button>
+          >
+            {{ $t('system-editor.addSelected', { count: pending.length }) }}
+          </Button>
         </footer>
       </section>
     </div>
@@ -458,45 +547,53 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 12px;
 }
+
 .association-add {
   display: flex;
+  gap: 7px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
   min-height: 38px;
   margin-top: 12px;
   color: hsl(var(--primary));
 }
+
 .member-card {
   display: flex;
-  align-items: center;
   gap: 12px;
+  align-items: center;
   padding: 14px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) * 0.875);
 }
+
 .member-card > div {
   flex: 1;
   min-width: 0;
 }
+
 .member-card strong,
 .member-card span {
   display: block;
   overflow-wrap: anywhere;
 }
+
 .member-card strong {
   font-size: 14px;
   font-weight: 500;
 }
+
 .member-card span {
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
+
 .member-card :deep(.ant-avatar) {
   flex: none;
   color: hsl(var(--primary));
   background: hsl(var(--primary) / 10%);
 }
+
 .remove-association {
   display: inline-flex;
   flex: none;
@@ -507,59 +604,70 @@ onBeforeUnmount(() => {
   padding: 0;
   color: hsl(var(--muted-foreground));
 }
+
 .remove-association:hover:not(:disabled) {
   color: hsl(var(--destructive));
   border-color: hsl(var(--destructive));
 }
+
 .association-undo {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   padding: 8px 10px;
   margin-top: 12px;
-  background: hsl(var(--muted) / 40%);
   font-size: 12px;
+  background: hsl(var(--muted) / 40%);
 }
+
 .association-picker {
   margin-top: 12px;
-  border: 1px solid hsl(var(--primary) / 50%);
-  border-radius: calc(var(--radius) * 0.875);
   overflow: hidden;
   background: hsl(var(--card));
+  border: 1px solid hsl(var(--primary) / 50%);
+  border-radius: calc(var(--radius) * 0.875);
 }
+
 .association-picker header,
 .association-picker footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
   gap: 12px;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 14px;
 }
+
 .association-picker header h4 {
   margin: 0;
   font-size: 13px;
   font-weight: 500;
 }
+
 .association-picker footer {
-  border-top: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 25%);
+  border-top: 1px solid hsl(var(--border));
 }
+
 .association-picker footer > span {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
 }
+
 .association-search {
   padding: 0 14px 12px;
 }
+
 .association-picker .association-warning {
   margin: 0 14px 12px;
 }
+
 .association-results {
   max-height: 300px;
   overflow: auto;
   border-top: 1px solid hsl(var(--border));
 }
+
 .association-result {
   display: flex;
   align-items: flex-start;
@@ -568,80 +676,95 @@ onBeforeUnmount(() => {
   margin: 0;
   border-bottom: 1px solid hsl(var(--border));
 }
+
 .association-result :deep(.ant-checkbox) {
   top: 4px;
 }
+
 .association-result :deep(.ant-checkbox + span) {
   display: flex;
   flex: 1;
-  align-items: flex-start;
   gap: 10px;
+  align-items: flex-start;
   min-width: 0;
   padding-right: 0;
 }
+
 .result-content {
   display: block;
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
 .result-content > strong,
 .result-content > span,
 .result-content > code {
   display: block;
 }
+
 .result-content strong {
   font-weight: 500;
 }
+
 .result-content > span,
 .result-content code,
 .result-group {
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
+
 .result-content code {
   max-height: 54px;
   overflow: auto;
   white-space: pre-wrap;
 }
+
 .result-content > .result-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   margin: 4px 0;
 }
+
 .result-tags :deep(.ant-tag) {
   max-width: 100%;
   margin: 0;
-  white-space: normal;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
+
 .result-content > .result-title {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 6px;
+  align-items: center;
 }
+
 .result-risk {
   display: inline-flex;
-  align-items: center;
   gap: 4px;
+  align-items: center;
   margin: 0;
 }
+
 .result-content > .result-rules {
   display: grid;
   gap: 6px;
   margin-top: 8px;
 }
+
 .result-rule {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 8px;
   align-items: start;
 }
+
 .result-rule-label {
   margin: 0;
 }
+
 .result-rule-values {
   display: flex;
   flex-direction: column;
@@ -649,15 +772,18 @@ onBeforeUnmount(() => {
   max-height: 96px;
   overflow: auto;
 }
+
 .result-rule-values code {
   display: block;
   max-height: none;
   overflow: visible;
 }
+
 .matched {
-  color: #ef4444;
   font-weight: 600;
+  color: #ef4444;
 }
+
 .picker-state {
   display: grid;
   place-items: center;
@@ -668,5 +794,9 @@ onBeforeUnmount(() => {
 </style>
 
 <style scoped>
-.association-results { height: 320px; overflow: auto; scrollbar-gutter: stable; }
+.association-results {
+  height: 320px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
 </style>

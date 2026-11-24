@@ -162,7 +162,27 @@
     },
     "timezone": {
       "setTimezone": "设置时区",
-      "setSuccess": "时区设置成功"
+      "setSuccess": "时区设置成功",
+      "save": "保存",
+      "search": "搜索城市、时区或 UTC 偏移",
+      "region": "时区区域",
+      "common": "常用时区",
+      "offset": "当前 UTC 偏移",
+      "selected": "所选时区",
+      "dst": "偏移随夏令时自动调整",
+      "loading": "正在加载时区",
+      "loadFailed": "时区加载失败",
+      "retry": "重试",
+      "empty": "未找到匹配的时区",
+      "regions": {
+        "All": "全部",
+        "Asia": "亚洲",
+        "Europe": "欧洲",
+        "Americas": "美洲",
+        "Oceania": "大洋洲",
+        "Africa": "非洲",
+        "Other": "其他"
+      }
     }
   }
 }

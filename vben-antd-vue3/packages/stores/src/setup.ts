@@ -2,100 +2,98 @@ import type { Pinia } from 'pinia';
 
 import type { App } from 'vue';
 
+import { watch } from 'vue';
+
+import { userCache } from '@vben-core/shared/cache';
+
 import { createPinia } from 'pinia';
-import SecureLS from 'secure-ls';
+
+import { useAccessStore, useTabbarStore, useUserStore } from './modules';
+import { browserSession } from './session-persistence';
 
 let pinia: Pinia;
 
-type SecureLSStorage = {
-  get(key: string): any;
-  set(key: string, value: unknown): void;
-};
-
-type PersistStorage = {
-  getItem(key: string): null | string;
-  setItem(key: string, value: string): void;
-};
-
-type SecureLSCtor = new (config?: {
-  encodingType?: string;
-  encryptionSecret?: string;
-  isCompression?: boolean;
-  metaKey?: string;
-}) => SecureLSStorage;
-
-const secureLSModule = SecureLS as unknown as {
-  default?: SecureLSCtor;
-  SecureLS?: SecureLSCtor;
-};
-
-const SecureLSConstructor =
-  secureLSModule.default ??
-  secureLSModule.SecureLS ??
-  (SecureLS as unknown as SecureLSCtor);
-
 export interface InitStoreOptions {
-  /**
-   * @zh_CN 应用名,由于 @vben/stores 是公用的，后续可能有多个app，为了防止多个app缓存冲突，可在这里配置应用名,应用名将被用于持久化的前缀
-   */
   namespace: string;
 }
 
-/**
- * @zh_CN 初始化pinia
- */
-export async function initStores(app: App, options: InitStoreOptions) {
+export async function initStores(app: App, { namespace }: InitStoreOptions) {
   const { createPersistedState } = await import('pinia-plugin-persistedstate');
   pinia = createPinia();
-  const { namespace } = options;
-  const ls = new SecureLSConstructor({
-    encodingType: 'aes',
-    encryptionSecret: import.meta.env.VITE_APP_STORE_SECURE_KEY,
-    isCompression: true,
-    metaKey: `${namespace}-secure-meta`,
-  });
-  const storage: PersistStorage = import.meta.env.DEV
-    ? localStorage
-    : {
-        getItem(key) {
-          const value = ls.get(key);
-          return typeof value === 'string' ? value : null;
-        },
-        setItem(key, value) {
-          ls.set(key, value);
-        },
-      };
-  const legacyAccessKey = `${namespace}-core-access`;
-  const legacyAccess = storage.getItem(legacyAccessKey);
-  if (legacyAccess) {
-    try {
-      const value = JSON.parse(legacyAccess);
-      if (value && typeof value === 'object') {
-        delete value.accessToken;
-        storage.setItem(legacyAccessKey, JSON.stringify(value));
-      }
-    } catch {
-      storage.setItem(legacyAccessKey, '{}');
-    }
-  }
-  pinia.use(
+  pinia.use((context) => {
+    if (!context.options.persist) return;
+    let cache = userCache.current().child('pinia');
+    let switching = false;
     createPersistedState({
-      // key $appName-$store.id
-      key: (storeKey) => `${namespace}-${storeKey}`,
-      storage,
-    }),
-  );
+      storage: {
+        getItem: (key) => cache.getItem(key),
+        setItem: (key, raw) => {
+          if (!switching) cache.setItem(key, raw);
+        },
+      },
+    })(context);
+    const store = context.store;
+    const stop = userCache.onChange(() => {
+      store.$persist();
+      switching = true;
+      try {
+        cache = userCache.current().child('pinia');
+        store.$reset();
+        store.$hydrate();
+      } finally {
+        switching = false;
+      }
+    });
+    const dispose = store.$dispose;
+    store.$dispose = () => {
+      stop();
+      dispose();
+    };
+  });
   app.use(pinia);
+  const access = useAccessStore(pinia);
+  const restored = browserSession.initialize(namespace);
+  if (restored) {
+    access.setRefreshToken(restored.token);
+    if (restored.lock) access.lockScreen(restored.lock);
+  }
+  watch(
+    () => access.lockScreenPassword,
+    (password) => browserSession.lock(password),
+    { flush: 'sync' },
+  );
+
+  const tabs = useTabbarStore(pinia);
+  let restoring = false;
+  let cache = userCache.current('session');
+  userCache.onChange(() => {
+    access.setAccessCodes([]);
+    access.setAccessMenus([]);
+    access.setAccessRoutes([]);
+    access.setIsAccessChecked(false);
+    useUserStore(pinia).$reset();
+    cache = userCache.current('session');
+    restoring = true;
+    try {
+      tabs.restoreWorkspace(cache.get('workspace'));
+    } finally {
+      restoring = false;
+    }
+  });
+  tabs.$subscribe(
+    (_mutation, state) => {
+      if (!restoring && userCache.account)
+        cache.set('workspace', {
+          tabs: state.tabs,
+          visitHistory: state.visitHistory,
+        });
+    },
+    { detached: true, flush: 'sync' },
+  );
   return pinia;
 }
 
 export function resetAllStores() {
-  if (!pinia) {
-    console.error('Pinia is not installed');
-    return;
-  }
-  const allStores = (pinia as any)._s;
-  for (const [_key, store] of allStores) {
-    store.$reset();
-  }
+  if (!pinia) return;
+  for (const store of (pinia as any)._s.values()) store.$reset();
 }

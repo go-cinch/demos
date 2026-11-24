@@ -62,13 +62,6 @@ export function useManagementFormatting(resource: () => ResourceKind) {
       : undefined;
   }
 
-  function userPasswordChangeFailures(record: Recordable<any>) {
-    const value = record.metadata?.password_change_failures;
-    return typeof value === 'number' && Number.isInteger(value) && value > 0
-      ? value
-      : 0;
-  }
-
   function disablePastDate(value: Dayjs) {
     return value.endOf('day').isBefore(dayjs());
   }
@@ -127,7 +120,6 @@ export function useManagementFormatting(resource: () => ResourceKind) {
     formatDate,
     formatLockExpiration,
     userLockExpiration,
-    userPasswordChangeFailures,
     disablePastDate,
     resourceRules,
     resourceRuleColor,

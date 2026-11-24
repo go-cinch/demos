@@ -1,0 +1,426 @@
+/* Editing keeps one section and one operation in focus. */
+.catalog-node-editor {
+  scroll-margin-top: 76px;
+}
+
+.catalog-node-editor .catalog-node-heading {
+  position: sticky;
+  top: 60px;
+  z-index: 1;
+  padding: 16px 0;
+  margin: -8px 0 0;
+  background: hsl(var(--card));
+}
+
+.catalog-node-editor .catalog-node-form {
+  max-width: none;
+}
+
+.catalog-node-editor .catalog-node-error {
+  margin-top: 16px;
+}
+
+.catalog-node-tabs > .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.catalog-editor-tab {
+  gap: 7px;
+}
+
+.catalog-editor-tab > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.catalog-editor-section-heading {
+  margin-bottom: 20px;
+}
+
+.catalog-section-title > .catalog-editor-section-heading {
+  margin: 0;
+}
+
+.catalog-node-editor .catalog-node-type {
+  margin-bottom: 20px;
+}
+
+.catalog-entry-editor-title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.catalog-entry-editor-title > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: hsl(var(--primary));
+}
+
+.catalog-entry-editor-title > div {
+  min-width: 0;
+}
+
+.catalog-entry-editor-title .ant-tag {
+  margin-left: auto;
+}
+
+.catalog-entry-editor .ant-collapse-header,
+.catalog-feature-editor .ant-collapse-header {
+  align-items: center !important;
+}
+
+.catalog-entry-editor .ant-collapse-content-box,
+.catalog-feature-editor .ant-collapse-content-box {
+  padding: 20px;
+}
+
+.catalog-operation-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.catalog-operation-settings > .catalog-editor-section-heading {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+.catalog-operation-settings > .catalog-resource-permission-scope {
+  flex: 0 1 480px;
+  margin: 0;
+}
+
+.catalog-operation-workbench {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.catalog-operation-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.catalog-operation-choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-right: 12px;
+  background: hsl(var(--muted) / 25%);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.75);
+}
+
+.catalog-operation-choice--active {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 6%);
+  border-color: hsl(var(--primary) / 30%);
+}
+
+.catalog-operation-select {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 13px 0 13px 12px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.5);
+}
+
+.catalog-operation-select:hover {
+  color: hsl(var(--primary));
+}
+
+.catalog-operation-select:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+.catalog-operation-select > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.catalog-operation-choice strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.catalog-operation-choice code {
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-operation-config {
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid hsl(var(--border));
+}
+
+.catalog-operation-config-heading h3 {
+  margin: 0;
+}
+
+.catalog-feature-editor-title {
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.catalog-feature-editor-title > .catalog-muted {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.catalog-feature-editor {
+  margin: 0;
+}
+
+.catalog-feature-editor > .ant-collapse-item > .ant-collapse-header {
+  scroll-margin-top: 164px;
+}
+
+.catalog-feature-panel--highlighted > .ant-collapse-header {
+  background: hsl(var(--primary) / 16%);
+  box-shadow: inset 3px 0 hsl(var(--primary));
+  animation: catalog-feature-jump 2s ease-out both;
+}
+
+@keyframes catalog-feature-jump {
+  60% {
+    background: hsl(var(--primary) / 16%);
+    box-shadow: inset 3px 0 hsl(var(--primary));
+  }
+
+  100% {
+    background: transparent;
+    box-shadow: inset 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-feature-panel--highlighted > .ant-collapse-header {
+    animation: none;
+  }
+}
+
+.catalog-mapping-editor {
+  padding: 16px;
+  margin-top: 16px;
+  background: hsl(var(--muted) / 20%);
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) * 0.75);
+}
+
+.catalog-mapping-editor-heading {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.catalog-mapping-editor-heading h4 {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+}
+
+.catalog-mapping-editor-heading h4 > svg,
+.catalog-mapping-editor-heading .ant-btn svg,
+.catalog-inline-mapping .ant-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.catalog-mapping-editor .catalog-inline-mapping:last-child {
+  margin-bottom: 0;
+}
+
+.catalog-http-labels {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 32px;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-mapping-placeholder {
+  margin: 0;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-mapping-note {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-mapping-note > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+.catalog-editor-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 210px;
+  padding: 28px 20px;
+  text-align: center;
+  background: hsl(var(--muted) / 15%);
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+}
+
+.catalog-editor-empty > svg {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 4px;
+  color: hsl(var(--muted-foreground));
+}
+
+.catalog-editor-empty > p {
+  max-width: 400px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 1280px) {
+  .catalog-operation-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .catalog-operation-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalog-operation-config {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .catalog-mapping-group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  .catalog-section-title {
+    flex-wrap: wrap;
+  }
+
+  .catalog-inline-empty {
+    flex-wrap: wrap;
+  }
+
+  .catalog-inline-empty > div {
+    min-width: 160px;
+  }
+
+  .catalog-operation-counts {
+    gap: 8px;
+  }
+
+  .catalog-node-editor .catalog-node-heading {
+    position: static;
+  }
+
+  .catalog-feature-editor > .ant-collapse-item > .ant-collapse-header {
+    scroll-margin-top: 64px;
+  }
+
+  .catalog-entry-editor .ant-collapse-content-box,
+  .catalog-feature-editor .ant-collapse-content-box {
+    padding: 14px;
+  }
+}
+
+.catalog-reference-operation-options {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.catalog-reference-operation-options .ant-checkbox-wrapper {
+  margin: 0;
+  font-size: 12px;
+}
+
+.catalog-reference-option {
+  padding: 6px 0;
+}
+
+.catalog-reference-selected-row {
+  flex-wrap: wrap;
+}
+
+.catalog-reference-selected-operations,
+.catalog-reference-operation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.catalog-reference-operation-tags {
+  margin-top: 8px;
+}
+
+.catalog-reference-selected-operations .ant-tag,
+.catalog-reference-operation-tags .ant-tag {
+  margin: 0;
+}
+
+.catalog-tree-title > small {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catalog-reference-add-form {
+  display: grid;
+  flex-basis: 100%;
+  gap: 12px;
+  padding: 12px;
+  margin: 4px 0 4px 22px;
+  background: hsl(var(--muted) / 45%);
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) * 0.75);
+}
+
+.catalog-reference-add-form .catalog-reference-operation-options {
+  margin-left: 0;
+}
+
+.catalog-reference-add-form .catalog-actions > .catalog-muted {
+  flex: 1;
+}

@@ -1,6 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import type { Catalog, ResourceFeatureDraft } from './catalog-model';
+
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  toRaw,
+  watch,
+} from 'vue';
+
 import { IconifyIcon } from '@vben/icons';
+import { preferences } from '@vben/preferences';
+
 import {
   Alert,
   Button,
@@ -13,72 +27,73 @@ import {
   Segmented,
   Select,
   Switch,
-  Tag,
-  Tabs,
   TabPane,
+  Tabs,
+  Tag,
 } from 'ant-design-vue';
+
 import { $t } from '#/locales';
-import { preferences } from '@vben/preferences';
-import type {
-  Catalog,
-  ResourceEditor,
-  ResourceFeatureDraft,
-} from './catalog-model';
-import { text } from './catalog-model';
+
 import { resourceBreadcrumb } from '../components/resource-catalog';
-import { supportsResourceReferences } from '../components/resource-references';
 import { resourceChildren } from '../components/resource-order';
+import { supportsResourceReferences } from '../components/resource-references';
+import { useResourceDraft } from './catalog-editor-context';
+import { text } from './catalog-model';
 import { resourceTypeChangeIssue } from './resource-editor-model';
-import ResourceReferencePicker from './resource-reference-picker.vue';
 import ResourceFeatureEditor from './resource-feature-editor.vue';
+import ResourceReferencePicker from './resource-reference-picker.vue';
 
 const props = defineProps<{
   catalog: Catalog;
-  draft: ResourceEditor;
+
   scope: string;
   disabled: boolean;
   error: string;
   errorPath: string;
 }>();
 const emit = defineEmits<{ save: []; cancel: [] }>();
+const draft = useResourceDraft();
 const t = (key: string) => $t(`developer.${key}`);
 const siblings = computed(() =>
   resourceChildren(
     props.catalog.resource_catalog,
-    props.draft.parent,
+    draft.value.parent,
     props.scope,
   ),
 );
 const positionCount = computed(
   () =>
     siblings.value.filter(
-      (item) => !(item.kind === 'node' && item.key === props.draft.original),
+      (item) => !(item.kind === 'node' && item.key === draft.value.original),
     ).length + 1,
 );
 const initialPosition = computed(() =>
-  props.draft.original
+  draft.value.original
     ? siblings.value.findIndex(
-        (item) => item.kind === 'node' && item.key === props.draft.original,
+        (item) => item.kind === 'node' && item.key === draft.value.original,
       ) + 1
     : positionCount.value,
 );
-const referenceCollection = computed(
-  () =>
-    supportsResourceReferences({ kind: props.draft.nodeKind, parent: props.draft.parent, references: props.draft.references }),
+const referenceCollection = computed(() =>
+  supportsResourceReferences({
+    kind: draft.value.nodeKind,
+    parent: draft.value.parent,
+    references: draft.value.references,
+  }),
 );
 const typeChangeIssue = computed(() =>
   resourceTypeChangeIssue(
     props.catalog,
-    props.draft,
-    props.draft.nodeKind === 'resource' ? 'directory' : 'resource',
+    draft.value,
+    draft.value.nodeKind === 'resource' ? 'directory' : 'resource',
   ),
 );
 const typeChangeError = computed(() =>
   [
-    'rootTypeFixed',
-    'resourceTypeHasConfiguration',
     'directoryTypeHasChildren',
     'directoryTypeHasReferences',
+    'resourceTypeHasConfiguration',
+    'rootTypeFixed',
   ].includes(props.error),
 );
 const identifierError = computed(
@@ -86,39 +101,59 @@ const identifierError = computed(
     /^(nodeIdentifier|directoryIdentifier|resourceIdentifier)/.test(
       props.error,
     ) ||
-    (props.error === 'duplicate' && props.errorPath === props.draft.key),
+    (props.error === 'duplicate' && props.errorPath === draft.value.key),
 );
 const expanded = reactive<Record<string, string[]>>({});
-const entryExpanded = ref<string[]>(props.draft.entries.length ? ['0'] : []);
+const entryExpanded = ref<string[]>(
+  draft.value.entries.length > 0 ? ['0'] : [],
+);
 const editorRoot = ref<HTMLElement>();
+const featureIds = new WeakMap<ResourceFeatureDraft, string>();
+const pendingFeature = ref<string>();
+const highlightedFeature = ref<string>();
+let nextFeatureId = 0;
+let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function featureId(feature: ResourceFeatureDraft) {
+  const draft = toRaw(feature);
+  const existing = featureIds.get(draft);
+  if (existing !== undefined) return existing;
+  const id = String(++nextFeatureId);
+  featureIds.set(draft, id);
+  return id;
+}
+
 onMounted(() => {
   editorRoot.value?.scrollIntoView({ block: 'start' });
 });
+onBeforeUnmount(() => clearTimeout(highlightTimeout));
 const section = computed({
-  get: () => props.draft.editorTab || 'basic',
+  get: () => draft.value.editorTab || 'basic',
   set: (value: 'basic' | 'entries' | 'operations') => {
-    props.draft.editorTab = value;
+    draft.value.editorTab = value;
   },
 });
 const activeOperation = computed({
   get: () =>
-    props.draft.editorOperation ||
-    props.draft.operations[0] ||
+    draft.value.editorOperation ||
+    draft.value.operations[0] ||
     props.catalog.operations[0] ||
     'read',
   set: (value: string) => {
-    props.draft.editorOperation = value;
+    draft.value.editorOperation = value;
   },
 });
-props.draft.editorOperation ||= activeOperation.value;
+draft.value.editorOperation ||= activeOperation.value;
+const activeFeatures = computed(() =>
+  draft.value.features.filter(
+    (feature) => feature.operation === activeOperation.value,
+  ),
+);
 watch(
   activeOperation,
   (operation) => {
-    const index = props.draft.features.findIndex(
-      (feature) => feature.operation === operation,
-    );
-    if (!expanded[operation])
-      expanded[operation] = index < 0 ? [] : [String(index)];
+    const [first] = activeFeatures.value;
+    expanded[operation] ??= first ? [featureId(first)] : [];
   },
   { immediate: true },
 );
@@ -131,8 +166,8 @@ watch(
       (key === props.errorPath || props.errorPath.split(' / ').includes(key));
     const missing = (item: { key: string; zh: string; en: string }) =>
       !item.key.trim() || !item.zh.trim() || !item.en.trim();
-    const basicInvalid = missing(props.draft) || identifierError.value;
-    const entryIndex = props.draft.entries.findIndex(
+    const basicInvalid = missing(draft.value) || identifierError.value;
+    const entryIndex = draft.value.entries.findIndex(
       (entry, index, items) =>
         matchesPath(entry.key) ||
         (!basicInvalid &&
@@ -144,7 +179,7 @@ watch(
                 (other, i) => i !== index && other.key === entry.key,
               )))),
     );
-    const featureIndex = props.draft.features.findIndex(
+    const featureIndex = draft.value.features.findIndex(
       (feature, index, items) =>
         matchesPath(feature.key) ||
         (!basicInvalid &&
@@ -155,15 +190,18 @@ watch(
                 (other, i) => i !== index && other.key === feature.key,
               )))),
     );
-    if (entryIndex >= 0) {
+    if (entryIndex !== -1) {
       section.value = 'entries';
       entryExpanded.value = [String(entryIndex)];
-    } else if (featureIndex >= 0) {
-      const operation = props.draft.features[featureIndex]!.operation;
+    } else if (featureIndex === -1) {
+      section.value = 'basic';
+    } else {
+      const feature = draft.value.features[featureIndex];
+      if (!feature) return;
       section.value = 'operations';
-      activeOperation.value = operation;
-      expanded[operation] = [String(featureIndex)];
-    } else section.value = 'basic';
+      activeOperation.value = feature.operation;
+      expanded[feature.operation] = [featureId(feature)];
+    }
     await nextTick();
     editorRoot.value
       ?.querySelector<HTMLElement>('.ant-form-item-has-error input')
@@ -183,7 +221,7 @@ const parents = computed(() =>
         current;
         current = props.catalog.resource_catalog.resources[current]?.parent
       ) {
-        if (current === props.draft.original || seen.has(current)) return false;
+        if (current === draft.value.original || seen.has(current)) return false;
         seen.add(current);
       }
       return true;
@@ -194,7 +232,7 @@ const parents = computed(() =>
     })),
 );
 const operationOptions = computed(() =>
-  props.draft.operations.map((value) => ({
+  draft.value.operations.map((value) => ({
     value,
     label: $t(`operations.${value}`),
   })),
@@ -203,64 +241,96 @@ const status = (value: string) =>
   props.error && !value.trim() ? 'error' : undefined;
 const help = (value: string) =>
   props.error && !value.trim() ? t('required') : undefined;
-const features = (operation: string) =>
-  props.draft.features.filter((feature) => feature.operation === operation);
 function changeParent(value: unknown) {
-  const previous = props.draft.parent || props.scope;
-  props.draft.parent = String(value ?? '');
-  props.draft.position = positionCount.value;
-  if (!props.draft.original && props.draft.key.startsWith(`${previous}:`))
-    props.draft.key = `${props.draft.parent || props.scope}:${props.draft.key.slice(previous.length + 1)}`;
-  if (!props.draft.parent && !props.draft.original)
-    props.draft.nodeKind = 'directory';
+  const previous = draft.value.parent || props.scope;
+  draft.value.parent = String(value ?? '');
+  draft.value.position = positionCount.value;
+  if (!draft.value.original && draft.value.key.startsWith(`${previous}:`))
+    draft.value.key = `${draft.value.parent || props.scope}:${draft.value.key.slice(previous.length + 1)}`;
+  if (!draft.value.parent && !draft.value.original)
+    draft.value.nodeKind = 'directory';
 }
 function changeKind(value: unknown) {
   const kind = value === 'resource' ? 'resource' : 'directory';
   if (
     props.disabled ||
-    kind === props.draft.nodeKind ||
-    resourceTypeChangeIssue(props.catalog, props.draft, kind)
+    kind === draft.value.nodeKind ||
+    resourceTypeChangeIssue(props.catalog, draft.value, kind)
   )
     return;
-  props.draft.nodeKind = kind;
-  props.draft.editorTab = 'basic';
+  draft.value.nodeKind = kind;
+  draft.value.editorTab = 'basic';
   if (
-    !props.draft.original &&
+    !draft.value.original &&
     value === 'resource' &&
-    props.draft.key.split(':').length === 2 &&
-    !props.draft.key.endsWith(':')
+    draft.value.key.split(':').length === 2 &&
+    !draft.value.key.endsWith(':')
   )
-    props.draft.key += ':';
+    draft.value.key += ':';
 }
 function toggleOperation(operation: string, checked: boolean) {
-  props.draft.operations = props.catalog.operations.filter((op) =>
-    op === operation ? checked : props.draft.operations.includes(op),
+  draft.value.operations = props.catalog.operations.filter((op) =>
+    op === operation ? checked : draft.value.operations.includes(op),
   );
 }
 function addEntry() {
-  if (props.draft.entries.length) return;
-  entryExpanded.value = [String(props.draft.entries.length)];
-  props.draft.entries.push({
-    key: props.draft.key.replace(':', ':menu:'),
+  if (draft.value.entries.length > 0) return;
+  entryExpanded.value = [String(draft.value.entries.length)];
+  draft.value.entries.push({
+    key: draft.value.key.replace(':', ':menu:'),
     path: '',
     parentMenu: '',
-    operations: props.draft.operations.includes('read') ? ['read'] : [],
+    operations: draft.value.operations.includes('read') ? ['read'] : [],
   });
 }
-function addFeature(operation: string) {
-  props.draft.features.push({
-    key: `${props.draft.key}:`,
+async function addFeature(operation: string) {
+  const feature: ResourceFeatureDraft = {
+    key: `${draft.value.key}:`,
     zh: '',
     en: '',
     operation,
     buttons: [],
     http: [],
     grpc: [],
+  };
+  const id = featureId(feature);
+  // Settle the panel heights before scrolling to the new header.
+  pendingFeature.value = id;
+  draft.value.features.push(feature);
+  expanded[operation] = [id];
+  clearTimeout(highlightTimeout);
+  highlightedFeature.value = undefined;
+  await nextTick();
+  if (pendingFeature.value !== id) return;
+  pendingFeature.value = undefined;
+  if (operation !== activeOperation.value) return;
+
+  const header = editorRoot.value
+    ?.querySelector(`[data-feature-panel="${id}"]`)
+    ?.querySelector<HTMLElement>('.ant-collapse-header');
+  if (!header) return;
+
+  header.focus({ preventScroll: true });
+  header.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'instant'
+      : 'smooth',
+    block: 'start',
+    inline: 'nearest',
   });
-  (expanded[operation] ??= []).push(String(props.draft.features.length - 1));
+  highlightedFeature.value = id;
+  highlightTimeout = setTimeout(() => {
+    highlightedFeature.value = undefined;
+  }, 2200);
 }
 function removeFeature(feature: ResourceFeatureDraft) {
-  props.draft.features.splice(props.draft.features.indexOf(feature), 1);
+  const index = draft.value.features.indexOf(feature);
+  if (index === -1) return;
+  const id = featureId(feature);
+  expanded[feature.operation] = (expanded[feature.operation] ?? []).filter(
+    (key) => key !== id,
+  );
+  draft.value.features.splice(index, 1);
 }
 </script>
 
@@ -308,7 +378,7 @@ function removeFeature(feature: ResourceFeatureDraft) {
       </div>
     </header>
     <Alert
-      v-if="error"
+      v-if="error && (error !== 'invalidPosition' || section !== 'basic')"
       class="catalog-node-error"
       type="error"
       show-icon
@@ -322,11 +392,11 @@ function removeFeature(feature: ResourceFeatureDraft) {
         :animated="false"
       >
         <TabPane key="basic">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:box" />{{ t('basicInfo') }}</span
-            ></template
-          >
+            >
+          </template>
           <div class="catalog-editor-section-heading">
             <h3>{{ t('basicInfo') }}</h3>
             <p>{{ t('basicInfoDescription') }}</p>
@@ -335,7 +405,13 @@ function removeFeature(feature: ResourceFeatureDraft) {
           <FormItem
             :label="t('type')"
             :validate-status="typeChangeError ? 'error' : undefined"
-            :help="t(typeChangeError ? error : typeChangeIssue || 'typeChangeAvailable')"
+            :help="
+              t(
+                typeChangeError
+                  ? error
+                  : typeChangeIssue || 'typeChangeAvailable',
+              )
+            "
           >
             <Segmented
               v-if="draft.parent"
@@ -349,15 +425,17 @@ function removeFeature(feature: ResourceFeatureDraft) {
               ]"
               @change="changeKind"
             />
-            <Tag v-else color="blue">{{
-              t(
-                draft.nodeKind === 'resource'
-                  ? 'resource'
-                  : draft.parent
-                    ? 'subdirectory'
-                    : 'directory',
-              )
-            }}</Tag>
+            <Tag v-else color="blue">
+              {{
+                t(
+                  draft.nodeKind === 'resource'
+                    ? 'resource'
+                    : draft.parent
+                      ? 'subdirectory'
+                      : 'directory',
+                )
+              }}
+            </Tag>
           </FormItem>
           <div class="catalog-node-fields">
             <FormItem
@@ -384,28 +462,33 @@ function removeFeature(feature: ResourceFeatureDraft) {
               required
               :validate-status="status(draft.zh)"
               :help="help(draft.zh)"
-              ><Input
+            >
+              <Input
                 v-model:value="draft.zh"
                 :disabled="disabled"
                 :aria-label="t('zh')"
                 data-testid="editor-zh"
-            /></FormItem>
+              />
+            </FormItem>
             <FormItem
               label="English"
               :extra="t('resourceNameUsage')"
               required
               :validate-status="status(draft.en)"
               :help="help(draft.en)"
-              ><Input
+            >
+              <Input
                 v-model:value="draft.en"
                 :disabled="disabled"
                 aria-label="English"
                 data-testid="editor-en"
-            /></FormItem>
+              />
+            </FormItem>
             <FormItem
               :label="t('parent')"
               :extra="draft.original ? t('useTreeToMove') : undefined"
-              ><Select
+            >
+              <Select
                 :value="draft.parent || undefined"
                 :disabled="disabled || !!draft.original"
                 :options="parents"
@@ -413,7 +496,8 @@ function removeFeature(feature: ResourceFeatureDraft) {
                 :aria-label="t('parent')"
                 :placeholder="t('rootDirectory')"
                 @change="changeParent"
-            /></FormItem>
+              />
+            </FormItem>
             <FormItem
               :label="t('position')"
               :validate-status="
@@ -424,23 +508,34 @@ function removeFeature(feature: ResourceFeatureDraft) {
                   ? t('invalidPosition')
                   : t('positionHint')
               "
-              ><InputNumber
+            >
+              <InputNumber
                 :value="
                   draft.position === null
                     ? undefined
                     : (draft.position ?? initialPosition)
                 "
                 :disabled="disabled"
-                :min="1"
-                :max="positionCount"
-                :precision="0"
+                :aria-valuemin="1"
+                :aria-valuemax="positionCount"
                 :aria-label="t('position')"
                 @update:value="
                   draft.position = typeof $event === 'number' ? $event : null
                 "
-            /></FormItem>
-            <FormItem v-if="draft.nodeKind === 'directory' && !draft.parent" :label="t('frontendVisible')" :extra="t('frontendVisibleHint')">
-              <Switch :checked="draft.frontendVisible ?? true" :disabled="disabled" :aria-label="t('frontendVisible')" data-testid="editor-frontend-visible" @update:checked="draft.frontendVisible = !!$event" />
+              />
+            </FormItem>
+            <FormItem
+              v-if="draft.nodeKind === 'directory' && !draft.parent"
+              :label="t('frontendVisible')"
+              :extra="t('frontendVisibleHint')"
+            >
+              <Switch
+                :checked="draft.frontendVisible ?? true"
+                :disabled="disabled"
+                :aria-label="t('frontendVisible')"
+                data-testid="editor-frontend-visible"
+                @update:checked="draft.frontendVisible = !!$event"
+              />
             </FormItem>
           </div>
           <FormItem
@@ -448,29 +543,32 @@ function removeFeature(feature: ResourceFeatureDraft) {
             class="catalog-node-reference-field"
             :label="t('references')"
             :validate-status="
-              ['invalidReference', 'invalidReferenceOperations'].includes(error) ? 'error' : undefined
+              ['invalidReference', 'invalidReferenceOperations'].includes(error)
+                ? 'error'
+                : undefined
             "
             :help="
-              ['invalidReference', 'invalidReferenceOperations'].includes(error) ? t(error) : undefined
+              ['invalidReference', 'invalidReferenceOperations'].includes(error)
+                ? t(error)
+                : undefined
             "
           >
             <ResourceReferencePicker
               :catalog="catalog"
-              :draft="draft"
               :scope="scope"
               :disabled="disabled"
             />
           </FormItem>
         </TabPane>
         <TabPane v-if="draft.nodeKind === 'resource'" key="entries">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:panels-top-left" />{{ t('entries')
               }}<span class="catalog-count">{{
                 draft.entries.length
               }}</span></span
-            ></template
-          >
+            >
+          </template>
           <div class="catalog-section-title">
             <div class="catalog-editor-section-heading">
               <h3>{{ t('entries') }}</h3>
@@ -480,9 +578,10 @@ function removeFeature(feature: ResourceFeatureDraft) {
               v-if="!draft.entries.length"
               :disabled="disabled"
               @click="addEntry"
-              ><template #icon><IconifyIcon icon="lucide:plus" /></template
-              >{{ t('addEntry') }}</Button
             >
+              <template #icon><IconifyIcon icon="lucide:plus" /></template
+              >{{ t('addEntry') }}
+            </Button>
           </div>
           <div v-if="!draft.entries.length" class="catalog-editor-empty">
             <IconifyIcon
@@ -494,9 +593,10 @@ function removeFeature(feature: ResourceFeatureDraft) {
               v-if="!draft.entries.length"
               :disabled="disabled"
               @click="addEntry"
-              ><template #icon><IconifyIcon icon="lucide:plus" /></template
-              >{{ t('addEntry') }}</Button
             >
+              <template #icon><IconifyIcon icon="lucide:plus" /></template
+              >{{ t('addEntry') }}
+            </Button>
           </div>
           <Collapse
             v-else
@@ -508,25 +608,26 @@ function removeFeature(feature: ResourceFeatureDraft) {
               v-for="(entry, index) in draft.entries"
               :key="String(index)"
             >
-              <template #header
-                ><div class="catalog-entry-editor-title">
+              <template #header>
+                <div class="catalog-entry-editor-title">
                   <IconifyIcon icon="lucide:monitor" aria-hidden="true" />
                   <div>
                     <strong>{{ draft.zh || draft.en || t('newEntry') }}</strong
                     ><code>{{ entry.path || t('routePending') }}</code>
                   </div>
-                </div></template
-              >
-              <template #extra
-                ><Button
+                </div>
+              </template>
+              <template #extra>
+                <Button
                   type="text"
                   danger
                   size="small"
                   :disabled="disabled"
                   @click.stop="draft.entries.splice(index, 1)"
-                  >{{ t('remove') }}</Button
-                ></template
-              >
+                >
+                  {{ t('remove') }}
+                </Button>
+              </template>
               <div class="catalog-node-fields">
                 <FormItem
                   class="catalog-node-wide"
@@ -534,41 +635,47 @@ function removeFeature(feature: ResourceFeatureDraft) {
                   required
                   :validate-status="status(entry.key)"
                   :help="help(entry.key)"
-                  ><Input
+                >
+                  <Input
                     v-model:value="entry.key"
                     :disabled="disabled"
                     :aria-label="`${t('entries')} ${index + 1} ${t('identifier')}`"
-                /></FormItem>
+                  />
+                </FormItem>
                 <FormItem
                   class="catalog-node-wide"
                   :label="t('route')"
                   required
                   :validate-status="status(entry.path)"
                   :help="help(entry.path)"
-                  ><Input
+                >
+                  <Input
                     v-model:value="entry.path"
                     :disabled="disabled"
                     :aria-label="t('route')"
                     placeholder="/system/resource"
-                /></FormItem>
+                  />
+                </FormItem>
               </div>
             </CollapsePanel>
           </Collapse>
         </TabPane>
         <TabPane v-if="draft.nodeKind === 'resource'" key="operations">
-          <template #tab
-            ><span class="catalog-editor-tab"
+          <template #tab>
+            <span class="catalog-editor-tab"
               ><IconifyIcon icon="lucide:sliders-horizontal" />{{
                 t('operations')
               }}<span class="catalog-count">{{
                 draft.permissionScope === '*' ? '*' : draft.operations.length
               }}</span></span
-            ></template
-          >
+            >
+          </template>
           <div class="catalog-operation-settings">
             <div class="catalog-editor-section-heading">
               <h3>{{ t('operations') }}</h3>
-              <p v-if="draft.permissionScope !== '*'">{{ t('operationsHint') }}</p>
+              <p v-if="draft.permissionScope !== '*'">
+                {{ t('operationsHint') }}
+              </p>
             </div>
             <FormItem
               class="catalog-resource-permission-scope"
@@ -588,7 +695,10 @@ function removeFeature(feature: ResourceFeatureDraft) {
               />
             </FormItem>
           </div>
-          <div v-if="draft.permissionScope !== '*'" class="catalog-operation-workbench">
+          <div
+            v-if="draft.permissionScope !== '*'"
+            class="catalog-operation-workbench"
+          >
             <nav class="catalog-operation-nav" :aria-label="t('operation')">
               <div
                 v-for="operation in catalog.operations"
@@ -648,20 +758,22 @@ function removeFeature(feature: ResourceFeatureDraft) {
                         ? 'blue'
                         : undefined
                     "
-                    >{{
+                  >
+                    {{
                       draft.operations.includes(activeOperation)
                         ? t('enabled')
                         : t('notEnabled')
-                    }}</Tag
-                  >
+                    }}
+                  </Tag>
                 </div>
                 <Button
                   v-if="draft.operations.includes(activeOperation)"
                   :disabled="disabled"
                   @click="addFeature(activeOperation)"
-                  ><template #icon><IconifyIcon icon="lucide:plus" /></template
-                  >{{ t('addFeature') }}</Button
                 >
+                  <template #icon><IconifyIcon icon="lucide:plus" /></template
+                  >{{ t('addFeature') }}
+                </Button>
               </div>
               <div
                 v-if="!draft.operations.includes(activeOperation)"
@@ -675,15 +787,13 @@ function removeFeature(feature: ResourceFeatureDraft) {
                 <Button
                   :disabled="disabled"
                   @click="toggleOperation(activeOperation, true)"
-                  >{{ t('enable') }}
-                  {{ $t(`operations.${activeOperation}`) }}</Button
                 >
+                  {{ t('enable') }}
+                  {{ $t(`operations.${activeOperation}`) }}
+                </Button>
               </div>
               <template v-else>
-                <div
-                  v-if="!features(activeOperation).length"
-                  class="catalog-editor-empty"
-                >
+                <div v-if="!activeFeatures.length" class="catalog-editor-empty">
                   <IconifyIcon
                     icon="lucide:blocks"
                     aria-hidden="true"
@@ -692,21 +802,28 @@ function removeFeature(feature: ResourceFeatureDraft) {
                   <Button
                     :disabled="disabled"
                     @click="addFeature(activeOperation)"
-                    >{{ t('addFeature') }}</Button
                   >
+                    {{ t('addFeature') }}
+                  </Button>
                 </div>
                 <Collapse
                   v-else
                   v-model:active-key="expanded[activeOperation]"
+                  :open-animation="pendingFeature ? { css: false } : undefined"
                   class="catalog-feature-editor"
                   expand-icon-position="end"
                 >
                   <CollapsePanel
-                    v-for="feature in features(activeOperation)"
-                    :key="String(draft.features.indexOf(feature))"
+                    v-for="feature in activeFeatures"
+                    :key="featureId(feature)"
+                    :data-feature-panel="featureId(feature)"
+                    :class="{
+                      'catalog-feature-panel--highlighted':
+                        highlightedFeature === featureId(feature),
+                    }"
                   >
-                    <template #header
-                      ><div class="catalog-feature-editor-title">
+                    <template #header>
+                      <div class="catalog-feature-editor-title">
                         <strong>{{
                           feature.zh || feature.en || t('newFeature')
                         }}</strong
@@ -717,20 +834,22 @@ function removeFeature(feature: ResourceFeatureDraft) {
                           {{ feature.http.length + feature.grpc.length }}
                           {{ t('endpointCountLabel') }}</span
                         >
-                      </div></template
-                    >
-                    <template #extra
-                      ><Button
+                      </div>
+                    </template>
+                    <template #extra>
+                      <Button
                         type="text"
                         danger
                         size="small"
                         :disabled="disabled"
                         @click.stop="removeFeature(feature)"
-                        >{{ t('remove') }}</Button
-                      ></template
-                    >
+                      >
+                        {{ t('remove') }}
+                      </Button>
+                    </template>
                     <ResourceFeatureEditor
                       :feature="feature"
+                      @patch="Object.assign(feature, $event)"
                       :catalog="catalog.resource_catalog"
                       :resource-key="draft.key"
                       :disabled="disabled"

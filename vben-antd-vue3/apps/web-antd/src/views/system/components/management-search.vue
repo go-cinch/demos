@@ -12,43 +12,51 @@ defineOptions({ inheritAttrs: false });
       <slot></slot>
     </div>
     <Space class="w-full justify-end lg:w-auto lg:shrink-0" wrap>
-<slot name="actions"></slot>
-</Space>
+      <slot name="actions"></slot>
+    </Space>
   </Form>
 </template>
 <style scoped>
 :deep(.system-filter-control:is(.ant-select, .search-autocomplete-wrapper)) {
+  flex-shrink: 0;
   width: var(--filter-width, 208px);
   min-width: var(--filter-width, 208px);
-  flex-shrink: 0;
 }
+
 :deep(.ant-form-item-label) {
   flex-shrink: 0;
 }
+
 @media (min-width: 640px) {
   :deep(.ant-form-item) {
     flex: none;
     max-width: 100%;
   }
+
   :deep(.ant-form-item-control) {
     flex: none;
   }
+
   :deep(.ant-form-item-row) {
     flex-wrap: nowrap;
   }
 }
+
 @media (max-width: 639px) {
   :deep(.ant-form-item),
   :deep(.ant-form-item-row) {
     width: 100%;
   }
+
   :deep(.ant-form-item) {
     margin-inline-end: 0;
   }
+
   :deep(.ant-form-item-control) {
     flex: 1;
     min-width: 0;
   }
+
   :deep(.system-filter-control:is(.ant-select, .search-autocomplete-wrapper)) {
     width: 100%;
     min-width: 0;

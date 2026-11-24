@@ -6,6 +6,7 @@ import { Settings } from '@vben/icons';
 import { VbenIconButton } from '@vben-core/shadcn-ui';
 
 import Preferences from './preferences.vue';
+import { useOpenPreferences } from './use-open-preferences';
 
 const emit = defineEmits<{ clearPreferencesAndLogout: [] }>();
 
@@ -14,18 +15,24 @@ function clearPreferencesAndLogout() {
 }
 
 const preferencesRef = ref<InstanceType<typeof Preferences> | null>(null);
+const sharedOpenPreferences = useOpenPreferences();
+const openPreferences =
+  sharedOpenPreferences ?? (() => preferencesRef.value?.open());
 </script>
 
 <template>
-  <Preferences
-    ref="preferencesRef"
-    @clear-preferences-and-logout="clearPreferencesAndLogout"
-  >
+  <div>
+    <Preferences
+      v-if="!sharedOpenPreferences"
+      ref="preferencesRef"
+      :show-button="false"
+      @clear-preferences-and-logout="clearPreferencesAndLogout"
+    />
     <VbenIconButton
       class="hover:animate-[shrink_0.3s_ease-in-out]"
-      @click="preferencesRef?.open()"
+      @click="openPreferences"
     >
       <Settings class="size-4 text-foreground" />
     </VbenIconButton>
-  </Preferences>
+  </div>
 </template>

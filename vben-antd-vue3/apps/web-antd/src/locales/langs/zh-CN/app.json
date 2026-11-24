@@ -23,12 +23,20 @@
     "start": "点击开始验证"
   },
   "errors": {
+    "methodNotAllowed": "不支持此请求方法。",
+    "conflict": "请求与当前状态冲突，请刷新后重试。",
+    "tooManyRequests": "操作过于频繁，请稍后重试。",
+    "sessionRestore": "暂时无法恢复登录状态，请重试。",
     "failed": "请求失败，请稍后重试。",
     "serverLost": "服务器迷路啦~",
     "statisticsLoad": "统计信息加载失败，请重试。",
     "dataLoad": "数据加载失败，请重试。"
   },
+  "onboarding": { "skip": "跳过" },
   "resetPassword": {
+    "adminRequired": "管理员已重置你的密码。请设置新密码后继续。",
+    "adminOptional": "管理员已重置你的密码。你可以现在修改，也可以跳过并继续使用当前密码。",
+    "optionalDescription": "你可以修改密码，也可以跳过并继续。",
     "title": "重置密码",
     "description": "首次登录或管理员重置密码后，请设置一个与当前密码不同的新密码，再开始使用。",
     "submit": "重置并继续",

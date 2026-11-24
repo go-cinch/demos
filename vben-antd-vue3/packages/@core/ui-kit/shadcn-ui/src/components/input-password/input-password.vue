@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useSlots } from 'vue';
+import { computed, ref, useSlots } from 'vue';
 
 import { Eye, EyeOff } from '@vben-core/icons';
 import { cn } from '@vben-core/shared/utils';
@@ -22,6 +22,9 @@ defineOptions({
 const props = defineProps<Props>();
 
 const modelValue = defineModel<string>();
+const showPasswordStrength = computed(
+  () => props.passwordStrength && Boolean(modelValue.value),
+);
 
 const slots = useSlots();
 
@@ -36,7 +39,7 @@ const show = ref(false);
       :class="cn('pr-10', props.class)"
       :type="show ? 'text' : 'password'"
     />
-    <template v-if="passwordStrength">
+    <template v-if="showPasswordStrength">
       <PasswordStrength :password="modelValue" />
       <p v-if="slots.strengthText" class="text-muted-foreground mt-1.5 text-xs">
         <slot name="strengthText"> </slot>
@@ -44,8 +47,8 @@ const show = ref(false);
     </template>
     <div
       :class="{
-        'top-3': !!passwordStrength,
-        'top-1/2 -translate-y-1/2 items-center': !passwordStrength,
+        'top-3': showPasswordStrength,
+        'top-1/2 -translate-y-1/2 items-center': !showPasswordStrength,
       }"
       class="text-foreground/60 hover:text-foreground absolute inset-y-0 right-0 flex cursor-pointer pr-3 text-lg leading-5"
       @click="show = !show"

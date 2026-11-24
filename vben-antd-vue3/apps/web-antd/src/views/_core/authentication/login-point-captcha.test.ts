@@ -3,6 +3,7 @@ import { defineComponent, nextTick } from 'vue';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import LoginPointCaptcha from './login-point-captcha.vue';
 
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
@@ -70,12 +71,12 @@ describe('login-point-captcha', () => {
 
     const image = wrapper.find('img');
     await image.trigger('click', {
-      clientX: points[0]!.x,
-      clientY: points[0]!.y,
+      clientX: required(points[0]).x,
+      clientY: required(points[0]).y,
     });
     await image.trigger('click', {
-      clientX: points[1]!.x,
-      clientY: points[1]!.y,
+      clientX: required(points[1]).x,
+      clientY: required(points[1]).y,
     });
     await flushPromises();
 
@@ -103,12 +104,20 @@ describe('login-point-captcha', () => {
     await flushPromises();
 
     expect(wrapper.find('.captcha-panel-error').exists()).toBe(true);
+    const trigger = wrapper.get('.captcha-trigger');
+    expect(trigger.classes()).toContain('captcha-trigger-error');
+    expect(trigger.text()).toBe('app.captcha.progress');
+    expect(wrapper.get('.sr-only[role="status"]').text()).toBe(
+      'app.captcha.failed',
+    );
     expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual([]);
 
     vi.advanceTimersByTime(3000);
     await nextTick();
 
     expect(wrapper.find('.captcha-panel-error').exists()).toBe(false);
+    expect(trigger.classes()).not.toContain('captcha-trigger-error');
+    expect(wrapper.get('.sr-only[role="status"]').text()).toBe('');
   });
   it('shows gateway downtime without blaming the selected points or issuing another request', async () => {
     const onVerify = vi.fn().mockRejectedValue({ response: { status: 502 } });
@@ -117,11 +126,10 @@ describe('login-point-captcha', () => {
     await image.trigger('click', { clientX: 40, clientY: 50 });
     await image.trigger('click', { clientX: 180, clientY: 120 });
     await flushPromises();
-    expect(wrapper.text()).toContain('app.errors.serverLost');
+    expect(wrapper.text()).not.toContain('app.errors.serverLost');
     expect(wrapper.text()).not.toContain('app.captcha.failed');
     expect(wrapper.props('onRefresh')).not.toHaveBeenCalled();
     expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual([]);
     wrapper.unmount();
   });
-
 });

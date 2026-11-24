@@ -57,6 +57,11 @@ interface RouteMeta {
    */
   fullPathKey?: boolean;
   /**
+   * 时区变更时重新挂载页面。自行响应时区变更的页面可设为 false。
+   * @default true
+   */
+  reloadOnTimezoneChange?: boolean;
+  /**
    * 当前路由的子级在菜单中不展现
    * @default false
    */
@@ -144,6 +149,7 @@ type RouteRecordStringComponent<T = string> = Omit<
 type ComponentRecordType = Record<string, () => Promise<Component>>;
 
 interface GenerateMenuAndRoutesOptions {
+  isCurrent?: () => boolean;
   fetchMenuListAsync?: () => Promise<RouteRecordStringComponent[]>;
   forbiddenComponent?: RouteRecordRaw['component'];
   layoutMap?: ComponentRecordType;

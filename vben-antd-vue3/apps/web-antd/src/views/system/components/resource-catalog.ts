@@ -1,4 +1,11 @@
-import type { ActionConfig, ActionResourceBinding, ResourceCatalog, ResourceNode } from '#/api/system';
+import type {
+  ActionConfig,
+  ActionResourceBinding,
+  ResourceCatalog,
+  ResourceNode,
+} from '#/api/system';
+
+import { requiredEntry } from '#/utils/required-entry';
 
 export const permissionOperations = [
   'read',
@@ -56,7 +63,7 @@ export function resourceTree(
         ([key, node]) =>
           matches.has(key) && (node.parent || undefined) === parent,
       )
-      .sort(([a, x], [b, y]) => x.sort - y.sort || a.localeCompare(b))
+      .toSorted(([a, x], [b, y]) => x.sort - y.sort || a.localeCompare(b))
       .map(([key, node]) => ({
         key,
         title: label(key),
@@ -90,8 +97,16 @@ export function resolveResourceConfig(
 ): ActionConfig {
   const node: ResourceNode | undefined = catalog.resources[key];
   if (node?.permission_scope === '*' && operation === '*') {
-    if (selected.length) throw new Error('Wildcard scope does not select features');
-    return { resource_key: key, operation, permission_scope: '*', feature_keys: [], ui: [], endpoints: [] };
+    if (selected.length > 0)
+      throw new Error('Wildcard scope does not select features');
+    return {
+      resource_key: key,
+      operation,
+      permission_scope: '*',
+      feature_keys: [],
+      ui: [],
+      endpoints: [],
+    };
   }
   const binding = node?.operations?.[operation];
   if (
@@ -109,26 +124,54 @@ export function resolveResourceConfig(
     )
   )
     throw new Error('Invalid feature selection');
-  const features = selected.map((id) => catalog.buttons[id]!);
+  const features = selected.map((id) =>
+    requiredEntry(catalog.buttons[id], 'resource catalog entry'),
+  );
   const btn = [...new Set(features.flatMap((feature) => feature.btn))];
-  const pageEntries = new Set([...binding.entry_keys, ...features.flatMap((feature) => feature.entry_keys ?? [])]);
+  const pageEntries = new Set([
+    ...binding.entry_keys,
+    ...features.flatMap((feature) => feature.entry_keys ?? []),
+  ]);
   const entries = new Map(Object.entries(node.entries ?? {}));
-  for (const owner of Object.values(catalog.resources)) for (const [key, entry] of Object.entries(owner.entries ?? {}))
-    if (pageEntries.has(key) || btn.some((button) => button.startsWith(`${key.replace(':menu:', ':btn:')}:`))) entries.set(key, entry);
+  for (const owner of Object.values(catalog.resources))
+    for (const [key, entry] of Object.entries(owner.entries ?? {}))
+      if (
+        pageEntries.has(key) ||
+        btn.some((button) =>
+          button.startsWith(`${key.replace(':menu:', ':btn:')}:`),
+        )
+      )
+        entries.set(key, entry);
   const endpoints = features.flatMap((feature) => [
     ...feature.http.map((endpoint) => ({
       protocol: 'http' as const,
       ...endpoint,
     })),
-    ...feature.grpc.map((path) => ({ protocol: 'grpc' as const, method: 'GRPC', path })),
+    ...feature.grpc.map((path) => ({
+      protocol: 'grpc' as const,
+      method: 'GRPC',
+      path,
+    })),
   ]);
   return {
-    ...(features.some((feature) => feature.permission_resource) ? { permission_scopes: [...new Set(features.filter((feature) => feature.permission_resource).map((feature) => `${feature.permission_resource}:${operation}`))] } : {}),
+    ...(features.some((feature) => feature.permission_resource)
+      ? {
+          permission_scopes: [
+            ...new Set(
+              features
+                .filter((feature) => feature.permission_resource)
+                .map(
+                  (feature) => `${feature.permission_resource}:${operation}`,
+                ),
+            ),
+          ],
+        }
+      : {}),
     resource_key: key,
     operation,
     feature_keys: [...selected],
     ui: [...entries]
-      .sort(([a], [b]) => a.localeCompare(b))
+      .toSorted(([a], [b]) => a.localeCompare(b))
       .map(([menu_key, entry]) => ({
         menu_key,
         menu_path: entry.path,
@@ -168,19 +211,14 @@ export function resolveResourceSelectionConfig(
     throw new Error('Invalid default permission selection');
   const grants = keys.map((key) => {
     const node = catalog.resources[key];
-    if (
-      !key.startsWith(`${scope}:`) ||
-      node?.kind !== 'resource' ||
-      !node.operations?.read
-    )
+    const read = node?.operations?.read;
+    if (!key.startsWith(`${scope}:`) || node?.kind !== 'resource' || !read)
       throw new Error('Invalid default resource');
     return resolveResourceConfig(
       catalog,
       key,
       'read',
-      selected.filter((feature) =>
-        node.operations!.read!.button_keys.includes(feature),
-      ),
+      selected.filter((feature) => read.button_keys.includes(feature)),
     );
   });
   const ui = new Map<string, ActionConfig['ui'][number]>();
@@ -204,7 +242,15 @@ export function resolveResourceSelectionConfig(
   }
   return {
     builtin: 'default',
-    ...(grants.some((grant) => grant.permission_scopes?.length) ? { permission_scopes: [...new Set(grants.flatMap((grant) => grant.permission_scopes ?? []))] } : {}),
+    ...(grants.some((grant) => grant.permission_scopes?.length)
+      ? {
+          permission_scopes: [
+            ...new Set(
+              grants.flatMap((grant) => grant.permission_scopes ?? []),
+            ),
+          ],
+        }
+      : {}),
     resource_keys: [...keys],
     feature_keys: [...selected],
     ui: [...ui.values()],
@@ -221,10 +267,18 @@ export function resolveResourceSelectionConfig(
   };
 }
 
-export function actionResourceBindings(config?: ActionConfig): ActionResourceBinding[] {
+export function actionResourceBindings(
+  config?: ActionConfig,
+): ActionResourceBinding[] {
   if (config?.bindings) return config.bindings;
   return config?.resource_key && config.operation
-    ? [{ resource_key: config.resource_key, operation: config.operation, feature_keys: config.feature_keys }]
+    ? [
+        {
+          resource_key: config.resource_key,
+          operation: config.operation,
+          feature_keys: config.feature_keys,
+        },
+      ]
     : [];
 }
 
@@ -237,27 +291,67 @@ export function resolveResourceBindings(
   const grants = bindings.map((binding) => {
     const key = binding.resource_key;
     const identity = `${key}:${binding.operation}`;
-    if (!key.startsWith(`${scope}:`) || seen.has(identity)) throw new Error('Invalid resource selection');
+    if (!key.startsWith(`${scope}:`) || seen.has(identity))
+      throw new Error('Invalid resource selection');
     seen.add(identity);
-    return resolveResourceConfig(catalog, key, binding.operation,
-      binding.feature_keys ?? catalog.resources[key]?.operations?.[binding.operation]?.button_keys ?? []);
+    return resolveResourceConfig(
+      catalog,
+      key,
+      binding.operation,
+      binding.feature_keys ??
+        catalog.resources[key]?.operations?.[binding.operation]?.button_keys ??
+        [],
+    );
   });
   const ui = new Map<string, ActionConfig['ui'][number]>();
   for (const entry of grants.flatMap((grant) => grant.ui)) {
     const previous = ui.get(entry.menu_key);
-    ui.set(entry.menu_key, previous ? {
-      ...previous,
-      page_entry: previous.page_entry || entry.page_entry,
-      button_keys: [...new Set([...(previous.button_keys ?? []), ...(entry.button_keys ?? [])])],
-    } : entry);
+    ui.set(
+      entry.menu_key,
+      previous
+        ? {
+            ...previous,
+            page_entry: previous.page_entry || entry.page_entry,
+            button_keys: [
+              ...new Set([
+                ...(previous.button_keys ?? []),
+                ...(entry.button_keys ?? []),
+              ]),
+            ],
+          }
+        : entry,
+    );
   }
   return {
-    ...(grants.some((grant) => grant.permission_scope === '*') ? { permission_scope: '*' as const } : {}),
-    ...(grants.some((grant) => grant.permission_scopes?.length) ? { permission_scopes: [...new Set(grants.flatMap((grant) => grant.permission_scopes ?? []))] } : {}),
-    bindings: bindings.map((binding) => ({ ...binding, feature_keys: binding.feature_keys == null ? binding.feature_keys : [...binding.feature_keys] })),
+    ...(grants.some((grant) => grant.permission_scope === '*')
+      ? { permission_scope: '*' as const }
+      : {}),
+    ...(grants.some((grant) => grant.permission_scopes?.length)
+      ? {
+          permission_scopes: [
+            ...new Set(
+              grants.flatMap((grant) => grant.permission_scopes ?? []),
+            ),
+          ],
+        }
+      : {}),
+    bindings: bindings.map((binding) => ({
+      ...binding,
+      feature_keys:
+        binding.feature_keys === null || binding.feature_keys === undefined
+          ? binding.feature_keys
+          : [...binding.feature_keys],
+    })),
     ui: [...ui.values()],
-    endpoints: [...new Map(grants.flatMap((grant) => grant.endpoints).map((endpoint) => [
-      `${endpoint.protocol}:${endpoint.method ?? ''}:${endpoint.path}`, endpoint,
-    ])).values()],
+    endpoints: [
+      ...new Map(
+        grants
+          .flatMap((grant) => grant.endpoints)
+          .map((endpoint) => [
+            `${endpoint.protocol}:${endpoint.method ?? ''}:${endpoint.path}`,
+            endpoint,
+          ]),
+      ).values(),
+    ],
   };
 }

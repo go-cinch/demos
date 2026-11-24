@@ -40,6 +40,7 @@
   "inheritedBadge": "Provided by role",
   "roleEmpty": "This role has no permissions yet.",
   "loadingRole": "Loading role permissions",
+  "catalogForbidden": "Assigning permissions requires read access to permission management.",
   "resourceLoadError": "Unable to load all assigned resource permissions. Refresh and try again. Existing permissions have not changed.",
   "deletedActions": "{count} actions have been deleted and no longer grant access. You can edit the remaining permissions; saving will remove the stale references."
 }

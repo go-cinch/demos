@@ -273,8 +273,9 @@ describe('form runtime', () => {
 
       for (const name of ['name', 'email']) {
         const input = wrapper.get(`input[name="${name}"]`);
-        if (trigger === 'blur') await input.trigger('blur');
-        else await input.setValue('changed');
+        await (trigger === 'blur'
+          ? input.trigger('blur')
+          : input.setValue('changed'));
       }
       // Enter TanStack's async scheduling path without executing the delayed
       // validators. Clearing only an already-started promise misses this race.

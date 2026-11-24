@@ -3,5 +3,9 @@ export const actionWordPattern =
 
 export const actionGroupPattern = /^[a-z][a-z0-9_-]*(?::[a-z][a-z0-9_-]*){2,}$/;
 export function isValidActionGroup(word: string, scope?: string) {
-  return word.length <= 128 && actionGroupPattern.test(word) && (!scope || word.startsWith(`${scope}:`));
+  return (
+    word.length <= 128 &&
+    actionGroupPattern.test(word) &&
+    (!scope || word.startsWith(`${scope}:`))
+  );
 }

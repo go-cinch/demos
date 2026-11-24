@@ -45,7 +45,7 @@ function handleClick(e: MouseEvent) {
 <template>
   <VbenButton
     v-if="!showTooltip"
-    :class="cn('rounded-full', props.class)"
+    :class="cn('rounded-md', props.class)"
     :disabled="disabled"
     :variant="variant"
     size="icon"
@@ -61,7 +61,7 @@ function handleClick(e: MouseEvent) {
   >
     <template #trigger>
       <VbenButton
-        :class="cn('rounded-full', props.class)"
+        :class="cn('rounded-md', props.class)"
         :disabled="disabled"
         :variant="variant"
         size="icon"

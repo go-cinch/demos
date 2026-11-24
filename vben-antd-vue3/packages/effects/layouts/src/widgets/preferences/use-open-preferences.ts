@@ -1,16 +1,15 @@
-import { ref } from 'vue';
+import type { InjectionKey } from 'vue';
 
-const openPreferences = ref(false);
+import { inject, provide } from 'vue';
 
-function useOpenPreferences() {
-  function handleOpenPreference() {
-    openPreferences.value = true;
-  }
+const openPreferencesKey: InjectionKey<() => void> = Symbol('openPreferences');
 
-  return {
-    handleOpenPreference,
-    openPreferences,
-  };
+function provideOpenPreferences(open: () => void) {
+  provide(openPreferencesKey, open);
 }
 
-export { useOpenPreferences };
+function useOpenPreferences() {
+  return inject(openPreferencesKey, undefined);
+}
+
+export { provideOpenPreferences, useOpenPreferences };

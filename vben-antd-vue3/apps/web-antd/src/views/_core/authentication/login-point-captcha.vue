@@ -10,7 +10,8 @@ import { CircleCheckBig, LockKeyhole } from '@vben/icons';
 
 import { Popover } from 'ant-design-vue';
 
-import { isBadGatewayError } from '#/api/request-error';
+import { isTransportFailure } from '#/api/request-error';
+import { showRequestErrorToast } from '#/api/request-feedback';
 import { vSkeleton } from '#/directives/skeleton';
 import { $t } from '#/locales';
 
@@ -18,6 +19,7 @@ defineOptions({ name: 'LoginPointCaptcha' });
 
 const props = defineProps<{
   captcha: AuthApi.PointCaptchaChallenge;
+  autoOpen?: boolean;
   modelValue?: AuthApi.CaptchaPoint[];
   onRefresh: () => Promise<void>;
   onVerify: (
@@ -33,13 +35,11 @@ const selectedPoints = ref<AuthApi.CaptchaPoint[]>([]);
 const selectionComplete = ref(false);
 const refreshing = ref(false);
 const verificationFailed = ref(false);
-const gatewayFailed = ref(false);
 const verifying = ref(false);
 const panelOpen = ref(false);
 let failureTimer: ReturnType<typeof setTimeout> | undefined;
 
 function clearVerificationFailure() {
-  gatewayFailed.value = false;
   verificationFailed.value = false;
   if (failureTimer) {
     clearTimeout(failureTimer);
@@ -67,7 +67,7 @@ watch(
   () => {
     resetSelection();
     if (!refreshing.value && !verifying.value) {
-      panelOpen.value = false;
+      panelOpen.value = Boolean(props.autoOpen);
     }
   },
   { immediate: true },
@@ -95,9 +95,9 @@ async function handlePointsChange(points: CaptchaPoint[]) {
     panelOpen.value = true;
   } catch (error) {
     resetSelection();
-    if (isBadGatewayError(error)) {
+    if (isTransportFailure(error)) {
       clearVerificationFailure();
-      gatewayFailed.value = true;
+      showRequestErrorToast(error);
       panelOpen.value = false;
       return;
     }
@@ -106,9 +106,9 @@ async function handlePointsChange(points: CaptchaPoint[]) {
     try {
       await props.onRefresh();
     } catch (error) {
-      if (isBadGatewayError(error)) {
+      if (isTransportFailure(error)) {
         clearVerificationFailure();
-        gatewayFailed.value = true;
+        showRequestErrorToast(error);
       }
     }
   } finally {
@@ -124,7 +124,7 @@ async function handleRefresh() {
   try {
     await props.onRefresh();
   } catch (error) {
-    gatewayFailed.value = isBadGatewayError(error);
+    if (isTransportFailure(error)) showRequestErrorToast(error);
   } finally {
     refreshing.value = false;
   }
@@ -175,10 +175,10 @@ function handleOpenChange(open: boolean) {
       :aria-expanded="panelOpen"
       class="captcha-trigger group relative flex h-10 w-full items-center overflow-hidden rounded-md border bg-background-deep px-3 text-sm transition-all duration-300"
       :class="
-        (verificationFailed || gatewayFailed)
-          ? 'border-red-500 bg-red-500/10 text-red-500'
-          : selectionComplete
-            ? 'captcha-trigger-success border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.16)]'
+        selectionComplete
+          ? 'captcha-trigger-success border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.16)]'
+          : verificationFailed
+            ? 'captcha-trigger-error text-muted-foreground'
             : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground'
       "
       type="button"
@@ -198,13 +198,9 @@ function handleOpenChange(open: boolean) {
             ? $t('app.captcha.passed')
             : verifying
               ? $t('app.captcha.checking')
-              : gatewayFailed
-                ? $t('app.errors.serverLost')
-                : verificationFailed
-                  ? $t('app.captcha.failed')
-                : panelOpen
-                  ? $t('app.captcha.progress')
-                  : $t('app.captcha.start')
+              : panelOpen
+                ? $t('app.captcha.progress')
+                : $t('app.captcha.start')
         }}
       </span>
 
@@ -218,6 +214,9 @@ function handleOpenChange(open: boolean) {
       />
     </button>
   </Popover>
+  <span class="sr-only" role="status">
+    {{ verificationFailed ? $t('app.captcha.failed') : '' }}
+  </span>
 </template>
 
 <style scoped>
@@ -226,8 +225,13 @@ function handleOpenChange(open: boolean) {
 }
 
 .captcha-panel-error {
+  box-shadow: 0 0 0 2px hsl(var(--destructive));
   animation: captcha-panel-shake 420ms ease-in-out;
-  box-shadow: 0 0 0 2px rgb(239 68 68 / 90%);
+}
+
+.captcha-trigger-error {
+  outline: 2px solid hsl(var(--destructive));
+  outline-offset: -2px;
 }
 
 @keyframes captcha-panel-shake {
@@ -235,15 +239,19 @@ function handleOpenChange(open: boolean) {
   100% {
     transform: translateX(0);
   }
+
   20% {
     transform: translateX(-8px);
   }
+
   40% {
     transform: translateX(7px);
   }
+
   60% {
     transform: translateX(-5px);
   }
+
   80% {
     transform: translateX(3px);
   }
@@ -257,6 +265,7 @@ function handleOpenChange(open: boolean) {
   0% {
     box-shadow: 0 0 0 0 hsl(var(--primary) / 35%);
   }
+
   100% {
     box-shadow: 0 0 0 9px hsl(var(--primary) / 0%);
   }
@@ -271,10 +280,12 @@ function handleOpenChange(open: boolean) {
     box-shadow: 0 0 0 0 rgb(16 185 129 / 45%);
     transform: scale(0.985);
   }
+
   55% {
     box-shadow: 0 0 0 5px rgb(16 185 129 / 16%);
     transform: scale(1.01);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgb(16 185 129 / 0%);
     transform: scale(1);
@@ -284,10 +295,10 @@ function handleOpenChange(open: boolean) {
 
 <style>
 .login-point-captcha-popover .ant-popover-inner {
-  overflow: hidden;
   padding: 0;
-  border: 1px solid hsl(var(--border));
+  overflow: hidden;
   background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
   box-shadow: 0 14px 38px rgb(0 0 0 / 28%);
 }
 

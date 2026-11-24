@@ -128,7 +128,12 @@ defineExpose({
         </div>
       </template>
 
-      <SearchPanel :active="open" :keyword="keyword" :menus="menus" @close="handleClose" />
+      <SearchPanel
+        :active="open"
+        :keyword="keyword"
+        :menus="menus"
+        @close="handleClose"
+      />
       <template #footer>
         <div class="flex w-full justify-start text-xs">
           <div class="mr-2 flex items-center">
@@ -150,7 +155,7 @@ defineExpose({
     <div
       v-if="showButton"
       data-testid="global-search-trigger"
-      class="group flex h-8 cursor-pointer items-center gap-3 rounded-2xl border-none bg-none px-2 py-0.5 outline-hidden md:bg-accent"
+      class="group flex h-8 cursor-pointer items-center gap-3 rounded-md border-none bg-none px-2 py-0.5 outline-hidden md:bg-accent"
       @click="toggleOpen()"
     >
       <Search

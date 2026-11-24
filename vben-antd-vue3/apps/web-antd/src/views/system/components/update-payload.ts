@@ -1,7 +1,7 @@
 type Payload = Record<string, unknown>;
 
 function cloneValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(cloneValue);
+  if (Array.isArray(value)) return value.map((item) => cloneValue(item));
   if (typeof value === 'object' && value !== null) {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [key, cloneValue(item)]),
@@ -12,8 +12,10 @@ function cloneValue(value: unknown): unknown {
 
 function valuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
-  if (Array.isArray(left) && Array.isArray(right)) {
+  if (Array.isArray(left) || Array.isArray(right)) {
     return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
       left.length === right.length &&
       left.every((value, index) => valuesEqual(value, right[index]))
     );
@@ -60,11 +62,16 @@ export function buildChangedPayload(
 }
 
 // Existing groups carry only pending membership changes, never a partial replacement.
-export function buildUserGroupChanges(original: Payload, current: Payload): Payload {
+export function buildUserGroupChanges(
+  original: Payload,
+  current: Payload,
+): Payload {
   const { user_ids, ...base } = current;
-  const delta = (user_ids as { added: number[]; removed: number[] } | undefined) ?? { added: [], removed: [] };
+  const delta = (user_ids as
+    | undefined
+    | { added: number[]; removed: number[] }) ?? { added: [], removed: [] };
   const payload = buildChangedPayload(original, base);
-  if (delta.added.length) payload.add_user_ids = [...delta.added];
-  if (delta.removed.length) payload.remove_user_ids = [...delta.removed];
+  if (delta.added.length > 0) payload.add_user_ids = [...delta.added];
+  if (delta.removed.length > 0) payload.remove_user_ids = [...delta.removed];
   return payload;
 }

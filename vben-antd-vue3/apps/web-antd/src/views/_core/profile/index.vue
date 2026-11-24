@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { UserInfoWithPermissions } from '#/api';
 
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
@@ -9,27 +10,72 @@ import { useUserStore } from '@vben/stores';
 
 import { Alert, Avatar, Badge, Button, Card, Tag } from 'ant-design-vue';
 
-import { $t } from '#/locales';
 import { usePermissions } from '#/composables/use-permissions';
+import { $t } from '#/locales';
+import { useAuthStore } from '#/store';
+import { emailEnabled, totpEnabled } from '#/store/system-properties';
 
 import MessageHistory from '../../msg/history.vue';
 import ProfileBase from './base-setting.vue';
+import ProfileEmailSetting from './email-setting.vue';
 import ProfilePasswordSetting from './password-setting.vue';
-import ProfileMFASetting from './mfa-setting.vue';
 import ProfileActivity from './profile-activity.vue';
 import ProfileMessages from './profile-messages.vue';
+import SecuritySection from './security-section.vue';
+import ProfileTOTPSetting from './totp-setting.vue';
 
 const userStore = useUserStore();
-const { hasAllPermissions } = usePermissions();
+const passwordOpen = ref(false);
+const passwordBusy = ref(false);
+const passwordFormKey = ref(0);
+const { hasAllPermissions, hasButton, hasPage, hasProfileAction } =
+  usePermissions();
+const canChangePassword = computed(
+  () =>
+    hasButton('admin:btn:account:profile:change-password') &&
+    hasProfileAction('change_password'),
+);
+const canOpenInbox = computed(() => hasPage('/msg/inbox'));
 const user = computed(
   () => userStore.userInfo as null | UserInfoWithPermissions,
 );
-const tab = ref('overview');
+const route = useRoute();
+const auth = useAuthStore();
+const recoveryRequested = computed(
+  () => route.path === '/profile' && auth.totpRecoveryRequested,
+);
+const tab = ref(
+  route.query.tab === 'security' || recoveryRequested.value
+    ? 'security'
+    : 'overview',
+);
+watch([() => route.query.tab, recoveryRequested], ([target, recovery]) => {
+  if (target === 'security' || recovery) tab.value = 'security';
+});
+function consumeRecoveryRequest() {
+  auth.totpRecoveryRequested = false;
+}
 const unread = ref<number>();
 const inboxOpen = ref(false);
 const inboxMessageId = ref<number>();
 const inboxMessageTitle = ref('');
+let inboxTrigger: HTMLElement | null = null;
+watch(canOpenInbox, (allowed) => {
+  if (!allowed) {
+    inboxOpen.value = false;
+    inboxMessageId.value = undefined;
+    unread.value = undefined;
+  }
+});
+function restoreInboxFocus(open: boolean) {
+  if (!open && inboxTrigger?.isConnected)
+    inboxTrigger.focus({ preventScroll: true });
+}
 function openInbox(id?: number, title = '') {
+  inboxTrigger =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   inboxMessageId.value = id;
   inboxMessageTitle.value = title;
   inboxOpen.value = true;
@@ -69,15 +115,16 @@ async function moveTab(event: KeyboardEvent) {
   else if (event.key === 'End') next = tabs.value.length - 1;
   else return;
   event.preventDefault();
-  tab.value = tabs.value[next]!.value;
+  const target = tabs.value[next];
+  if (!target) return;
+  tab.value = target.value;
   await nextTick();
-  document.getElementById(`profile-tab-${tab.value}`)?.focus();
+  document.querySelector<HTMLElement>(`#profile-tab-${tab.value}`)?.focus();
 }
 </script>
 <template>
   <Page>
     <div class="profile-center" data-testid="profile-center">
-      <h1 class="profile-title">{{ $t('page.profile.title') }}</h1>
       <div class="profile-layout">
         <Card
           class="profile-identity"
@@ -90,9 +137,9 @@ async function moveTab(event: KeyboardEvent) {
               :style="{ fontSize: '32px' }"
               :src="user?.avatar || undefined"
               class="identity-avatar"
-              >
-{{ user?.username?.slice(0, 1).toLocaleUpperCase() }}
-</Avatar>
+            >
+              {{ user?.username?.slice(0, 1).toLocaleUpperCase() }}
+            </Avatar>
             <h2>{{ user?.username || '—' }}</h2>
             <Tag v-if="user?.roleName" color="blue">{{ user.roleName }}</Tag>
             <div class="identity-code">
@@ -103,6 +150,7 @@ async function moveTab(event: KeyboardEvent) {
             <Button
               type="primary"
               block
+              v-if="canOpenInbox"
               class="identity-inbox"
               data-testid="profile-open-inbox"
               :aria-label="$t('profile-center.openInbox')"
@@ -163,6 +211,7 @@ async function moveTab(event: KeyboardEvent) {
             class="profile-overview"
           >
             <ProfileMessages
+              v-if="canOpenInbox"
               @count="unread = $event"
               @inbox="openInbox"
             />
@@ -183,29 +232,55 @@ async function moveTab(event: KeyboardEvent) {
             aria-labelledby="profile-tab-security"
             class="profile-security-stack"
           >
-            <Card
-              class="profile-panel profile-security-card"
-              :body-style="{ padding: '28px' }"
+            <header class="security-panel-heading">
+              <h2>{{ $t('profile-center.security') }}</h2>
+            </header>
+            <p
+              v-if="!emailEnabled && !totpEnabled && !canChangePassword"
+              class="text-muted-foreground"
             >
-              <template #title>
-                <div class="security-card-title">
-                  <span class="security-card-icon"><IconifyIcon icon="lucide:lock-keyhole" /></span>
-                  <h2>{{ $t('page.profile.tabs.changePassword') }}</h2>
-                </div>
-              </template>
-              <Alert
-                class="password-notice"
-                type="warning"
-                show-icon
-                :message="$t('profile-center.passwordNotice')"
+              {{ $t('profile-center.noSecuritySettings') }}
+            </p>
+            <ProfileEmailSetting :user="user" />
+            <SecuritySection
+              v-if="canChangePassword"
+              v-model:open="passwordOpen"
+              icon="lucide:lock-keyhole"
+              :title="$t('page.profile.tabs.changePassword')"
+              :action="$t('page.profile.tabs.changePassword')"
+              :busy="passwordBusy"
+            >
+              <template #notice
+                ><Alert
+                  class="password-notice"
+                  type="warning"
+                  show-icon
+                  :message="$t('profile-center.passwordNotice')"
+              /></template>
+              <ProfilePasswordSetting
+                :key="passwordFormKey"
+                @busy="passwordBusy = $event"
+                @cancel="
+                  passwordOpen = false;
+                  passwordFormKey++;
+                "
               />
-              <ProfilePasswordSetting />
-            </Card>
-            <ProfileMFASetting />
+            </SecuritySection>
+            <ProfileTOTPSetting
+              v-if="totpEnabled"
+              :recovery-requested="recoveryRequested"
+              @recovery-opened="consumeRecoveryRequest"
+            />
           </section>
         </div>
       </div>
-      <MessageHistory v-model:open="inboxOpen" v-model:message-id="inboxMessageId" :message-title="inboxMessageTitle" />
+      <MessageHistory
+        v-if="canOpenInbox"
+        v-model:open="inboxOpen"
+        v-model:message-id="inboxMessageId"
+        :message-title="inboxMessageTitle"
+        @after-open-change="restoreInboxFocus"
+      />
     </div>
   </Page>
 </template>
@@ -215,203 +290,232 @@ async function moveTab(event: KeyboardEvent) {
   max-width: 1560px;
   margin: 0 auto;
 }
-.profile-title {
-  margin: 2px 0 20px;
-  font-size: 22px;
-  font-weight: 600;
-}
+
 .profile-layout {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  align-items: start;
   gap: 22px;
+  align-items: start;
 }
+
 .profile-identity {
   overflow: hidden;
+  background: hsl(var(--card));
   border-top: 4px solid hsl(var(--primary));
   border-radius: calc(var(--radius) * 1.125);
-  background: hsl(var(--card));
 }
+
 .identity-top {
   padding: 28px 24px 0;
   text-align: center;
 }
+
 .identity-avatar {
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
   font-size: 32px;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 10%);
 }
+
 .identity-top h2 {
   margin: 18px 0 10px;
   font-size: 22px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
 .identity-top :deep(.ant-tag) {
   margin-inline-end: 0;
 }
+
 .identity-code {
   display: flex;
+  gap: 7px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
   margin: 14px 0 22px;
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
   overflow-wrap: anywhere;
 }
+
 .identity-code svg {
   flex: none;
 }
+
 .identity-inbox {
   display: flex;
-  justify-content: center;
-  align-items: center;
   gap: 9px;
+  align-items: center;
+  justify-content: center;
   height: 38px;
 }
+
 .identity-facts {
-  margin: 24px 24px 0;
   padding-top: 17px;
+  margin: 24px 24px 0;
   border-top: 1px solid hsl(var(--border));
 }
+
 .identity-facts > div {
   display: flex;
-  justify-content: space-between;
   gap: 12px;
+  justify-content: space-between;
   padding: 8px 0;
   font-size: 12px;
 }
+
 .identity-facts dt {
   flex: none;
   color: hsl(var(--muted-foreground));
 }
+
 .identity-facts dd {
   margin: 0;
   text-align: right;
   overflow-wrap: anywhere;
 }
+
 .identity-tabs {
   display: grid;
   gap: 6px;
   padding: 20px 14px 24px;
 }
+
 .identity-tabs button {
   display: flex;
-  align-items: center;
   gap: 12px;
+  align-items: center;
   width: 100%;
   padding: 12px 14px;
-  border: 0;
-  border-radius: calc(var(--radius) * 0.75);
-  background: transparent;
-  color: hsl(var(--muted-foreground));
   font-size: 14px;
+  color: hsl(var(--muted-foreground));
   text-align: left;
   cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.75);
 }
+
 .identity-tabs button:hover {
-  background: hsl(var(--primary) / 0.04);
   color: hsl(var(--primary));
+  background: hsl(var(--primary) / 4%);
 }
+
 .identity-tabs button[aria-selected='true'] {
-  background: hsl(var(--primary) / 0.09);
-  color: hsl(var(--primary));
   font-weight: 500;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 9%);
 }
+
 .identity-tabs button:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
 }
+
 .profile-content {
   min-width: 0;
 }
+
 .profile-overview {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
 }
+
 .profile-security-stack {
-  display: grid;
-  gap: 24px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
 }
-.security-card-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+
+.security-panel-heading {
+  padding: 22px 26px 18px;
+  border-bottom: 1px solid hsl(var(--border));
 }
-.security-card-title h2 {
+
+.security-panel-heading h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
 }
-.security-card-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.07);
-}
-.security-card-icon :deep(svg) { width: 18px; height: 18px; }
+
 .password-notice {
-  margin-bottom: 28px;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 20px;
 }
+
 .profile-center :deep(.profile-panel) {
-  border-radius: calc(var(--radius) * 1.125);
+  min-width: 0;
   background: hsl(var(--card));
+  border-radius: calc(var(--radius) * 1.125);
 }
+
 .profile-center :deep(.profile-panel .ant-card-head) {
   min-height: 64px;
   padding-inline: 24px;
   border-bottom: 0;
 }
+
 .profile-center :deep(.profile-panel .ant-card-head-title) {
   padding-block: 18px;
 }
+
 .profile-center :deep(.profile-security-card .ant-card-head) {
   min-height: 72px;
   padding-inline: 28px;
   border-bottom: 1px solid hsl(var(--border));
 }
-.profile-center :deep(.profile-security-card .ant-card-head-title) { padding-block: 16px; }
+
+.profile-center :deep(.profile-security-card .ant-card-head-title) {
+  padding-block: 16px;
+}
+
 .profile-center :deep(.profile-panel h2) {
   font-size: 16px;
   font-weight: 600;
 }
+
 @media (max-width: 1100px) {
   .profile-layout {
     grid-template-columns: 220px minmax(0, 1fr);
     gap: 18px;
   }
+
   .identity-top {
     padding-inline: 18px;
   }
+
   .identity-facts {
     margin-inline: 18px;
   }
 }
+
 @media (max-width: 760px) {
   .profile-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
   .identity-top {
     padding-top: 20px;
   }
+
   .identity-facts {
     display: none;
   }
+
   .identity-tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     padding: 18px 10px;
   }
+
   .identity-tabs button {
-    padding: 10px 8px;
-    justify-content: center;
     gap: 6px;
+    justify-content: center;
+    padding: 10px 8px;
     font-size: 12px;
   }
+
   .profile-center :deep(.profile-panel .ant-card-head) {
     padding-inline: 18px;
   }

@@ -1,4 +1,5 @@
 import { authRequestClient } from '#/api/request';
+import { quietRequest } from '#/api/request-types';
 
 export type SystemResource =
   | 'action'
@@ -38,13 +39,19 @@ export function getSystemSummary(
     role: 'total,counts,groups',
     user: 'total,counts,trend',
     'user-group': 'total,counts,groups',
-
   };
-  return authRequestClient.get<Partial<SystemSummary>>(`/${resource}/summary`, {
-    params: { ...params, f: fields[resource] },
-  }).then((value): SystemSummary => ({
-    total: 0, counts: {}, groups: [], trend: [], ...value,
-  }));
+  return authRequestClient
+    .get<Partial<SystemSummary>>(`/${resource}/summary`, {
+      ...quietRequest,
+      params: { ...params, f: fields[resource] },
+    })
+    .then((value): SystemSummary => ({
+      total: 0,
+      counts: {},
+      groups: [],
+      trend: [],
+      ...value,
+    }));
 }
 
 export function getSummaryUserGroup(id: number) {

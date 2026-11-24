@@ -91,7 +91,7 @@ onBeforeUnmount(clear);
     :class="{ 'is-highlighting': highlighting }"
     data-testid="audit-filter-cue"
   >
-    <slot />
+    <slot></slot>
     <span v-if="highlighting" class="filter-lock" aria-hidden="true"
       ><IconifyIcon icon="lucide:scan-line"
     /></span>
@@ -107,24 +107,28 @@ onBeforeUnmount(clear);
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  border-radius: var(--radius);
   scroll-margin-block: 160px;
+  border-radius: var(--radius);
 }
+
 .audit-filter-cue::after {
   position: absolute;
   inset: -5px;
-  border: 2px solid hsl(var(--primary));
-  border-radius: calc(var(--radius) + 4px);
-  opacity: 0;
   pointer-events: none;
   content: '';
+  border: 2px solid hsl(var(--primary));
+  border-radius: calc(var(--radius) * 1.5);
+  opacity: 0;
 }
+
 .is-highlighting::after {
   animation: filter-lock-ring 2.4s ease-out both;
 }
+
 .is-highlighting {
   animation: filter-lock-settle 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
 .filter-lock {
   position: absolute;
   top: -12px;
@@ -133,68 +137,79 @@ onBeforeUnmount(clear);
   place-items: center;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
   color: hsl(var(--primary-foreground));
-  background: hsl(var(--primary));
   pointer-events: none;
+  background: hsl(var(--primary));
+  border-radius: 50%;
   animation: filter-lock-icon 2.4s ease-out both;
 }
+
 .filter-announcement {
   position: absolute;
   width: 1px;
   height: 1px;
   padding: 0;
   overflow: hidden;
-  clip-path: inset(50%);
   white-space: nowrap;
+  clip-path: inset(50%);
 }
+
 @keyframes filter-lock-settle {
   from {
     transform: scale(1.07);
   }
+
   to {
     transform: scale(1);
   }
 }
+
 @keyframes filter-lock-ring {
   0% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0%);
     opacity: 0;
     transform: scale(1.14);
-    box-shadow: 0 0 0 8px hsl(var(--primary) / 0%);
   }
+
   18%,
   65% {
+    box-shadow: 0 0 0 5px hsl(var(--primary) / 12%);
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 0 5px hsl(var(--primary) / 12%);
   }
+
   100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0%);
     opacity: 0;
     transform: scale(1);
-    box-shadow: 0 0 0 0 hsl(var(--primary) / 0%);
   }
 }
+
 @keyframes filter-lock-icon {
   0% {
     opacity: 0;
     transform: scale(0.6);
   }
+
   18%,
   70% {
     opacity: 1;
     transform: scale(1);
   }
+
   100% {
     opacity: 0;
     transform: scale(1);
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .is-highlighting,
   .is-highlighting::after,
   .filter-lock {
     animation: none;
   }
+
   .is-highlighting::after {
     opacity: 1;
   }

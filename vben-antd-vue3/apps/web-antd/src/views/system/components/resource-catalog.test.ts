@@ -1,14 +1,16 @@
-import { describe, expect, it } from 'vitest';
 import type { ResourceCatalog } from '#/api/system';
+
+import { describe, expect, it } from 'vitest';
+
+import { required } from '../../../../../../scripts/test-utils/required';
 import {
   permissionOperations,
+  resolveResourceConfig,
   resourceBreadcrumb,
   resourceTree,
-  resolveResourceConfig,
 } from './resource-catalog';
 
 export const catalogFixture: ResourceCatalog = {
-  
   resources: {
     'admin:system': { kind: 'directory', sort: 10 },
     'admin:system:user': {
@@ -74,15 +76,15 @@ describe('resource permission catalog', () => {
     ]);
     const tree = resourceTree(catalogFixture, 'admin', '', (key) => key);
     expect(tree.map((node) => node.key)).toEqual(['admin:system']);
-    expect(tree[0]!.selectable).toBe(false);
-    expect(tree[0]!.children.map((node) => node.key)).toEqual([
+    expect(required(tree[0]).selectable).toBe(false);
+    expect(required(tree[0]).children.map((node) => node.key)).toEqual([
       'admin:system:role',
       'admin:system:user',
     ]);
     expect(resourceTree(catalogFixture, 'h5', '', (key) => key)).toEqual([]);
-    expect(resourceTree(catalogFixture, 'mini', '', (key) => key)[0]!.key).toBe(
-      'mini:work',
-    );
+    expect(
+      required(resourceTree(catalogFixture, 'mini', '', (key) => key)[0]).key,
+    ).toBe('mini:work');
   });
   it('searches names and identifiers while retaining parents', () => {
     const labels: Record<string, string> = {
@@ -92,9 +94,9 @@ describe('resource permission catalog', () => {
     };
     const label = (key: string) => labels[key] || key;
     expect(
-      resourceTree(catalogFixture, 'admin', '用户', label)[0]!.children.map(
-        (node) => node.key,
-      ),
+      required(
+        resourceTree(catalogFixture, 'admin', '用户', label)[0],
+      ).children.map((node) => node.key),
     ).toEqual(['admin:system:user']);
     expect(resourceBreadcrumb(catalogFixture, 'admin:system:user', label)).toBe(
       '系统管理 / 用户管理',
@@ -107,17 +109,18 @@ describe('resource permission catalog', () => {
       'read',
       ['admin:system:user:query'],
     );
-    expect(config.ui[0]!.page_entry).toBe(true);
+    expect(required(config.ui[0]).page_entry).toBe(true);
     expect(config.endpoints).toEqual([
       { protocol: 'http', method: 'GET', path: '/user' },
     ]);
-    expect(resolveResourceConfig(
-      catalogFixture,
-      'admin:system:user',
-      'read',
-      ['admin:system:user:detail'],
-    ).endpoints).toContainEqual({
-      protocol: 'grpc', method: 'GRPC', path: '/auth.v1.User/GetUser',
+    expect(
+      resolveResourceConfig(catalogFixture, 'admin:system:user', 'read', [
+        'admin:system:user:detail',
+      ]).endpoints,
+    ).toContainEqual({
+      protocol: 'grpc',
+      method: 'GRPC',
+      path: '/auth.v1.User/GetUser',
     });
     const empty = resolveResourceConfig(
       catalogFixture,
@@ -127,11 +130,13 @@ describe('resource permission catalog', () => {
     );
     expect(empty.feature_keys).toEqual([]);
     expect(empty.endpoints).toEqual([]);
-    expect(empty.ui[0]!.button_keys).toEqual([]);
+    expect(required(empty.ui[0]).button_keys).toEqual([]);
     expect(
-      resolveResourceConfig(catalogFixture, 'admin:system:user', 'update', [
-        'admin:system:user:edit',
-      ]).ui[0]!.page_entry,
+      required(
+        resolveResourceConfig(catalogFixture, 'admin:system:user', 'update', [
+          'admin:system:user:edit',
+        ]).ui[0],
+      ).page_entry,
     ).toBe(false);
   });
   it('rejects other operations, resources, scopes and repeated features', () => {
@@ -147,10 +152,10 @@ describe('resource permission catalog', () => {
           'read',
           keys,
         ),
-      ).toThrow();
+      ).toThrow('Invalid feature selection');
     }
     expect(() =>
       resolveResourceConfig(catalogFixture, 'admin:system:user', 'export', []),
-    ).toThrow();
+    ).toThrow('Invalid resource operation');
   });
 });

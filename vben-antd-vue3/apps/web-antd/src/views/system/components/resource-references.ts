@@ -1,5 +1,12 @@
 import type { ResourceCatalog, ResourceNode } from '#/api/system';
-import { permissionOperations, resourceBreadcrumb, resourceTree } from './resource-catalog';
+
+import { requiredEntry } from '#/utils/required-entry';
+
+import {
+  permissionOperations,
+  resourceBreadcrumb,
+  resourceTree,
+} from './resource-catalog';
 import { childOrderKey, resourceChildren } from './resource-order';
 
 // Resolve directory references through explicit operation intersections. Reference
@@ -14,24 +21,47 @@ export function referenceResourceBindings(
   const node = catalog.resources[key];
   if (!node || path.has(key)) return result;
   if (node.kind === 'resource') {
-    const operations = allowed.filter((operation) => operation === '*' ? node.permission_scope === '*' : !!node.operations?.[operation]);
-    if (operations.length) result.set(key, [...operations]);
+    const operations = allowed.filter((operation) =>
+      operation === '*'
+        ? node.permission_scope === '*'
+        : !!node.operations?.[operation],
+    );
+    if (operations.length > 0) result.set(key, [...operations]);
     return result;
   }
   const seen = new Set([...path, key]);
-  for (const child of resourceChildren(catalog, key, key.split(':')[0]!)) {
-    const operations = child.kind === 'reference'
-      ? allowed.filter((operation) => referencedOperations(catalog, key, child.key, seen).includes(operation))
-      : allowed;
-    for (const [resource, selected] of referenceResourceBindings(catalog, child.key, operations, seen))
-      result.set(resource, [...new Set([...(result.get(resource) ?? []), ...selected])]);
+  for (const child of resourceChildren(catalog, key, key.split(':')[0] ?? '')) {
+    const operations =
+      child.kind === 'reference'
+        ? allowed.filter((operation) =>
+            referencedOperations(catalog, key, child.key, seen).includes(
+              operation,
+            ),
+          )
+        : allowed;
+    for (const [resource, selected] of referenceResourceBindings(
+      catalog,
+      child.key,
+      operations,
+      seen,
+    ))
+      result.set(resource, [
+        ...new Set([...(result.get(resource) ?? []), ...selected]),
+      ]);
   }
   return result;
 }
 
-export function availableReferenceOperations(catalog: ResourceCatalog, target: string) {
-  const available = new Set([...referenceResourceBindings(catalog, target).values()].flat());
-  return permissionOperations.filter((operation) => available.has(operation)).map(String);
+export function availableReferenceOperations(
+  catalog: ResourceCatalog,
+  target: string,
+) {
+  const available = new Set(
+    [...referenceResourceBindings(catalog, target).values()].flat(),
+  );
+  return permissionOperations
+    .filter((operation) => available.has(operation))
+    .map(String);
 }
 
 export function referencedOperations(
@@ -43,7 +73,18 @@ export function referencedOperations(
   const node = catalog.resources[owner];
   const explicit = node?.reference_operations?.[target];
   if (explicit !== undefined) return explicit;
-  return [...new Set([...referenceResourceBindings(catalog, target, permissionOperations, path).values()].flat())];
+  return [
+    ...new Set(
+      [
+        ...referenceResourceBindings(
+          catalog,
+          target,
+          permissionOperations,
+          path,
+        ).values(),
+      ].flat(),
+    ),
+  ];
 }
 
 export function supportsResourceReferences(
@@ -60,8 +101,8 @@ export function resourceReachable(
 ) {
   const seen = new Set<string>();
   const queue = [from];
-  while (queue.length) {
-    const key = queue.pop()!;
+  while (queue.length > 0) {
+    const key = requiredEntry(queue.pop(), 'resource catalog entry');
     if (key === target) return true;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -97,12 +138,12 @@ export function referenceGraphIssues(catalog: ResourceCatalog) {
   }[] = [];
   const edges = new Map<string, string[]>();
   for (const [key, node] of Object.entries(catalog.resources)) {
-    const scope = key.split(':')[0]!;
+    const scope = key.split(':')[0] ?? '';
     if (node.parent)
       edges.set(node.parent, [...(edges.get(node.parent) ?? []), key]);
     const references = node.references ?? [];
     if (
-      (references.length && node.kind !== 'directory') ||
+      (references.length > 0 && node.kind !== 'directory') ||
       new Set(references).size !== references.length ||
       references.some(
         (target) =>
@@ -112,11 +153,23 @@ export function referenceGraphIssues(catalog: ResourceCatalog) {
       )
     )
       issues.push({ key, field: 'references', code: 'invalidReference' });
-    for (const [target, operations] of Object.entries(node.reference_operations ?? {})) {
-      if (!references.includes(target) || !operations.length ||
-          new Set(operations).size !== operations.length ||
-          operations.some((operation) => !availableReferenceOperations(catalog, target).includes(operation)))
-        issues.push({ key, field: 'references', code: 'invalidReferenceOperations' });
+    for (const [target, operations] of Object.entries(
+      node.reference_operations ?? {},
+    )) {
+      if (
+        !references.includes(target) ||
+        operations.length === 0 ||
+        new Set(operations).size !== operations.length ||
+        operations.some(
+          (operation) =>
+            !availableReferenceOperations(catalog, target).includes(operation),
+        )
+      )
+        issues.push({
+          key,
+          field: 'references',
+          code: 'invalidReferenceOperations',
+        });
     }
     edges.set(key, [...(edges.get(key) ?? []), ...references]);
   }
@@ -156,6 +209,7 @@ export function resourceReferenceTree(
   scope: string,
   query: string,
   label: (key: string) => string,
+  searchLabel: (key: string) => string = label,
 ): ReferenceTreeNode[] {
   const search = query.trim().toLocaleLowerCase();
   const walk = (
@@ -166,7 +220,9 @@ export function resourceReferenceTree(
       const matches =
         ancestorMatches ||
         !search ||
-        `${node.key} ${node.title}`.toLocaleLowerCase().includes(search);
+        `${node.key} ${searchLabel(node.key)}`
+          .toLocaleLowerCase()
+          .includes(search);
       const children = walk(node.children, matches);
       const references: ReferenceTreeNode[] = (
         catalog.resources[node.key]?.references ?? []
@@ -175,7 +231,7 @@ export function resourceReferenceTree(
           (target) =>
             catalog.resources[target] &&
             (matches ||
-              `${target} ${resourceBreadcrumb(catalog, target, label)}`
+              `${target} ${resourceBreadcrumb(catalog, target, searchLabel)}`
                 .toLocaleLowerCase()
                 .includes(search)),
         )
@@ -188,14 +244,15 @@ export function resourceReferenceTree(
           referenceTarget: target,
           referenceOwner: node.key,
         }));
-      if (!matches && !children.length && !references.length) return [];
+      if (!matches && children.length === 0 && references.length === 0)
+        return [];
       const positions = new Map(
         resourceChildren(catalog, node.key, scope).map((item, index) => [
           childOrderKey(item),
           index,
         ]),
       );
-      const allChildren = [...children, ...references].sort(
+      const allChildren = [...children, ...references].toSorted(
         (a, b) =>
           (positions.get(
             childOrderKey({
@@ -215,22 +272,19 @@ export function resourceReferenceTree(
   return walk(resourceTree(catalog, scope, '', label));
 }
 
-/** Match the full menu's depth-first order, including mixed reference positions.
- * A referenced resource has one card at its first occurrence. Search and grant
- * selection never change this order; retain unresolved keys at the end.
- */
+// Follow the full menu's original nodes and keep unresolved selections at the end.
 export function orderPermissionResourceKeys(
   catalog: ResourceCatalog,
   scope: string,
   keys: readonly string[],
 ): string[] {
   const remaining = new Set(keys);
-  if (!remaining.size) return [];
+  if (remaining.size === 0) return [];
   const result: string[] = [];
   const visit = (nodes: ReferenceTreeNode[]) => {
     for (const node of nodes) {
-      const key = node.referenceTarget ?? node.key;
-      if (remaining.delete(key)) result.push(key);
+      if (!node.referenceTarget && remaining.delete(node.key))
+        result.push(node.key);
       visit(node.children);
     }
   };

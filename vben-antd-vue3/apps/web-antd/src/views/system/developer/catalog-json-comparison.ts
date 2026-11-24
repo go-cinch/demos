@@ -1,3 +1,5 @@
+import { requiredEntry } from '#/utils/required-entry';
+
 import { isObject, stable } from './catalog-model';
 
 export interface JsonCodeLine {
@@ -9,7 +11,7 @@ export interface JsonCodeLine {
 export interface JsonComparisonRow {
   local?: JsonCodeLine;
   online?: JsonCodeLine;
-  block: number | null;
+  block: null | number;
 }
 export interface JsonComparisonBlock {
   id: number;
@@ -27,14 +29,11 @@ function tokens(text: string): JsonCodeLine['tokens'] {
   for (const match of text.matchAll(expression)) {
     if (match.index > offset)
       result.push({ kind: 'plain', text: text.slice(offset, match.index) });
+    let selectedKind = 'literal';
+    if (match[1]) selectedKind = match[2] ? 'key' : 'string';
+    else if (match[3]) selectedKind = 'number';
     result.push({
-      kind: match[1]
-        ? match[2]
-          ? 'key'
-          : 'string'
-        : match[3]
-          ? 'number'
-          : 'literal',
+      kind: selectedKind,
       text: match[0],
     });
     offset = match.index + match[0].length;
@@ -57,12 +56,13 @@ function jsonLines(value: unknown): JsonCodeLine[] {
     comma = '',
   ) {
     const indent = ' '.repeat(depth);
-    const entries = Array.isArray(value)
-      ? value.map((item, index) => [String(index), item] as const)
-      : isObject(value)
-        ? Object.entries(value)
-        : [];
-    if (entries.length) {
+    let entries: (readonly [string, unknown])[] = [];
+    if (Array.isArray(value)) {
+      entries = value.map((item, index) => [String(index), item] as const);
+    } else if (isObject(value)) {
+      entries = Object.entries(value);
+    }
+    if (entries.length > 0) {
       const array = Array.isArray(value);
       push(indent + label + (array ? '[' : '{'), path);
       entries.forEach(([key, item], index) =>
@@ -113,7 +113,8 @@ function repeatedLineEdits(
       while (
         x < width &&
         y < height &&
-        local[a + x]!.text === online[c + y]!.text
+        requiredEntry(local[a + x], 'diff entry').text ===
+          requiredEntry(online[c + y], 'diff entry').text
       ) {
         x += 1;
         y += 1;
@@ -124,7 +125,7 @@ function repeatedLineEdits(
       x = width;
       y = height;
       for (let step = distance; step >= 0; step--) {
-        const previous = trace[step]!;
+        const previous = requiredEntry(trace[step], 'diff entry');
         const k = x - y;
         const previousK =
           k === -step ||
@@ -140,7 +141,7 @@ function repeatedLineEdits(
         if (x === previousX) result.push({ online: c + --y });
         else result.push({ local: a + --x });
       }
-      return result.reverse();
+      return result.toReversed();
     }
   }
 }
@@ -155,10 +156,14 @@ function uniqueAnchors(
 ): [number, number][] {
   const left = new Map<string, number>();
   const right = new Map<string, number>();
-  for (let i = a; i < b; i++)
-    left.set(local[i]!.text, left.has(local[i]!.text) ? -1 : i);
-  for (let i = c; i < d; i++)
-    right.set(online[i]!.text, right.has(online[i]!.text) ? -1 : i);
+  for (let i = a; i < b; i++) {
+    const { text } = requiredEntry(local[i], 'local diff line');
+    left.set(text, left.has(text) ? -1 : i);
+  }
+  for (let i = c; i < d; i++) {
+    const { text } = requiredEntry(online[i], 'published diff line');
+    right.set(text, right.has(text) ? -1 : i);
+  }
   const pairs: [number, number][] = [];
   for (const [text, index] of left) {
     const other = right.get(text);
@@ -166,22 +171,28 @@ function uniqueAnchors(
       pairs.push([index, other]);
   }
   const tails: number[] = [];
-  const previous = new Array<number>(pairs.length).fill(-1);
+  const previous = new Int32Array(pairs.length).fill(-1);
   pairs.forEach((pair, index) => {
     let low = 0;
     let high = tails.length;
     while (low < high) {
       const middle = (low + high) >>> 1;
-      if (pairs[tails[middle]!]![1] < pair[1]) low = middle + 1;
+      const tail = requiredEntry(tails[middle], 'anchor index');
+      const previousPair = requiredEntry(pairs[tail], 'anchor pair');
+      if (previousPair[1] < pair[1]) low = middle + 1;
       else high = middle;
     }
-    previous[index] = low ? tails[low - 1]! : -1;
+    previous[index] = low ? requiredEntry(tails[low - 1], 'diff entry') : -1;
     tails[low] = index;
   });
   const anchors: [number, number][] = [];
-  for (let index = tails.at(-1) ?? -1; index >= 0; index = previous[index]!)
-    anchors.push(pairs[index]!);
-  return anchors.reverse();
+  for (
+    let index = tails.at(-1) ?? -1;
+    index >= 0;
+    index = requiredEntry(previous[index], 'diff entry')
+  )
+    anchors.push(requiredEntry(pairs[index], 'diff entry'));
+  return anchors.toReversed();
 }
 
 export function compareJson(localValue: unknown, onlineValue: unknown) {
@@ -189,13 +200,19 @@ export function compareJson(localValue: unknown, onlineValue: unknown) {
   const online = jsonLines(onlineValue);
   const edits: Edit[] = [];
   function compare(a: number, b: number, c: number, d: number) {
-    while (a < b && c < d && local[a]!.text === online[c]!.text)
+    while (
+      a < b &&
+      c < d &&
+      requiredEntry(local[a], 'diff entry').text ===
+        requiredEntry(online[c], 'diff entry').text
+    )
       edits.push({ local: a++, online: c++ });
     let suffix = 0;
     while (
       a < b - suffix &&
       c < d - suffix &&
-      local[b - suffix - 1]!.text === online[d - suffix - 1]!.text
+      requiredEntry(local[b - suffix - 1], 'diff entry').text ===
+        requiredEntry(online[d - suffix - 1], 'diff entry').text
     )
       suffix += 1;
     const leftEnd = b - suffix;
@@ -205,7 +222,7 @@ export function compareJson(localValue: unknown, onlineValue: unknown) {
       for (let i = c; i < rightEnd; i++) edits.push({ online: i });
     } else {
       const anchors = uniqueAnchors(local, online, a, leftEnd, c, rightEnd);
-      if (anchors.length) {
+      if (anchors.length > 0) {
         for (const [left, right] of anchors) {
           compare(a, left, c, right);
           edits.push({ local: left, online: right });
@@ -236,7 +253,7 @@ export function compareJson(localValue: unknown, onlineValue: unknown) {
   const rows: JsonComparisonRow[] = [];
   const blocks: JsonComparisonBlock[] = [];
   for (let i = 0; i < edits.length;) {
-    const edit = edits[i]!;
+    const edit = requiredEntry(edits[i], 'diff entry');
     if (edit.local !== undefined && edit.online !== undefined) {
       rows.push({
         local: local[edit.local],
@@ -249,10 +266,12 @@ export function compareJson(localValue: unknown, onlineValue: unknown) {
     const left: JsonCodeLine[] = [];
     const right: JsonCodeLine[] = [];
     while (i < edits.length) {
-      const entry = edits[i]!;
+      const entry = requiredEntry(edits[i], 'diff entry');
       if (entry.local !== undefined && entry.online !== undefined) break;
-      if (entry.local !== undefined) left.push(local[entry.local]!);
-      if (entry.online !== undefined) right.push(online[entry.online]!);
+      if (entry.local !== undefined)
+        left.push(requiredEntry(local[entry.local], 'diff entry'));
+      if (entry.online !== undefined)
+        right.push(requiredEntry(online[entry.online], 'diff entry'));
       i += 1;
     }
     const block: JsonComparisonBlock = {

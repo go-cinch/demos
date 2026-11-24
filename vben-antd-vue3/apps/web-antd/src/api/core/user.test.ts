@@ -2,8 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { authRequestClient } from '#/api/request';
 
-import { getUserInfoApi } from './user';
-vi.mock('#/api/request', () => ({ authRequestClient: { get: vi.fn() } }));
+import {
+  getUserInfoApi,
+  skipEmailBindingApi,
+  updateUserLanguageApi,
+  updateUserTimezoneApi,
+} from './user';
+const properties = vi.hoisted(() => vi.fn());
+vi.mock('#/store/system-properties', () => ({
+  loadSystemProperties: properties,
+}));
+vi.mock('#/api/request', () => ({
+  authRequestClient: { get: vi.fn(), request: vi.fn() },
+}));
 const user = { code: 'ABC12345', id: 1, scope: 'admin', username: 'operator' };
 const menu = {
   menu_key: 'admin:menu:system:user',
@@ -11,17 +22,80 @@ const menu = {
   btns: ['admin:btn:system:user:query'],
 };
 describe('scoped user permissions', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    properties.mockResolvedValue({ email_enabled: true });
+  });
+  it('omits email fields and ignores an old binding when delivery is disabled', async () => {
+    properties.mockResolvedValue({ email_enabled: false });
+    vi.mocked(authRequestClient.get).mockResolvedValue({
+      ...user,
+      email: 'old@example.test',
+      email_verified_at: 1,
+      email_binding_required: true,
+    });
+    expect(await getUserInfoApi()).toMatchObject({
+      email: '',
+      emailVerifiedAt: undefined,
+      emailBindingRequired: false,
+    });
+    expect(authRequestClient.get).toHaveBeenCalledWith('/info', {
+      params: {
+        ui: 'vben_pc',
+        f: 'id,username,code,role,scope,permission,metadata,ui_preferences',
+      },
+    });
+  });
+  it.each([true, false])(
+    'loads all saved onboarding preferences independently of email delivery (%s)',
+    async (emailEnabled) => {
+      properties.mockResolvedValue({ email_enabled: emailEnabled });
+      vi.mocked(authRequestClient.get).mockResolvedValue({
+        ...user,
+        metadata: {
+          totp_enrollment_skipped: true,
+          password_reset_skipped: true,
+          email_binding_skipped: true,
+        },
+      });
+      expect(await getUserInfoApi()).toMatchObject({
+        totpEnrollmentSkipped: true,
+        passwordResetSkipped: true,
+        emailBindingSkipped: true,
+      });
+      expect(
+        vi.mocked(authRequestClient.get).mock.calls[0]?.[1]?.params?.f,
+      ).toContain('metadata');
+      vi.mocked(authRequestClient.get).mockResolvedValue(user);
+      expect(await getUserInfoApi()).toMatchObject({
+        totpEnrollmentSkipped: false,
+        passwordResetSkipped: false,
+        emailBindingSkipped: false,
+      });
+    },
+  );
+  it('writes only the self-service preference to info', async () => {
+    await skipEmailBindingApi();
+    expect(authRequestClient.request).toHaveBeenCalledWith('/info', {
+      method: 'PATCH',
+      data: { metadata: { email_binding_skipped: true } },
+    });
+  });
   it('uses the scoped request client without a scope query and keeps permission identities separate', async () => {
     vi.mocked(authRequestClient.get).mockResolvedValue({
       ...user,
+      metadata: { email_binding_skipped: true },
       role: { id: 3, name: 'Operator', word: 'operator' },
       permission: { words: ['admin:read:system:user'], menus: [menu] },
     });
     const result = await getUserInfoApi();
     expect(authRequestClient.get).toHaveBeenCalledWith('/info', {
-      params: { f: 'id,username,code,role,scope,permission' },
+      params: {
+        ui: 'vben_pc',
+        f: 'id,username,code,role,scope,permission,email,email_verified_at,email_binding_required,metadata,ui_preferences',
+      },
     });
+    expect(result.emailBindingSkipped).toBe(true);
     expect(result.roles).toEqual(['/system/user']);
     expect(result.permission.words).toEqual(['admin:read:system:user']);
     expect(result.permission.menus[0]?.btns).toEqual([
@@ -42,7 +116,7 @@ describe('scoped user permissions', () => {
     const result = await getUserInfoApi();
     expect(result.roles).toEqual([]);
     expect(result.permission).toEqual({ words: [], menus: [] });
-    expect(result.homePath).toBe('/forbidden');
+    expect(result.homePath).toBe('/profile');
   });
   it('deduplicates buttons within their page and rejects mismatched response scopes', async () => {
     vi.mocked(authRequestClient.get).mockResolvedValue({
@@ -60,7 +134,8 @@ describe('scoped user permissions', () => {
         ],
       },
     });
-    expect((await getUserInfoApi()).permission.menus).toHaveLength(1);
+    const receivedUser = await getUserInfoApi();
+    expect(receivedUser.permission.menus).toHaveLength(1);
     vi.mocked(authRequestClient.get).mockResolvedValue({
       ...user,
       scope: 'mini',
@@ -102,7 +177,8 @@ describe('scoped user permissions', () => {
         ],
       },
     });
-    expect((await getUserInfoApi()).permission.navigation).toEqual([
+    const receivedUser = await getUserInfoApi();
+    expect(receivedUser.permission.navigation).toEqual([
       {
         resource_key: 'admin:audit',
         children: [
@@ -198,7 +274,8 @@ describe('scoped user permissions', () => {
         menus: [menu],
       },
     });
-    expect((await getUserInfoApi()).permission).toMatchObject({
+    const receivedUser = await getUserInfoApi();
+    expect(receivedUser.permission).toMatchObject({
       permission_scope: '*',
       permission_scopes: ['user:update', 'role:read'],
       words: ['admin:read:system:user'],
@@ -224,9 +301,10 @@ describe('scoped user permissions', () => {
         ],
       },
     });
-    expect((await getUserInfoApi()).permission.menus).toEqual([menu]);
+    const receivedUser = await getUserInfoApi();
+    expect(receivedUser.permission.menus).toEqual([menu]);
   });
-  it('prefers an authorized overview and fails closed when permission data is absent', async () => {
+  it('uses authorized menu order and falls back to profile when permission data is absent', async () => {
     vi.mocked(authRequestClient.get).mockResolvedValue({
       ...user,
       permission: {
@@ -241,12 +319,43 @@ describe('scoped user permissions', () => {
         ],
       },
     });
-    expect((await getUserInfoApi()).homePath).toBe('/dashboard/overview');
+    const receivedUser = await getUserInfoApi();
+    expect(receivedUser.homePath).toBe('/system/user');
     vi.mocked(authRequestClient.get).mockResolvedValue(user);
     expect(await getUserInfoApi()).toMatchObject({
-      homePath: '/forbidden',
+      homePath: '/profile',
       roles: [],
       permission: { words: [], menus: [] },
     });
+  });
+});
+
+it('reads and patches the current account language using metadata', async () => {
+  vi.mocked(authRequestClient.get).mockResolvedValue({
+    ...user,
+    metadata: { language: 'fr-FR' },
+  });
+  const receivedUser = await getUserInfoApi();
+  expect(receivedUser.language).toBe('fr-FR');
+  await updateUserLanguageApi('zh-CN');
+  expect(authRequestClient.request).toHaveBeenCalledWith('/info', {
+    method: 'PATCH',
+    data: { metadata: { language: 'zh-CN' } },
+  });
+});
+
+it('reads and patches timezone globally beside language without writing per-client preferences', async () => {
+  vi.mocked(authRequestClient.get).mockResolvedValue({
+    ...user,
+    metadata: { language: 'zh-CN', timezone: 'Asia/Tokyo' },
+  });
+  expect(await getUserInfoApi()).toMatchObject({
+    language: 'zh-CN',
+    timezone: 'Asia/Tokyo',
+  });
+  await updateUserTimezoneApi('America/New_York');
+  expect(authRequestClient.request).toHaveBeenCalledWith('/info', {
+    method: 'PATCH',
+    data: { metadata: { timezone: 'America/New_York' } },
   });
 });

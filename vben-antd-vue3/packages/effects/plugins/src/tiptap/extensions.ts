@@ -5,7 +5,7 @@ import type { Extensions } from '@tiptap/vue-3';
 
 import type { ImageUploadOptions, VbenTiptapExtensionOptions } from './types';
 
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 
 import { alert } from '@vben-core/popup-ui';
 
@@ -444,7 +444,7 @@ export function createDefaultTiptapExtensions(
           },
         }),
     Placeholder.configure({
-      placeholder: options.placeholder ?? $t('ui.tiptap.placeholder'),
+      placeholder: options.placeholder ?? $placeholder('ui.tiptap.placeholder'),
     }),
   ];
 }

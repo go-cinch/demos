@@ -1,8 +1,13 @@
 import { onScopeDispose, ref, watch } from 'vue';
 
+import { userCache } from '@vben/utils/cache';
+
 import { Modal } from 'ant-design-vue';
 
-import { MFACancelled, mfaPrompt } from '#/security/mfa-prompt';
+import {
+  VerificationCancelled,
+  verificationPrompt,
+} from '#/security/verification-prompt';
 export function useOperationConfirmation() {
   const operationPopover = ref('');
   const submittingConfirmations = new Set<ReturnType<typeof Modal.confirm>>();
@@ -10,17 +15,19 @@ export function useOperationConfirmation() {
   async function runConfirmedOperation(operation: () => unknown) {
     try {
       return await operation();
-    } catch (cause) {
-      if (!(cause instanceof MFACancelled)) throw cause;
+    } catch (error) {
+      if (!(error instanceof VerificationCancelled)) throw error;
     }
   }
 
   function confirmSensitiveOperation(
     options: Parameters<typeof Modal.confirm>[0],
   ) {
+    const current = userCache.capture();
     const dialog = Modal.confirm({
       ...options,
       async onOk() {
+        if (!current()) return;
         submittingConfirmations.add(dialog);
         try {
           return await runConfirmedOperation(() => options.onOk?.());
@@ -33,7 +40,7 @@ export function useOperationConfirmation() {
   }
 
   function setOperationPopover(key: string, open: boolean) {
-    if (open && mfaPrompt.value?.mode !== 'sensitive') {
+    if (open && verificationPrompt.value?.mode !== 'sensitive') {
       operationPopover.value = key;
     } else if (operationPopover.value === key) {
       operationPopover.value = '';
@@ -41,9 +48,9 @@ export function useOperationConfirmation() {
   }
 
   watch(
-    () => mfaPrompt.value?.id,
+    () => verificationPrompt.value?.id,
     () => {
-      if (mfaPrompt.value?.mode !== 'sensitive') return;
+      if (verificationPrompt.value?.mode !== 'sensitive') return;
       // The operation is already confirmed; show only the shared identity prompt.
       operationPopover.value = '';
       submittingConfirmations.forEach((dialog) => {

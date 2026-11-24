@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import type { ResourceKind, SystemRecord } from './system-record-format';
 
+import type { LoadFailure } from '#/api/request-error';
 import type { ActionRecord } from '#/api/system';
 
 import { computed } from 'vue';
 
-import {
-  Button,
-  Collapse,
-  CollapsePanel,
-  Empty,
-  Tag,
-} from 'ant-design-vue';
+import { Collapse, CollapsePanel, Empty, Tag } from 'ant-design-vue';
 
 import LoadWarning from '#/components/load-warning.vue';
 import { vSkeleton } from '#/directives/skeleton';
@@ -19,11 +14,11 @@ import { $t } from '#/locales';
 
 import GroupMembers from './group-members.vue';
 import PermissionDetail from './permission-detail.vue';
-import { memberCount } from './system-record-format';
 import {
   jsonStructure,
   jsonText,
   jsonType,
+  memberCount,
   recordActions,
   recordDate,
   skeletonRecord,
@@ -34,14 +29,16 @@ const props = withDefaults(
     record: null | SystemRecord;
     resource: ResourceKind;
     loading?: boolean;
-    error?: boolean;
+    error?: LoadFailure;
     editing?: boolean;
     focusField?: 'button' | 'menu';
   }>(),
-  { loading: false, error: false, editing: false },
+  { loading: false, error: false, editing: false, focusField: undefined },
 );
 const emit = defineEmits<{ retry: [] }>();
-const record = computed<null | SystemRecord>(() => props.record ?? (props.loading ? skeletonRecord(props.resource) : null));
+const record = computed<null | SystemRecord>(
+  () => props.record ?? (props.loading ? skeletonRecord(props.resource) : null),
+);
 const dictionary = computed(() =>
   record.value && 'value' in record.value ? record.value : null,
 );
@@ -57,11 +54,22 @@ const hasPermissions = computed(() =>
 );
 const actionCodes = computed(() =>
   record.value && 'action_codes' in record.value
-    ? record.value.action_codes ?? []
+    ? (record.value.action_codes ?? [])
     : [],
 );
-const detailActions = computed(() => props.resource === 'action' && record.value ? [record.value as ActionRecord] : actions.value);
-const permissionCount = computed(() => new Set(user.value?.permission_sources?.flatMap((source) => source.action_codes) ?? actionCodes.value).size);
+const detailActions = computed(() =>
+  props.resource === 'action' && record.value
+    ? [record.value as ActionRecord]
+    : actions.value,
+);
+const permissionCount = computed(
+  () =>
+    new Set(
+      user.value?.permission_sources?.flatMap(
+        (source) => source.action_codes,
+      ) ?? actionCodes.value,
+    ).size,
+);
 const facts = computed(() => {
   const keys: Record<ResourceKind, string[]> = {
     action: ['name', 'word', 'code', 'group'],
@@ -69,22 +77,27 @@ const facts = computed(() => {
     role: ['name', 'word'],
     user: ['username', 'code'],
     'user-group': ['name', 'word'],
-
   };
   return keys[props.resource]
     .filter((key) => key !== 'code' || record.value)
-    .map((key) => ({
-      key,
-      label: $t(
-        `system.fields.${key === 'key' ? 'dictionaryKey' : key === 'code' && props.resource === 'user' ? 'userCode' : key}`,
-      ),
-      text:
-        record.value && key in record.value
-          ? String(
-              (record.value as unknown as Record<string, unknown>)[key] ?? '',
-            )
-          : '',
-    }));
+    .map((key) => {
+      let fieldLabel = key;
+      if (key === 'key') {
+        fieldLabel = 'dictionaryKey';
+      } else if (key === 'code' && props.resource === 'user') {
+        fieldLabel = 'userCode';
+      }
+      return {
+        key,
+        label: $t(`system.fields.${fieldLabel}`),
+        text:
+          record.value && key in record.value
+            ? String(
+                (record.value as unknown as Record<string, unknown>)[key] ?? '',
+              )
+            : '',
+      };
+    });
 });
 </script>
 <template>
@@ -97,31 +110,25 @@ const facts = computed(() => {
   >
     <LoadWarning
       v-if="error"
-      >
-<template #action>
-<Button size="small" @click="emit('retry')">
-{{
-          $t('system-cards.retry')
-        }}
-</Button>
-</template>
-</LoadWarning>
+      :failure="error"
+      :retry-label="$t('system-cards.retry')"
+      retry-size="small"
+      @retry="emit('retry')"
+    />
     <div v-else-if="record || editing" v-skeleton="loading">
       <div class="detail-section-heading">
         <h3>{{ $t('system-editor.basic') }}</h3>
         <Tag
           v-if="dictionary && !editing"
           :color="dictionary.enabled ? 'green' : 'default'"
-          >
-{{
+        >
+          {{
             $t(dictionary.enabled ? 'system.enabled.yes' : 'system.enabled.no')
           }}
-</Tag>
+        </Tag>
         <Tag v-if="user" :color="userStatus(user.status).color">
-{{
-          userStatus(user.status).label
-        }}
-</Tag>
+          {{ userStatus(user.status).label }}
+        </Tag>
       </div>
       <div class="detail-basic-fields">
         <template v-for="fact in facts" :key="fact.key">
@@ -137,11 +144,15 @@ const facts = computed(() => {
         <slot v-if="editing" name="field-enabled"></slot>
         <template v-if="resource === 'user'">
           <slot v-if="editing && !record" name="field-password"></slot>
-          <slot v-if="editing && $slots['field-role_id']" name="field-role_id"></slot>
+          <slot
+            v-if="editing && $slots['field-role_id']"
+            name="field-role_id"
+          ></slot>
           <dl v-else class="detail-facts">
             <dt>{{ $t('system.fields.role') }}</dt>
             <dd>
-              <Tag v-if="userRole" color="blue">{{ userRole.name }}</Tag><span v-else>—</span>
+              <Tag v-if="userRole" color="blue">{{ userRole.name }}</Tag
+              ><span v-else>—</span>
             </dd>
           </dl>
           <dl v-if="user" class="detail-facts">
@@ -152,23 +163,28 @@ const facts = computed(() => {
             <dt>{{ $t('system-cards.failedLoginCount') }}</dt>
             <dd>{{ user.wrong }}</dd>
           </dl>
-          <Collapse v-if="editing && record && $slots['field-password']" ghost class="detail-password">
-<CollapsePanel
+          <Collapse
+            v-if="editing && record && $slots['field-password']"
+            ghost
+            class="detail-password"
+          >
+            <CollapsePanel
               key="password"
               :header="$t('system.fields.newPassword')"
               force-render
-              >
-<slot name="field-password"></slot>
-</CollapsePanel>
-</Collapse>
+            >
+              <slot name="field-password"></slot>
+            </CollapsePanel>
+          </Collapse>
         </template>
       </div>
       <section v-if="resource === 'dictionary'" class="detail-section">
         <slot v-if="editing" name="field-value"></slot>
         <template v-else-if="dictionary">
-<h4>{{ $t('system.fields.dictionaryValue') }}</h4>
+          <h4>{{ $t('system.fields.dictionaryValue') }}</h4>
           <p class="detail-json-type">
-            <Tag>{{ jsonType(dictionary.value) }}</Tag>{{ jsonStructure(dictionary.value) }}
+            <Tag>{{ jsonType(dictionary.value) }}</Tag
+            >{{ jsonStructure(dictionary.value) }}
           </p>
           <pre
             class="detail-json"
@@ -178,29 +194,60 @@ const facts = computed(() => {
         </template>
       </section>
       <section v-if="user" class="detail-section">
-        <h4>{{ $t('system.fields.metadata') }}</h4>
-        <pre
-          class="detail-json detail-user-json"
-          tabindex="0"
-          :aria-label="$t('system.fields.metadata')"
-          >{{ jsonText(user.metadata) }}</pre>
+        <slot
+          v-if="editing && $slots['field-metadata']"
+          name="field-metadata"
+        ></slot>
+        <template v-else>
+          <h4>{{ $t('system.fields.metadata') }}</h4>
+          <pre
+            class="detail-json detail-user-json"
+            tabindex="0"
+            :aria-label="$t('system.fields.metadata')"
+            >{{ jsonText(user.metadata) }}</pre>
+        </template>
       </section>
       <section v-if="resource === 'action'" class="detail-section">
-        <template v-if="editing"><slot name="field-resource"></slot><slot name="field-menu"></slot><slot name="field-button"></slot></template>
-        <PermissionDetail v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :focus-field="focusField" />
+        <template v-if="editing"
+          ><slot name="field-resource"></slot><slot name="field-menu"></slot
+          ><slot name="field-button"></slot
+        ></template>
+        <PermissionDetail
+          v-else-if="record && !loading"
+          :key="`${record.id}:${record.updated_at}`"
+          :actions="detailActions"
+          :focus-field="focusField"
+        />
       </section>
       <section v-if="resource === 'user-group'" class="detail-section">
-        <slot v-if="editing && $slots['field-user_ids']" name="field-user_ids"></slot>
-        <GroupMembers v-else-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :group-id="record.id" :count="memberCount(record)" />
+        <slot
+          v-if="editing && $slots['field-user_ids']"
+          name="field-user_ids"
+        ></slot>
+        <GroupMembers
+          v-else-if="record && !loading"
+          :key="`${record.id}:${record.updated_at}`"
+          :group-id="record.id"
+          :count="memberCount(record)"
+        />
       </section>
       <section v-if="hasPermissions" class="detail-section">
-        <slot v-if="editing && $slots['field-action_codes']" name="field-action_codes"></slot>
+        <slot
+          v-if="editing && $slots['field-action_codes']"
+          name="field-action_codes"
+        ></slot>
         <template v-else>
           <h4>
             {{ $t('system.fields.permissions') }}
             <span v-if="!user">{{ permissionCount }}</span>
           </h4>
-          <PermissionDetail v-if="record && !loading" :key="`${record.id}:${record.updated_at}`" :actions="detailActions" :codes="actionCodes" :sources="user?.permission_sources" />
+          <PermissionDetail
+            v-if="record && !loading"
+            :key="`${record.id}:${record.updated_at}`"
+            :actions="detailActions"
+            :codes="actionCodes"
+            :sources="user?.permission_sources"
+          />
         </template>
       </section>
       <section v-if="record" class="detail-section">
@@ -215,14 +262,14 @@ const facts = computed(() => {
         </dl>
       </section>
       <Collapse v-if="record && !editing" class="detail-raw" ghost>
-<CollapsePanel key="raw" :header="$t('system-cards.rawRecord')">
+        <CollapsePanel key="raw" :header="$t('system-cards.rawRecord')">
           <pre
             class="detail-json"
             tabindex="0"
             :aria-label="$t('system-cards.rawRecord')"
             >{{ jsonText(record) }}</pre>
         </CollapsePanel>
-</Collapse>
+      </Collapse>
     </div>
     <Empty
       v-else
@@ -233,34 +280,38 @@ const facts = computed(() => {
 </template>
 <style scoped>
 .detail-unresolved {
-  margin-top: 18px;
   padding: 12px;
+  margin-top: 18px;
+  background: hsl(var(--muted) / 30%);
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) * 0.75);
-  background: hsl(var(--muted) / 0.3);
 }
+
 .detail-unresolved p {
+  margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.7;
   color: hsl(var(--muted-foreground));
-  margin: 10px 0 0;
 }
 
 .record-detail {
   min-width: 0;
   color: hsl(var(--foreground));
 }
+
 .detail-section-heading {
   display: flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
   margin-bottom: 22px;
 }
+
 .detail-section-heading h3 {
   margin: 0 auto 0 0;
   font-size: 15px;
   font-weight: 600;
 }
+
 .detail-facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -268,207 +319,247 @@ const facts = computed(() => {
   margin: 0;
   font-size: 13px;
 }
+
 .detail-facts dt {
   color: hsl(var(--muted-foreground));
 }
+
 .detail-facts dd {
   min-width: 0;
   margin: 0 0 15px;
-  overflow-wrap: anywhere;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
+
 .detail-section {
-  margin-top: 24px;
   padding-top: 20px;
+  margin-top: 24px;
   border-top: 1px solid hsl(var(--border));
 }
+
 .detail-section h4 {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
 }
+
 .detail-section h4 span {
   font-size: 12px;
   font-weight: 400;
   color: hsl(var(--muted-foreground));
 }
+
 .detail-json-type {
   margin: 0 0 10px;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
 }
+
 .detail-json {
   max-height: 360px;
-  margin: 0;
   padding: 14px;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) * 0.75);
-  background: hsl(var(--muted) / 45%);
+  margin: 0;
   overflow: auto;
   font:
     12px/1.7 ui-monospace,
     monospace;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  background: hsl(var(--muted) / 45%);
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) * 0.75);
 }
+
 .detail-json:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
 }
+
 .detail-rules {
   max-height: 360px;
   overflow: auto;
 }
+
 .detail-rule {
   display: flex;
-  align-items: flex-start;
   gap: 5px;
+  align-items: flex-start;
   margin-bottom: 7px;
 }
+
 .detail-rule code {
   min-width: 0;
-  overflow-wrap: anywhere;
   font:
     12px/1.8 ui-monospace,
     monospace;
+  overflow-wrap: anywhere;
 }
+
 .detail-rule :deep(.ant-tag) {
   flex: none;
   margin: 0;
 }
+
 .detail-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
+
 .detail-tags :deep(.ant-tag) {
   max-width: 100%;
   margin: 0;
-  white-space: normal;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
+
 .detail-section h4.detail-subheading {
   margin-top: 18px;
 }
+
 .detail-member-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+
 .detail-member {
   display: flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
   min-width: 0;
 }
+
 .detail-member :deep(.ant-avatar) {
   flex: none;
   color: hsl(var(--primary));
   background: hsl(var(--primary) / 10%);
 }
+
 .detail-member > div {
   min-width: 0;
 }
+
 .detail-member strong,
 .detail-member span {
   display: block;
   overflow-wrap: anywhere;
 }
+
 .detail-member strong {
   font-size: 13px;
   font-weight: 500;
 }
+
 .detail-member span {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
 }
+
 .detail-empty {
   padding: 24px 16px;
-  text-align: center;
-  border: 1px dashed hsl(var(--border));
-  border-radius: calc(var(--radius) * 0.875);
-  background: hsl(var(--muted) / 0.25);
   margin: 0;
   font-size: 13px;
   color: hsl(var(--muted-foreground));
+  text-align: center;
+  background: hsl(var(--muted) / 25%);
+  border: 1px dashed hsl(var(--border));
+  border-radius: calc(var(--radius) * 0.875);
 }
+
 .detail-action-list {
   display: grid;
   gap: 12px;
   margin-top: 16px;
 }
+
 .detail-action {
   min-width: 0;
   padding: 14px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) * 0.875);
 }
+
 .detail-action-title {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  justify-content: space-between;
 }
+
 .detail-action-title strong {
-  overflow-wrap: anywhere;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
+
 .detail-action-code {
   margin: 3px 0 12px;
   font-size: 12px;
-  overflow-wrap: anywhere;
   color: hsl(var(--muted-foreground));
+  overflow-wrap: anywhere;
 }
+
 .detail-action-facts {
   gap: 8px 12px;
   font-size: 12px;
 }
+
 .detail-raw :deep(.ant-collapse-header) {
   padding-right: 0;
   padding-left: 0;
 }
+
 .detail-raw :deep(.ant-collapse-content-box) {
   padding-right: 0;
   padding-left: 0;
 }
+
 @media (max-width: 520px) {
   .detail-member-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 .detail-metadata {
   grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
   gap: 12px;
 }
+
 .detail-metadata dd {
   margin: 0;
-  text-align: right;
   font-size: 13px;
+  text-align: right;
 }
+
 .detail-raw {
+  padding-top: 12px;
   margin-top: 24px;
   border-top: 1px solid hsl(var(--border));
-  padding-top: 12px;
 }
+
 .detail-basic-fields :deep(.ant-form-item) {
   margin-bottom: 18px;
 }
+
 .detail-section :deep(.ant-form-item-label > label) {
   font-size: 14px;
   font-weight: 500;
   color: hsl(var(--foreground));
 }
+
 .detail-section :deep(.ant-form-item:last-child) {
   margin-bottom: 0;
 }
+
 .detail-user-json {
   max-height: 160px;
 }
+
 .detail-password :deep(.ant-collapse-header),
 .detail-password :deep(.ant-collapse-content-box) {
   padding-inline: 0;

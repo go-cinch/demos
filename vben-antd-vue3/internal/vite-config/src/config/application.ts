@@ -14,6 +14,8 @@ import { loadApplicationPlugins } from '../plugins';
 import { loadAndConvertEnv } from '../utils/env';
 import { getCommonConfig } from './common';
 
+const previewHost = `preview-local.go-cinch.top`;
+
 function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   return defineConfig(async (config) => {
     const options = await userConfigPromise?.(config);
@@ -77,7 +79,7 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
       css: createCssOptions(injectGlobalScss),
       plugins,
       server: {
-        allowedHosts: ['preview-local.go-cinch.top'],
+        allowedHosts: [previewHost],
         host: true,
         port,
         warmup: {

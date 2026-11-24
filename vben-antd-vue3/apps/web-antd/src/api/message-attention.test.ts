@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messageSeenEvent } from '#/api/message-events';
+
 import { MessageAttention, visitMessages } from './message-attention';
 
 const status = (overrides = {}) => ({
@@ -79,10 +81,10 @@ describe('message entry acknowledgement', () => {
       visited_at: 10_500,
       server_at: 1500,
     });
-    vi.setSystemTime(9_000);
+    vi.setSystemTime(9000);
     attention.visit(1);
     expect(stored.get('test:1:inbox')).toEqual({
-      visited_at: 9_000,
+      visited_at: 9000,
       server_at: 1500,
     });
     attention.update(status({ latest_unread_at: 1500, observed_at: 1600 }));
@@ -119,12 +121,12 @@ describe('message entry acknowledgement', () => {
 
   it('notifies mounted entry indicators when messages are visited', () => {
     const listener = vi.fn();
-    window.addEventListener('go-cinch-msg-seen', listener);
+    window.addEventListener(messageSeenEvent, listener);
     try {
       visitMessages(undefined);
       expect(listener).toHaveBeenCalledOnce();
     } finally {
-      window.removeEventListener('go-cinch-msg-seen', listener);
+      window.removeEventListener(messageSeenEvent, listener);
     }
   });
 });

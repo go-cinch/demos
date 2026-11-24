@@ -40,6 +40,7 @@
   "inheritedBadge": "角色已提供",
   "roleEmpty": "此角色尚未配置权限。",
   "loadingRole": "正在加载角色权限",
+  "catalogForbidden": "分配权限需要权限管理的读取权限。",
   "resourceLoadError": "无法完整加载已分配的资源权限，请刷新后重试。现有权限尚未更改。",
   "deletedActions": "有 {count} 项行为已删除，对应权限已失效。其余权限可正常编辑，保存时会清理失效引用。"
 }

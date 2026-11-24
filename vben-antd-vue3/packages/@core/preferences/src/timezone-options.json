@@ -1,0 +1,362 @@
+[
+  {
+    "value": "Asia/Shanghai",
+    "name": {
+      "zh-CN": "上海",
+      "en-US": "Shanghai"
+    },
+    "region": "Asia",
+    "sort": 0,
+    "enabled": true
+  },
+  {
+    "value": "Etc/UTC",
+    "name": {
+      "zh-CN": "协调世界时",
+      "en-US": "Coordinated Universal Time"
+    },
+    "region": "Other",
+    "sort": 1,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Hong_Kong",
+    "name": {
+      "zh-CN": "香港",
+      "en-US": "Hong Kong"
+    },
+    "region": "Asia",
+    "sort": 2,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Taipei",
+    "name": {
+      "zh-CN": "台北",
+      "en-US": "Taipei"
+    },
+    "region": "Asia",
+    "sort": 3,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Singapore",
+    "name": {
+      "zh-CN": "新加坡",
+      "en-US": "Singapore"
+    },
+    "region": "Asia",
+    "sort": 4,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Tokyo",
+    "name": {
+      "zh-CN": "东京",
+      "en-US": "Tokyo"
+    },
+    "region": "Asia",
+    "sort": 5,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Seoul",
+    "name": {
+      "zh-CN": "首尔",
+      "en-US": "Seoul"
+    },
+    "region": "Asia",
+    "sort": 6,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Bangkok",
+    "name": {
+      "zh-CN": "曼谷",
+      "en-US": "Bangkok"
+    },
+    "region": "Asia",
+    "sort": 7,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Jakarta",
+    "name": {
+      "zh-CN": "雅加达",
+      "en-US": "Jakarta"
+    },
+    "region": "Asia",
+    "sort": 8,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Kolkata",
+    "name": {
+      "zh-CN": "加尔各答",
+      "en-US": "Kolkata"
+    },
+    "region": "Asia",
+    "sort": 9,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Kathmandu",
+    "name": {
+      "zh-CN": "加德满都",
+      "en-US": "Kathmandu"
+    },
+    "region": "Asia",
+    "sort": 10,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Dubai",
+    "name": {
+      "zh-CN": "迪拜",
+      "en-US": "Dubai"
+    },
+    "region": "Asia",
+    "sort": 11,
+    "enabled": true
+  },
+  {
+    "value": "Asia/Riyadh",
+    "name": {
+      "zh-CN": "利雅得",
+      "en-US": "Riyadh"
+    },
+    "region": "Asia",
+    "sort": 12,
+    "enabled": true
+  },
+  {
+    "value": "Europe/London",
+    "name": {
+      "zh-CN": "伦敦",
+      "en-US": "London"
+    },
+    "region": "Europe",
+    "sort": 13,
+    "enabled": true
+  },
+  {
+    "value": "Europe/Paris",
+    "name": {
+      "zh-CN": "巴黎",
+      "en-US": "Paris"
+    },
+    "region": "Europe",
+    "sort": 14,
+    "enabled": true
+  },
+  {
+    "value": "Europe/Berlin",
+    "name": {
+      "zh-CN": "柏林",
+      "en-US": "Berlin"
+    },
+    "region": "Europe",
+    "sort": 15,
+    "enabled": true
+  },
+  {
+    "value": "Europe/Zurich",
+    "name": {
+      "zh-CN": "苏黎世",
+      "en-US": "Zurich"
+    },
+    "region": "Europe",
+    "sort": 16,
+    "enabled": true
+  },
+  {
+    "value": "Europe/Moscow",
+    "name": {
+      "zh-CN": "莫斯科",
+      "en-US": "Moscow"
+    },
+    "region": "Europe",
+    "sort": 17,
+    "enabled": true
+  },
+  {
+    "value": "Europe/Istanbul",
+    "name": {
+      "zh-CN": "伊斯坦布尔",
+      "en-US": "Istanbul"
+    },
+    "region": "Europe",
+    "sort": 18,
+    "enabled": true
+  },
+  {
+    "value": "America/New_York",
+    "name": {
+      "zh-CN": "纽约",
+      "en-US": "New York"
+    },
+    "region": "Americas",
+    "sort": 19,
+    "enabled": true
+  },
+  {
+    "value": "America/Chicago",
+    "name": {
+      "zh-CN": "芝加哥",
+      "en-US": "Chicago"
+    },
+    "region": "Americas",
+    "sort": 20,
+    "enabled": true
+  },
+  {
+    "value": "America/Denver",
+    "name": {
+      "zh-CN": "丹佛",
+      "en-US": "Denver"
+    },
+    "region": "Americas",
+    "sort": 21,
+    "enabled": true
+  },
+  {
+    "value": "America/Los_Angeles",
+    "name": {
+      "zh-CN": "洛杉矶",
+      "en-US": "Los Angeles"
+    },
+    "region": "Americas",
+    "sort": 22,
+    "enabled": true
+  },
+  {
+    "value": "America/Toronto",
+    "name": {
+      "zh-CN": "多伦多",
+      "en-US": "Toronto"
+    },
+    "region": "Americas",
+    "sort": 23,
+    "enabled": true
+  },
+  {
+    "value": "America/Vancouver",
+    "name": {
+      "zh-CN": "温哥华",
+      "en-US": "Vancouver"
+    },
+    "region": "Americas",
+    "sort": 24,
+    "enabled": true
+  },
+  {
+    "value": "America/Mexico_City",
+    "name": {
+      "zh-CN": "墨西哥城",
+      "en-US": "Mexico City"
+    },
+    "region": "Americas",
+    "sort": 25,
+    "enabled": true
+  },
+  {
+    "value": "America/Sao_Paulo",
+    "name": {
+      "zh-CN": "圣保罗",
+      "en-US": "Sao Paulo"
+    },
+    "region": "Americas",
+    "sort": 26,
+    "enabled": true
+  },
+  {
+    "value": "Pacific/Honolulu",
+    "name": {
+      "zh-CN": "檀香山",
+      "en-US": "Honolulu"
+    },
+    "region": "Americas",
+    "sort": 27,
+    "enabled": true
+  },
+  {
+    "value": "Australia/Sydney",
+    "name": {
+      "zh-CN": "悉尼",
+      "en-US": "Sydney"
+    },
+    "region": "Oceania",
+    "sort": 28,
+    "enabled": true
+  },
+  {
+    "value": "Australia/Melbourne",
+    "name": {
+      "zh-CN": "墨尔本",
+      "en-US": "Melbourne"
+    },
+    "region": "Oceania",
+    "sort": 29,
+    "enabled": true
+  },
+  {
+    "value": "Australia/Adelaide",
+    "name": {
+      "zh-CN": "阿德莱德",
+      "en-US": "Adelaide"
+    },
+    "region": "Oceania",
+    "sort": 30,
+    "enabled": true
+  },
+  {
+    "value": "Australia/Perth",
+    "name": {
+      "zh-CN": "珀斯",
+      "en-US": "Perth"
+    },
+    "region": "Oceania",
+    "sort": 31,
+    "enabled": true
+  },
+  {
+    "value": "Pacific/Auckland",
+    "name": {
+      "zh-CN": "奥克兰",
+      "en-US": "Auckland"
+    },
+    "region": "Oceania",
+    "sort": 32,
+    "enabled": true
+  },
+  {
+    "value": "Africa/Cairo",
+    "name": {
+      "zh-CN": "开罗",
+      "en-US": "Cairo"
+    },
+    "region": "Africa",
+    "sort": 33,
+    "enabled": true
+  },
+  {
+    "value": "Africa/Johannesburg",
+    "name": {
+      "zh-CN": "约翰内斯堡",
+      "en-US": "Johannesburg"
+    },
+    "region": "Africa",
+    "sort": 34,
+    "enabled": true
+  },
+  {
+    "value": "Africa/Nairobi",
+    "name": {
+      "zh-CN": "内罗毕",
+      "en-US": "Nairobi"
+    },
+    "region": "Africa",
+    "sort": 35,
+    "enabled": true
+  }
+]

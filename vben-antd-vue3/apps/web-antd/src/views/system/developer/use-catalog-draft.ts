@@ -1,8 +1,22 @@
-import { computed, nextTick, onBeforeUnmount, reactive, watch } from 'vue';
-import { useUserStore } from '@vben/stores';
-import { usePermissions } from '#/composables/use-permissions';
-import { listDictionaries, updateDictionary } from '#/api/system';
+import type { Catalog, Draft } from './catalog-model';
+
 import type { DictionaryRecord } from '#/api/system';
+
+import { computed, nextTick, onBeforeUnmount, reactive, watch } from 'vue';
+
+import { useUserStore } from '@vben/stores';
+import { userCache } from '@vben/utils/cache';
+
+import {
+  isServiceUnavailableError,
+  isTransportFailure,
+} from '#/api/request-error';
+import { showRequestErrorToast } from '#/api/request-feedback';
+import { listDictionaries, publishDictionaryCatalog } from '#/api/system';
+import { usePermissions } from '#/composables/use-permissions';
+import { VerificationCancelled } from '#/security/verification-prompt';
+
+import { pendingGroupRenames } from '../components/action-group-model';
 import {
   assign,
   clone,
@@ -10,15 +24,18 @@ import {
   equal,
   initialUI,
   isCatalog,
-  normalizeCatalog,
   merge,
+  normalizeCatalog,
   validate,
 } from './catalog-model';
-import type { Catalog, Draft } from './catalog-model';
 import { DraftStorage } from './draft-storage';
 import { createResourceEditor } from './resource-editor-model';
-import { harmonizeResourceModelDraft, repairResourcePreviewDraft, seedResourceCatalog, upgradeResourceCatalog } from './resource-preview';
-import { pendingGroupRenames } from '../components/action-group-model';
+import {
+  harmonizeResourceModelDraft,
+  repairResourcePreviewDraft,
+  seedResourceCatalog,
+  upgradeResourceCatalog,
+} from './resource-preview';
 import { pendingResourceRenames } from './resource-renames';
 
 export function useCatalogDraft() {
@@ -27,21 +44,26 @@ export function useCatalogDraft() {
   const state = reactive({
     draft: null as Draft | null,
     online: null as Catalog | null,
-    record: null as Pick<
-      DictionaryRecord,
-      'id' | 'key' | 'value' | 'enabled' | 'updated_at'
-    > & { rawValue?: unknown } | null,
+    record: null as
+      | null
+      | (Pick<
+          DictionaryRecord,
+          'enabled' | 'id' | 'key' | 'updated_at' | 'value'
+        > & { rawValue?: unknown }),
     fetchedAt: 0,
     restored: false,
     loading: false,
     publishing: false,
+    publicationCheck: '' as '' | 'checking' | 'unknown',
     error: '',
     storageError: false,
     external: false,
     ready: false,
   });
   let repository: DraftStorage | undefined;
+  let storageEventKey: string | undefined;
   let run = 0;
+  let unconfirmedCatalog: Catalog | undefined;
   let paused = false;
   const writer = crypto.randomUUID();
   const owner = computed(() => String(user.userInfo?.userId ?? ''));
@@ -51,6 +73,7 @@ export function useCatalogDraft() {
       state.ready &&
       !state.external &&
       !state.publishing &&
+      !state.publicationCheck &&
       !state.loading,
   );
   const changes = computed(() =>
@@ -88,16 +111,35 @@ export function useCatalogDraft() {
     });
     const record = result.items.find((item) => item.key === 'I18N_CATALOG');
     if (!record || !isCatalog(record.value)) throw new Error('catalogMissing');
-    return { ...record, rawValue: clone(record.value), value: normalizeCatalog(record.value) };
+    return {
+      ...record,
+      rawValue: clone(record.value),
+      value: normalizeCatalog(record.value),
+    };
   }
   function syncUnchangedEditor(previous: Catalog, next: Catalog) {
     const editor = state.draft?.ui.resourceEditor;
-    if (!editor || !previous.resource_catalog.resources[editor.original] || !next.resource_catalog.resources[editor.original]) return;
-    const scope = editor.original.split(':')[0]!;
+    if (
+      !editor ||
+      !previous.resource_catalog.resources[editor.original] ||
+      !next.resource_catalog.resources[editor.original]
+    )
+      return;
+    const scope = editor.original.split(':')[0] ?? '';
     const before = createResourceEditor(previous, scope, editor.original);
     const after = createResourceEditor(next, scope, editor.original);
-    for (const field of ['permissionScope', 'sort', 'position', 'operations', 'entries', 'features', 'zh', 'en'] as const)
-      if (equal(editor[field], before[field])) Object.assign(editor, { [field]: clone(after[field]) });
+    for (const field of [
+      'permissionScope',
+      'sort',
+      'position',
+      'operations',
+      'entries',
+      'features',
+      'zh',
+      'en',
+    ] as const)
+      if (equal(editor[field], before[field]))
+        Object.assign(editor, { [field]: clone(after[field]) });
   }
   function persist() {
     if (
@@ -126,26 +168,41 @@ export function useCatalogDraft() {
   }
   async function initialize() {
     const current = ++run;
+    unconfirmedCatalog = undefined;
+    state.publicationCheck = '';
+    state.publishing = false;
     let upgradedCatalog = false;
     state.ready = false;
     state.draft = null;
     state.online = null;
+    state.record = null;
     state.error = '';
     state.external = false;
     state.storageError = false;
     state.restored = false;
     repository = undefined;
+    storageEventKey = undefined;
     if (!owner.value || !canReadDeveloper.value) return;
     state.loading = true;
     try {
       const environment = `${location.origin}|${
         import.meta.env.VITE_GLOB_AUTH_API_URL ?? '/api/auth'
       }`;
-      const key = `go-cinch:catalog-draft:v1:${encodeURIComponent(
+      const legacyKey = `go-cinch:catalog-draft:v1:${encodeURIComponent(
         `${environment}|${owner.value}|I18N_CATALOG`,
       )}`;
       try {
-        repository = new DraftStorage(localStorage, key);
+        const cache = userCache.current();
+        const key = `catalog-draft/${owner.value}`;
+        cache.migrate(key, legacyKey);
+        storageEventKey = cache.key(key);
+        repository = new DraftStorage(
+          {
+            getItem: (name) => cache.getItem(name),
+            setItem: (name, raw) => cache.setItem(name, raw, true),
+          },
+          key,
+        );
         state.draft = repository.load();
         state.restored = !!state.draft;
       } catch {
@@ -158,16 +215,16 @@ export function useCatalogDraft() {
       state.record = record;
       state.online = clone(record.value);
       state.fetchedAt = Date.now();
+      const restoredDraft = state.draft;
       const referenceUpgrade =
-        state.draft &&
+        restoredDraft &&
         Object.entries(record.value.resource_catalog.resources).some(
           ([key, node]) =>
             node.reference_operations !== undefined &&
-            state.draft!.base.resource_catalog.resources[key]?.reference_operations === undefined,
+            restoredDraft.base.resource_catalog.resources[key]
+              ?.reference_operations === undefined,
         );
-      if (
-        state.draft && referenceUpgrade
-      ) {
+      if (state.draft && referenceUpgrade) {
         const upgrade = merge(
           state.draft.base,
           state.draft.document,
@@ -185,8 +242,13 @@ export function useCatalogDraft() {
                 editor.parent = onlineNode.parent ?? '';
               if (baseNode?.references === undefined)
                 editor.references = clone(onlineNode.references ?? []);
-              if (baseNode?.reference_operations === undefined && onlineNode.reference_operations)
-                editor.referenceOperations = clone(onlineNode.reference_operations);
+              if (
+                baseNode?.reference_operations === undefined &&
+                onlineNode.reference_operations
+              )
+                editor.referenceOperations = clone(
+                  onlineNode.reference_operations,
+                );
             }
           }
           const directories = Object.entries(
@@ -195,7 +257,7 @@ export function useCatalogDraft() {
             .filter(
               ([key, node]) =>
                 node.kind === 'directory' &&
-                !state.draft!.base.resource_catalog.resources[key],
+                !restoredDraft.base.resource_catalog.resources[key],
             )
             .map(([key]) => key);
           state.draft.ui.expanded = [
@@ -207,8 +269,11 @@ export function useCatalogDraft() {
         }
       }
       if (
-        state.draft && !state.draft.ui.buffer && !state.draft.ui.resourceEditor &&
-        differences(state.draft.base, state.draft.document).length === 0
+        state.draft &&
+        !state.draft.ui.buffer &&
+        !state.draft.ui.resourceEditor &&
+        differences(state.draft.base, state.draft.document).length === 0 &&
+        !equal(state.draft.base, record.value)
       ) {
         state.draft.base = clone(record.value);
         state.draft.document = clone(record.value);
@@ -243,37 +308,60 @@ export function useCatalogDraft() {
         const seeded = seedResourceCatalog(state.draft.document);
         if (seeded !== state.draft.document) {
           state.draft.document = seeded;
-          state.draft.ui.expanded = [...new Set([...state.draft.ui.expanded,
-            ...Object.entries(seeded.resource_catalog.resources).filter(([, node]) => node.kind === 'directory').map(([key]) => key),
-          ])];
+          state.draft.ui.expanded = [
+            ...new Set([
+              ...state.draft.ui.expanded,
+              ...Object.entries(seeded.resource_catalog.resources)
+                .filter(([, node]) => node.kind === 'directory')
+                .map(([key]) => key),
+            ]),
+          ];
           upgradedCatalog = true;
         }
         state.draft.ui.resourcePreviewVersion = 1;
       }
-      if (import.meta.env.DEV && state.draft.ui.resourcePreviewVersion < 3 && state.draft.document.resource_catalog.resources['admin:high-risk']) {
+      if (
+        import.meta.env.DEV &&
+        state.draft.ui.resourcePreviewVersion < 3 &&
+        state.draft.document.resource_catalog.resources['admin:high-risk']
+      ) {
         const previous = state.draft.document;
         state.draft.document = upgradeResourceCatalog(previous);
         syncUnchangedEditor(previous, state.draft.document);
         const editor = state.draft.ui.resourceEditor;
-        if (editor && editor.permissionScope === undefined) editor.permissionScope = state.draft.document.resource_catalog.resources[editor.original]?.permission_scope ?? '';
+        if (editor && editor.permissionScope === undefined)
+          editor.permissionScope =
+            state.draft.document.resource_catalog.resources[editor.original]
+              ?.permission_scope ?? '';
         state.draft.ui.resourcePreviewVersion = 3;
         upgradedCatalog = true;
       }
       if (import.meta.env.DEV && state.draft.ui.resourcePreviewVersion < 4) {
-        if (record.value.resource_catalog.resources['admin:high-risk:all']?.permission_scope === '*') {
-          const document = harmonizeResourceModelDraft(state.draft.document, record.value);
+        if (
+          record.value.resource_catalog.resources['admin:high-risk:all']
+            ?.permission_scope === '*'
+        ) {
+          const document = harmonizeResourceModelDraft(
+            state.draft.document,
+            record.value,
+          );
           const rebased = merge(state.draft.base, document, record.value);
           const previous = state.draft.document;
           state.draft.document = rebased.document;
           syncUnchangedEditor(previous, state.draft.document);
-          if (rebased.conflicts.length === 0) state.draft.base = clone(record.value);
+          if (rebased.conflicts.length === 0)
+            state.draft.base = clone(record.value);
         }
         state.draft.ui.resourcePreviewVersion = 4;
         upgradedCatalog = true;
       }
       if (state.draft.ui.resourcePreviewVersion < 5) {
         const previous = state.draft.document;
-        state.draft.document = repairResourcePreviewDraft(previous, state.draft.base, record.value);
+        state.draft.document = repairResourcePreviewDraft(
+          previous,
+          state.draft.base,
+          record.value,
+        );
         syncUnchangedEditor(previous, state.draft.document);
         state.draft.ui.resourcePreviewVersion = 5;
         upgradedCatalog = true;
@@ -282,10 +370,14 @@ export function useCatalogDraft() {
       if (!state.restored || upgradedCatalog) persist();
     } catch (error) {
       if (current !== run) return;
-      state.error =
-        error instanceof Error && error.message === 'catalogMissing'
-          ? 'catalogMissing'
-          : 'loadFailed';
+      if (!(error instanceof Error && error.message === 'catalogMissing'))
+        showRequestErrorToast(error);
+      if (isServiceUnavailableError(error)) state.error = 'gateway';
+      else
+        state.error =
+          error instanceof Error && error.message === 'catalogMissing'
+            ? 'catalogMissing'
+            : 'loadFailed';
       // An already persisted draft remains editable/exportable while offline.
       state.ready = !!state.draft;
     } finally {
@@ -304,8 +396,15 @@ export function useCatalogDraft() {
       state.online = clone(record.value);
       state.fetchedAt = Date.now();
       return true;
-    } catch {
-      state.error = 'loadFailed';
+    } catch (error) {
+      if (current !== run) return false;
+      showRequestErrorToast(error);
+      state.record = null;
+      state.online = null;
+      state.error =
+        error instanceof Error && error.message === 'catalogMissing'
+          ? 'catalogMissing'
+          : 'loadFailed';
       return false;
     } finally {
       if (current === run) state.loading = false;
@@ -326,10 +425,39 @@ export function useCatalogDraft() {
     // Advance independent fields while retaining the original comparison point
     // for unresolved conflicts, such as a locally reordered group list.
     for (const conflict of latest.conflicts) {
-      if (!conflict.path.length) return;
+      if (conflict.path.length === 0) return;
       assign(base, conflict.path, conflict.base);
     }
     rebase(latest.document, base);
+  }
+  function finishPublication(catalog: Catalog) {
+    if (!state.draft) return;
+    rebase(catalog, catalog);
+    state.draft.ui.groupRenames = {};
+    state.draft.ui.resourceRenames = {};
+    state.draft.ui.featureRenames = {};
+  }
+  async function checkPublication() {
+    const submitted = unconfirmedCatalog;
+    if (!submitted || state.publicationCheck === 'checking') return false;
+    const current = run;
+    state.publicationCheck = 'checking';
+    const loaded = await refresh();
+    if (run !== current || !state.draft) return false;
+    if (!loaded || !state.online) {
+      state.error = '';
+      state.publicationCheck = 'unknown';
+      return false;
+    }
+    state.publicationCheck = '';
+    unconfirmedCatalog = undefined;
+    if (!equal(state.online, submitted)) {
+      state.draft.ui.tab = 'diff';
+      state.error = 'publicationDifferent';
+      return false;
+    }
+    finishPublication(state.online);
+    return true;
   }
   async function publish() {
     if (
@@ -360,13 +488,23 @@ export function useCatalogDraft() {
     persist();
     if (state.storageError || state.external) return false;
     const current = run;
+    const submitted = clone(normalizeCatalog(state.draft.document));
     state.publishing = true;
     try {
-      const renames = pendingResourceRenames(state.draft.base, state.draft.document, state.draft.ui.resourceRenames, state.draft.ui.featureRenames);
-      const response = await updateDictionary(state.record.id, {
-        value: normalizeCatalog(state.draft.document),
+      const renames = pendingResourceRenames(
+        state.draft.base,
+        state.draft.document,
+        state.draft.ui.resourceRenames,
+        state.draft.ui.featureRenames,
+      );
+      const response = await publishDictionaryCatalog({
+        value: submitted,
         expected_value: clone(state.record.rawValue ?? state.draft.base),
-        group_renames: pendingGroupRenames(state.draft.base, state.draft.document, state.draft.ui.groupRenames),
+        group_renames: pendingGroupRenames(
+          state.draft.base,
+          state.draft.document,
+          state.draft.ui.groupRenames,
+        ),
         resource_renames: renames.resources,
         feature_renames: renames.features,
       });
@@ -374,17 +512,24 @@ export function useCatalogDraft() {
       state.record = response;
       state.online = clone(response.value as Catalog);
       state.fetchedAt = Date.now();
-      rebase(response.value as Catalog);
-      state.draft.ui.groupRenames = {};
-      state.draft.ui.resourceRenames = {};
-      state.draft.ui.featureRenames = {};
+      finishPublication(response.value as Catalog);
       return true;
-    } catch {
+    } catch (error) {
       if (current === run) {
-        state.error = 'submitFailed';
-        await refresh();
-        state.error = 'submitFailed';
-        state.draft.ui.tab = 'diff';
+        if (error instanceof VerificationCancelled) return false;
+        if (isTransportFailure(error)) {
+          unconfirmedCatalog = submitted;
+          if (await checkPublication()) return 'matched' as const;
+          if (current === run && state.error === 'publicationDifferent')
+            showRequestErrorToast(error);
+          return false;
+        }
+        showRequestErrorToast(error);
+        const refreshed = await refresh();
+        if (current === run && state.draft) {
+          state.draft.ui.tab = 'diff';
+          if (refreshed) state.error = 'submitFailed';
+        }
       }
       return false;
     } finally {
@@ -394,7 +539,7 @@ export function useCatalogDraft() {
   function exportDraft() {
     let raw = '';
     if (state.draft) raw = JSON.stringify(state.draft, null, 2);
-    else if (repository) raw = localStorage.getItem(repository.key) ?? '';
+    else if (repository) raw = repository.raw() ?? '';
     const url = URL.createObjectURL(
       new Blob([raw], { type: 'application/json' }),
     );
@@ -406,13 +551,15 @@ export function useCatalogDraft() {
   }
   function receiveStorage(event: StorageEvent) {
     if (
-      (event.key === null || event.key === repository?.key) &&
+      !state.external &&
+      (event.key === null || event.key === storageEventKey) &&
       repository?.changed()
     )
       state.external = true;
   }
   function checkStorage() {
-    if (state.ready && repository?.changed()) state.external = true;
+    if (state.ready && !state.external && repository?.changed())
+      state.external = true;
   }
   watch(() => state.draft, persist, { deep: true, flush: 'sync' });
   watch([owner, canReadDeveloper], initialize, {
@@ -448,6 +595,7 @@ export function useCatalogDraft() {
     persist,
     refresh,
     publish,
+    checkPublication,
     rebase,
     mergeOnlineUpdates,
     exportDraft,

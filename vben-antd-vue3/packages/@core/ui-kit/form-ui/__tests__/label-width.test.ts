@@ -1,5 +1,3 @@
-/* eslint-disable vue/one-component-per-file */
-
 import type { PropType } from 'vue';
 
 import type { FormLayout, FormRenderProps } from '../src/types';

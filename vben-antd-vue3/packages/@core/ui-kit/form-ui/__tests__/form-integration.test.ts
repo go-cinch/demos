@@ -158,7 +158,10 @@ describe('useVbenForm integration', () => {
     await flushPromises();
 
     expect(await formApi.getValues()).toEqual({ name: '' });
-    expect(validateValue).toHaveBeenCalledTimes(initialValidationCount + 1);
+    // Validation is debounced; flushing promises alone does not drain its timer.
+    await vi.waitFor(() =>
+      expect(validateValue).toHaveBeenCalledTimes(initialValidationCount + 1),
+    );
   });
 
   it('keeps only the active model protocol in field slot componentProps', async () => {
@@ -480,7 +483,9 @@ describe('useVbenForm integration', () => {
     const inputs = wrapper.findAll('input');
     expect(inputs).toHaveLength(2);
     expect(inputs[0]?.attributes('aria-invalid')).toBe('true');
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Name is required'));
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain('Name is required'),
+    );
     expect(wrapper.text()).toContain('Alias is required');
 
     await inputs[0]?.setValue('Ada');
@@ -965,7 +970,9 @@ describe('useVbenForm integration', () => {
 
     await input.trigger('blur');
     await flushPromises();
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Name is required'));
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain('Name is required'),
+    );
 
     await input.setValue('Ada');
     await flushPromises();

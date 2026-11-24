@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { LoadFailure } from '#/api/request-error';
 import type {
   SystemResource,
   SystemSummary,
@@ -9,13 +10,7 @@ import type {
 import { computed, nextTick, ref } from 'vue';
 
 import { useResizeObserver } from '@vueuse/core';
-import {
-  Button,
-  Card,
-  Empty,
-  Select,
-  Tooltip,
-} from 'ant-design-vue';
+import { Card, Empty, Select, Tooltip } from 'ant-design-vue';
 
 import LoadWarning from '#/components/load-warning.vue';
 import { useStatisticsWarning } from '#/composables/use-statistics-warning';
@@ -26,7 +21,7 @@ const props = defineProps<{
   resource: SystemResource;
   summary?: SystemSummary;
   loading: boolean;
-  error: boolean;
+  error: LoadFailure;
   days: number;
   selectedStatus?: number;
   selectedEnabled?: string;
@@ -46,10 +41,25 @@ const emit = defineEmits<{
   group: [SystemSummaryGroup];
   permissionGroup: [string];
 }>();
-const summary = computed<SystemSummary>(() => props.summary ?? {
-  total: 0, counts: {}, groups: Array.from({ length: 4 }, (_, id) => ({ id, name: '────────', count: 0 })),
-  trend: Array.from({ length: props.days }, (_, index) => ({ date: `loading-${index}`, from: 0, to: 0, count: 0, recent_logged_in_users: 0 })),
-});
+const summary = computed<SystemSummary>(
+  () =>
+    props.summary ?? {
+      total: 0,
+      counts: {},
+      groups: Array.from({ length: 4 }, (_, id) => ({
+        id,
+        name: '────────',
+        count: 0,
+      })),
+      trend: Array.from({ length: props.days }, (_, index) => ({
+        date: `loading-${index}`,
+        from: 0,
+        to: 0,
+        count: 0,
+        recent_logged_in_users: 0,
+      })),
+    },
+);
 const warningVisible = useStatisticsWarning(() => props.error);
 const trendViewport = ref<HTMLElement>();
 const trendTooltips = ref<Array<{ forcePopupAlign: () => void }>>([]);
@@ -137,7 +147,11 @@ const actionMetrics = computed(() => [
 const roleMetrics = computed(() => [
   {
     key: 'total',
-    label: $t(props.resource === 'role' ? 'system-insights.roles' : 'system-insights.groups'),
+    label: $t(
+      props.resource === 'role'
+        ? 'system-insights.roles'
+        : 'system-insights.groups',
+    ),
     value: props.summary?.total ?? 0,
     filter: undefined,
   },
@@ -214,15 +228,13 @@ const compactItems = computed(() =>
     data-testid="management-overview"
   >
     <LoadWarning
-kind="statistics"
+      kind="statistics"
       v-if="error"
-    >
-      <template #action>
-        <Button size="small" @click="emit('retry')">
-          {{ $t('system-insights.retry') }}
-        </Button>
-      </template>
-    </LoadWarning>
+      :failure="error"
+      :retry-label="$t('system-insights.retry')"
+      retry-size="small"
+      @retry="emit('retry')"
+    />
     <div v-else v-skeleton="loading" class="overview-content">
       <div v-if="resource === 'user'" class="overview-grid user-grid">
         <Card class="overview-panel status-panel">
@@ -267,7 +279,8 @@ kind="statistics"
               <div class="donut-value">
                 <strong data-testid="management-stat-total">{{
                   summary.total
-                }}</strong><span>{{ $t('system-insights.userTotal') }}</span>
+                }}</strong
+                ><span>{{ $t('system-insights.userTotal') }}</span>
               </div>
             </div>
             <div class="status-legend">
@@ -283,13 +296,18 @@ kind="statistics"
                 :data-testid="`management-status-${item.key}`"
                 @click="emit('filter', { key: 'status', value: item.value })"
               >
-                <i :style="{ background: item.color }"></i><span>{{ item.label }}</span><strong :data-testid="`management-stat-${item.key}`">{{
+                <i :style="{ background: item.color }"></i
+                ><span>{{ item.label }}</span
+                ><strong :data-testid="`management-stat-${item.key}`">{{
                   count(item.key)
-                }}</strong><small>{{
+                }}</strong
+                ><small
+                  >{{
                     summary.total
                       ? ((count(item.key) / summary.total) * 100).toFixed(1)
                       : '0.0'
-                  }}%</small>
+                  }}%</small
+                >
               </button>
             </div>
           </div>
@@ -327,20 +345,31 @@ kind="statistics"
             </div>
           </div>
           <div class="trend-legend">
-            <span><i
+            <span
+              ><i
                 class="trend-new-swatch"
                 data-testid="management-legend-new-users"
-              ></i>{{ $t('system-insights.newUsers') }}</span>
-            <span><i
+              ></i
+              >{{ $t('system-insights.newUsers') }}</span
+            >
+            <span
+              ><i
                 class="trend-login-swatch"
                 data-testid="management-legend-recent-logins"
-              ></i>{{ $t('system-insights.recentLoginUsers') }}</span>
+              ></i
+              >{{ $t('system-insights.recentLoginUsers') }}</span
+            >
           </div>
           <div class="trend-chart">
             <div class="trend-axis" aria-hidden="true">
-              <span>{{ trendMaximum }}</span><span>0</span>
+              <span>{{ trendMaximum }}</span
+              ><span>0</span>
             </div>
-            <div ref="trendViewport" class="trend-scroll" @scroll="alignTrendTooltips">
+            <div
+              ref="trendViewport"
+              class="trend-scroll"
+              @scroll="alignTrendTooltips"
+            >
               <div
                 class="trend-plot"
                 data-testid="management-user-trend"
@@ -477,9 +506,12 @@ kind="statistics"
                 "
                 @click="emit('group', group)"
               >
-                <span class="bar-label">{{ group.name }}</span><span class="bar-track"><i
+                <span class="bar-label">{{ group.name }}</span
+                ><span class="bar-track"
+                  ><i
                     :style="{ width: `${(group.count / groupMaximum) * 100}%` }"
-                  ></i></span><strong>{{ group.count }}</strong>
+                  ></i></span
+                ><strong>{{ group.count }}</strong>
               </button>
               <button
                 v-else
@@ -488,7 +520,9 @@ kind="statistics"
                 class="group-bar"
                 :aria-label="
                   $t('system-insights.selectGroup', {
-                    name: (group.name ? catalogLabel('groups', group.name) : $t('system-insights.ungrouped')),
+                    name: group.name
+                      ? catalogLabel('groups', group.name)
+                      : $t('system-insights.ungrouped'),
                   })
                 "
                 :aria-pressed="selectedGroups?.includes(group.name) ?? false"
@@ -496,10 +530,15 @@ kind="statistics"
                 @click="emit('permissionGroup', group.name)"
               >
                 <span class="bar-label">{{
-                  (group.name ? catalogLabel('groups', group.name) : $t('system-insights.ungrouped'))
-                }}</span><span class="bar-track"><i
+                  group.name
+                    ? catalogLabel('groups', group.name)
+                    : $t('system-insights.ungrouped')
+                }}</span
+                ><span class="bar-track"
+                  ><i
                     :style="{ width: `${(group.count / groupMaximum) * 100}%` }"
-                  ></i></span><strong>{{ group.count }}</strong>
+                  ></i></span
+                ><strong>{{ group.count }}</strong>
               </button>
             </template>
           </div>
@@ -573,7 +612,8 @@ kind="statistics"
       >
         <div class="summary-metrics">
           <div v-for="metric in actionMetrics" :key="metric.key">
-            <span>{{ metric.label }}</span><strong :data-testid="`management-stat-${metric.key}`">{{
+            <span>{{ metric.label }}</span
+            ><strong :data-testid="`management-stat-${metric.key}`">{{
               metric.value
             }}</strong>
           </div>
@@ -595,7 +635,8 @@ kind="statistics"
               })
             "
           >
-            <span>{{ item.label }}</span><strong :data-testid="`management-stat-${item.key}`">{{
+            <span>{{ item.label }}</span
+            ><strong :data-testid="`management-stat-${item.key}`">{{
               item.value
             }}</strong>
           </button>
@@ -610,77 +651,93 @@ button:disabled {
   cursor: wait;
   opacity: 0.65;
 }
+
 .system-overview {
   min-width: 0;
 }
+
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(290px, 1fr);
   gap: 16px;
 }
+
 .user-grid {
   grid-template-columns: minmax(310px, 1fr) minmax(0, 1.45fr);
 }
+
 .overview-panel,
 .overview-loading {
+  min-width: 0;
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   box-shadow: none;
-  background: hsl(var(--card));
-  min-width: 0;
 }
+
 .overview-panel :deep(.ant-card-body) {
   padding: 18px 20px;
 }
+
 .overview-heading {
   display: flex;
+  gap: 14px;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
   margin-bottom: 16px;
 }
+
 .overview-heading h2 {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
-  margin: 0;
 }
+
 .overview-caption {
+  margin: 0;
   font-size: 11px;
   line-height: 1.65;
   color: hsl(var(--muted-foreground));
-  margin: 0;
 }
+
 .overview-heading :deep(.ant-select) {
   min-width: 128px;
 }
+
 .status-layout {
   display: flex;
-  align-items: center;
   gap: 24px;
+  align-items: center;
 }
+
 .status-panel :deep(.ant-card-body) {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
+
 .status-panel .status-layout {
   flex: 1;
   min-height: 180px;
 }
+
 .status-donut {
   position: relative;
   flex-shrink: 0;
   width: 130px;
   height: 130px;
 }
+
 .status-donut svg {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
 }
+
 .donut-track {
   color: hsl(var(--muted));
 }
+
 .donut-value {
   position: absolute;
   inset: 0;
@@ -689,89 +746,104 @@ button:disabled {
   align-items: center;
   justify-content: center;
 }
+
 .donut-value strong {
   font-size: 29px;
   font-weight: 600;
-  line-height: 1.3;
   font-variant-numeric: tabular-nums;
+  line-height: 1.3;
 }
+
 .donut-value span {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
 }
+
 .status-legend {
-  flex: 1;
   display: grid;
+  flex: 1;
   gap: 9px;
   min-width: 0;
 }
+
 .status-legend button {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  text-align: left;
+  cursor: pointer;
   background: none;
   border: 0;
   border-radius: calc(var(--radius) * 0.625);
-  padding: 6px;
-  width: 100%;
-  cursor: pointer;
-  font-size: 12px;
-  text-align: left;
-  color: hsl(var(--muted-foreground));
 }
+
 .status-legend button:hover,
 .status-legend button[aria-pressed='true'] {
-  background: hsl(var(--primary) / 0.07);
+  background: hsl(var(--primary) / 7%);
 }
+
 .status-legend i {
+  flex-shrink: 0;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  flex-shrink: 0;
 }
+
 .status-legend strong {
   margin-left: auto;
-  color: hsl(var(--foreground));
   font-size: 13px;
+  color: hsl(var(--foreground));
 }
+
 .status-legend small {
   min-width: 38px;
-  text-align: right;
   font-size: 11px;
+  text-align: right;
 }
+
 .trend-panel {
   --trend-new-color: #3b82f6;
   --trend-login-color: #269c7a;
 }
+
 :global(.dark .system-overview .trend-panel) {
   --trend-new-color: #60a5fa;
   --trend-login-color: #48c9a3;
 }
+
 .trend-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   margin-top: -6px;
 }
+
 .trend-total {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 1px;
+  align-items: flex-start;
   min-width: 0;
-  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
+
 .trend-total + .trend-total {
   padding-left: 20px;
   border-left: 1px solid hsl(var(--border));
 }
+
 .trend-total strong {
   font-size: 26px;
   font-weight: 600;
-  color: hsl(var(--foreground));
   font-variant-numeric: tabular-nums;
+  color: hsl(var(--foreground));
 }
+
 .trend-legend {
   display: flex;
   flex-wrap: wrap;
@@ -780,45 +852,53 @@ button:disabled {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
 }
+
 .trend-legend > span {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
+  align-items: center;
 }
+
 .trend-legend i {
   width: 8px;
   height: 8px;
   border-radius: calc(var(--radius) * 0.25);
 }
+
 .trend-new-swatch {
   background: var(--trend-new-color);
 }
+
 .trend-login-swatch {
   background: var(--trend-login-color);
 }
+
 .trend-chart {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
   gap: 5px;
   margin-bottom: 8px;
 }
+
 .trend-axis {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   height: 124px;
-  text-align: right;
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: hsl(var(--muted-foreground));
-  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
+
 .trend-scroll {
   min-width: 0;
-  overflow-x: auto;
   padding: 3px 3px 5px;
   margin-top: -3px;
+  overflow-x: auto;
 }
+
 .trend-plot {
   display: flex;
   gap: 6px;
@@ -827,262 +907,312 @@ button:disabled {
   background: linear-gradient(hsl(var(--border)) 1px, transparent 1px) 0 0 /
     100% 62px no-repeat;
 }
+
 .trend-day {
-  flex: 1;
-  min-width: 18px;
   display: flex;
+  flex: 1;
   flex-direction: column;
+  min-width: 18px;
   color: hsl(var(--muted-foreground));
 }
+
 .trend-day-bars {
-  height: 124px;
   display: flex;
-  align-items: flex-end;
   gap: 3px;
+  align-items: flex-end;
   width: 100%;
+  height: 124px;
   border-bottom: 1px solid hsl(var(--border));
 }
+
 .trend-bar-target {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
   display: flex;
+  flex: 1;
   align-items: flex-end;
   justify-content: center;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  background: none;
   border: 0;
   border-radius: calc(var(--radius) * 0.375);
-  background: none;
-  padding: 0;
 }
+
 .trend-new-target {
   cursor: pointer;
 }
+
 .trend-login-target {
   cursor: pointer;
 }
+
 .trend-bar-target:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
 }
+
 .trend-column {
   display: block;
   width: 100%;
   max-width: 16px;
   border-radius: calc(var(--radius) * 0.375) calc(var(--radius) * 0.375) 0 0;
 }
+
 .trend-bar-target:hover,
 .trend-bar-target[aria-pressed='true'] {
-  background: hsl(var(--muted) / 0.65);
+  background: hsl(var(--muted) / 65%);
 }
+
 .trend-new-target[aria-pressed='true'] {
   box-shadow: inset 0 -2px var(--trend-new-color);
 }
+
 .trend-login-target[aria-pressed='true'] {
   box-shadow: inset 0 -2px var(--trend-login-color);
 }
+
 .zero-column {
   min-height: 1px;
   background: hsl(var(--border));
 }
+
 .trend-date {
+  align-self: center;
+  min-height: 14px;
+  margin-top: 8px;
   font-size: 9px;
   line-height: 14px;
-  min-height: 14px;
   white-space: nowrap;
-  margin-top: 8px;
-  align-self: center;
 }
+
 .group-bars {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 15px 20px;
   max-height: 190px;
-  overflow: auto;
   padding: 5px;
-  overscroll-behavior: contain;
+  overflow: auto;
   scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
+
 .group-bar {
   display: grid;
   grid-template-columns: minmax(80px, 1fr) minmax(50px, 2fr) 26px;
   gap: 12px;
   align-items: center;
   min-width: 0;
+  padding: 5px 7px;
   font-size: 12px;
   line-height: 1.7;
-  background: none;
-  border: 0;
-  padding: 5px 7px;
-  border-radius: calc(var(--radius) * 0.625);
   color: hsl(var(--foreground));
   text-align: left;
+  background: none;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.625);
 }
+
 .group-bar:is(button) {
   cursor: pointer;
 }
+
 .group-bar:is(button):hover,
 .group-bar[aria-pressed='true'] {
-  background: hsl(var(--primary) / 0.07);
+  background: hsl(var(--primary) / 7%);
 }
+
 .group-bar[aria-pressed='true'] .bar-label,
 .group-bar[aria-pressed='true'] strong {
   color: hsl(var(--primary));
 }
+
 .bar-label {
   min-width: 0;
-  overflow-wrap: anywhere;
   color: hsl(var(--muted-foreground));
+  overflow-wrap: anywhere;
 }
+
 .bar-track {
   height: 7px;
+  overflow: hidden;
   background: hsl(var(--muted));
   border-radius: calc(var(--radius) * 0.5);
-  overflow: hidden;
 }
+
 .bar-track i {
   display: block;
   height: 100%;
-  background: hsl(var(--primary) / 0.72);
+  background: hsl(var(--primary) / 72%);
   border-radius: calc(var(--radius) * 0.5);
 }
+
 .group-bar:hover .bar-track i,
 .group-bar[aria-pressed='true'] .bar-track i {
   background: hsl(var(--primary));
 }
+
 .group-bar strong {
-  text-align: right;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
+
 .summary-metrics {
   display: flex;
-  align-items: stretch;
   gap: 0;
+  align-items: stretch;
   margin: 8px 0 18px;
 }
+
 .summary-metrics > div {
   flex: 1;
   min-width: 0;
   padding: 0 18px;
 }
+
 .summary-metrics > div:first-child {
   padding-left: 0;
 }
+
 .summary-metrics > div + div {
   border-left: 1px solid hsl(var(--border));
 }
+
 .summary-metrics strong {
   display: block;
+  margin-bottom: 9px;
   font-size: 28px;
   font-weight: 600;
-  line-height: 1.25;
-  margin-bottom: 9px;
   font-variant-numeric: tabular-nums;
+  line-height: 1.25;
 }
+
 .summary-metrics span {
   font-size: 11px;
-  color: hsl(var(--muted-foreground));
   line-height: 1.5;
+  color: hsl(var(--muted-foreground));
 }
+
 .summary-filter-label {
   padding: 4px 0;
-  border: 0;
-  border-radius: calc(var(--radius) * 0.375);
-  background: none;
-  color: hsl(var(--primary));
-  cursor: pointer;
   font-size: 11px;
   line-height: 1.5;
+  color: hsl(var(--primary));
   text-align: left;
   text-underline-offset: 4px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.375);
 }
+
 .summary-filter-label:hover,
 .summary-filter-label[aria-pressed='true'] {
   text-decoration: underline;
 }
+
 .summary-filter-label:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 3px;
 }
+
 .metric-ribbon .summary-metrics {
   margin: 0;
 }
+
 .metric-ribbon strong {
   margin: 8px 0 0;
 }
+
 .compact-summary {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
 }
+
 .compact-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
+
 .compact-filters button {
   display: flex;
-  align-items: center;
   gap: 12px;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) * 0.75);
-  background: hsl(var(--card));
-  padding: 8px 14px;
-  cursor: pointer;
-  font-size: 12px;
 }
+
 .compact-filters button[aria-pressed='true'] {
-  background: hsl(var(--primary) / 0.07);
   color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.3);
+  background: hsl(var(--primary) / 7%);
+  border-color: hsl(var(--primary) / 30%);
 }
+
 button:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 3px;
 }
+
 @media (max-width: 1200px) {
   .overview-grid,
   .user-grid {
     grid-template-columns: 1fr 1fr;
   }
+
   .overview-panel :deep(.ant-card-body) {
     padding: 16px;
   }
+
   .status-layout {
     gap: 12px;
   }
+
   .status-donut {
     width: 112px;
     height: 112px;
   }
+
   .group-bars {
     grid-template-columns: 1fr;
   }
+
   .summary-metrics > div {
     padding: 0 12px;
   }
 }
+
 @media (max-width: 950px) {
   .overview-grid,
   .user-grid {
     grid-template-columns: 1fr;
   }
+
   .group-bars {
     grid-template-columns: 1fr 1fr;
   }
+
   .status-legend {
     max-width: 350px;
   }
+
   .metric-ribbon .summary-metrics {
     flex-wrap: wrap;
     gap: 16px 0;
   }
+
   .metric-ribbon .summary-metrics > div {
     flex-basis: 33%;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
@@ -1091,6 +1221,13 @@ button:focus-visible {
 </style>
 
 <style scoped>
-.group-bars { height: 180px; overflow: auto; scrollbar-gutter: stable; }
-.overview-grid:not(.user-grid) .overview-panel { min-height: 260px; }
+.group-bars {
+  height: 180px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.overview-grid:not(.user-grid) .overview-panel {
+  min-height: 260px;
+}
 </style>

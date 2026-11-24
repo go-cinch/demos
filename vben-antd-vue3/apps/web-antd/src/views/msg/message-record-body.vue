@@ -14,11 +14,11 @@ import MessageRecipients from './message-recipients.vue';
 const props = defineProps<{
   record?: MsgPreview;
   editing?: boolean;
-  targeted?: boolean;
+  scope?: MsgPreview['scope'];
 }>();
 const timezone = useTimezoneStore();
-const targeted = computed(() =>
-  props.editing ? props.targeted : props.record?.scope === 'targeted',
+const audience = computed(() =>
+  props.editing ? props.scope : props.record?.scope,
 );
 function time(value?: number) {
   void timezone.timezone;
@@ -34,43 +34,39 @@ function time(value?: number) {
     <section class="editor-section">
       <h3>{{ $t('system-editor.messageContent') }}</h3>
       <slot name="type">
-<Tag v-if="record" color="blue">
-{{
-          $t(`msg.${record.type}`)
-        }}
-</Tag>
-</slot>
+        <Tag v-if="record" color="blue">
+          {{ $t(`msg.${record.type}`) }}
+        </Tag>
+      </slot>
       <slot name="title">
-<h2 class="message-title">{{ record?.title }}</h2>
-</slot>
+        <h2 class="message-title">{{ record?.title }}</h2>
+      </slot>
       <slot name="content">
-<p class="message-content">{{ record?.content }}</p>
-</slot>
+        <p class="message-content">{{ record?.content }}</p>
+      </slot>
     </section>
     <section class="editor-section">
       <h3>{{ $t('system-editor.delivery') }}</h3>
       <slot name="scope">
-<dl class="message-fact">
+        <dl class="message-fact">
           <dt>{{ $t('msg.scope') }}</dt>
           <dd>
             <Tag v-if="record" color="purple">
-{{
-              $t(`msg.${record.scope}`)
-            }}
-</Tag>
+              {{ $t(`msg.${record.scope}`) }}
+            </Tag>
           </dd>
         </dl>
-</slot>
-      <div v-show="targeted">
+      </slot>
+      <div v-show="audience === 'targeted'">
         <slot name="recipients">
-<dl class="message-fact">
+          <dl class="message-fact">
             <dt>{{ $t('msg.recipients') }}</dt>
             <dd><MessageRecipients :recipients="record?.recipients" /></dd>
           </dl>
-</slot>
+        </slot>
       </div>
       <slot name="expiry">
-<dl class="message-fact">
+        <dl class="message-fact">
           <dt>{{ $t('msg.expiry') }}</dt>
           <dd>
             {{
@@ -78,8 +74,10 @@ function time(value?: number) {
             }}
           </dd>
         </dl>
-</slot>
-      <p v-if="!targeted" class="editor-note">{{ $t('msg.broadcastHint') }}</p>
+      </slot>
+      <p v-if="audience === 'all'" class="editor-note">
+        {{ $t('msg.broadcastHint') }}
+      </p>
     </section>
     <section v-if="record" class="editor-section">
       <h3>{{ $t('system-editor.recordInfo') }}</h3>
@@ -97,34 +95,40 @@ function time(value?: number) {
 <style scoped>
 .message-title {
   margin: 18px 0;
-  overflow-wrap: anywhere;
   font-size: 20px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
+
 .message-content {
   margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   line-height: 1.8;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
+
 .message-fact {
   margin: 0 0 20px;
 }
+
 .message-fact dt,
 .message-metadata dt {
-  color: hsl(var(--muted-foreground));
   font-size: 13px;
+  color: hsl(var(--muted-foreground));
 }
+
 .message-fact dd {
   margin: 7px 0 0;
   overflow-wrap: anywhere;
 }
+
 .message-metadata {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
   font-size: 13px;
 }
+
 .message-metadata dd {
   margin: 0;
 }

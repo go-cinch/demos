@@ -1,21 +1,40 @@
-import { createApp, watchEffect } from 'vue';
+import { createApp, watch, watchEffect } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 import { registerLoadingDirective } from '@vben/common-ui/es/loading';
-import { preferences } from '@vben/preferences';
-import { initStores } from '@vben/stores';
+import { loadLocaleMessages, onLocaleSelected } from '@vben/locales';
+import {
+  onUserPreferencesChange,
+  preferences,
+  updateUserPreferences,
+} from '@vben/preferences';
+import {
+  initStores,
+  setTimezoneHandler,
+  useTabbarStore,
+  useTimezoneStore,
+  useUserStore,
+} from '@vben/stores';
+import { browserSession } from '@vben/stores/session';
 import '@vben/styles';
 import '@vben/styles/antd';
+import { userCache } from '@vben/utils/cache';
 
 import { useTitle } from '@vueuse/core';
+import { message, Modal, notification } from 'ant-design-vue';
 
 import { $t, setupI18n } from '#/locales';
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
+import { getTimezoneOptionsApi } from './api/core/timezones';
 import App from './app.vue';
-import { router } from './router';
+import { resetRoutes, router } from './router';
+import { useAuthStore } from './store/auth';
 import { clearLegacyLoginCredentials } from './store/login-account-history';
+import { loadSystemProperties } from './store/system-properties';
+import { initializeTimezonePreference } from './store/timezone-preference';
+import { initializeUIPreferences } from './store/ui-preferences';
 
 async function bootstrap(namespace: string) {
   clearLegacyLoginCredentials();
@@ -42,11 +61,62 @@ async function bootstrap(namespace: string) {
     spinning: 'spinning',
   });
 
-  // 国际化 i18n 配置
-  await setupI18n(app);
-
-  // 配置 pinia-tore
+  // Public options use the request client, so initialize stores before i18n.
   await initStores(app, { namespace });
+  let leavingSession = false;
+  const invalidateExternalSession = () => {
+    if (!leavingSession && browserSession.hasExpired()) {
+      // A hard navigation also disposes kept-alive pages and outstanding dialogs.
+      leavingSession = true;
+      window.location.replace(router.resolve('/auth/login').href);
+    }
+  };
+  window.addEventListener('storage', invalidateExternalSession);
+  window.addEventListener('pageshow', invalidateExternalSession);
+  window.addEventListener('focus', invalidateExternalSession);
+  await setupI18n(app);
+  userCache.onChange(() => {
+    resetRoutes();
+    Modal.destroyAll();
+    message.destroy();
+    notification.destroy();
+    void loadLocaleMessages(preferences.app.locale);
+  });
+  watch(
+    () => useUserStore().userInfo,
+    (info) => {
+      if (info)
+        useTabbarStore().retainAuthorizedTabs(
+          new Set(['/profile', ...(info.roles ?? [])]),
+        );
+    },
+    { flush: 'sync' },
+  );
+  const options = await loadSystemProperties();
+  initializeTimezonePreference();
+  initializeUIPreferences(options?.ui_preferences?.vben_pc);
+  setTimezoneHandler({
+    getTimezoneOptions: getTimezoneOptionsApi,
+    getTimezone: async () =>
+      preferences.app.timezone ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    setTimezone: async (timezone) => {
+      updateUserPreferences({ app: { timezone } });
+    },
+  });
+  const timezoneStore = useTimezoneStore();
+  watch(
+    () => preferences.app.timezone,
+    (timezone) => timezoneStore.applyTimezone(timezone),
+    { immediate: true },
+  );
+  onUserPreferencesChange((change) => {
+    const timezone = change.preferences?.app?.timezone;
+    if (typeof timezone === 'string' && timezone)
+      useAuthStore().selectTimezone(timezone);
+    useAuthStore().selectUIPreferences(change);
+  });
+  onLocaleSelected((locale) => useAuthStore().selectLanguage(locale));
 
   // 安装权限指令
   registerAccessDirective(app);

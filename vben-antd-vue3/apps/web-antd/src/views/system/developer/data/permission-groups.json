@@ -88,7 +88,7 @@
       "admin:high-risk:all": {
         "kind": "resource",
         "parent": "admin:high-risk",
-        "sort": 10,
+        "sort": 1,
         "permission_scope": "*"
       }
     },
@@ -101,9 +101,7 @@
           "admin:btn:system:user:refresh",
           "admin:btn:system:user:view-detail"
         ],
-        "entry_keys": [
-          "admin:menu:system:user"
-        ],
+        "entry_keys": ["admin:menu:system:user"],
         "http": [
           {
             "path": "/user",
@@ -128,9 +126,7 @@
           "admin:btn:system:role:refresh",
           "admin:btn:system:role:view-detail"
         ],
-        "entry_keys": [
-          "admin:menu:system:role"
-        ],
+        "entry_keys": ["admin:menu:system:role"],
         "http": [
           {
             "path": "/role",
@@ -155,9 +151,7 @@
           "admin:btn:system:action:refresh",
           "admin:btn:system:action:view-detail"
         ],
-        "entry_keys": [
-          "admin:menu:system:action"
-        ],
+        "entry_keys": ["admin:menu:system:action"],
         "http": [
           {
             "path": "/action",
@@ -192,9 +186,7 @@
       },
       "admin:high-risk:permission-admin:user-create": {
         "permission_resource": "user",
-        "btn": [
-          "admin:btn:system:user:create"
-        ],
+        "btn": ["admin:btn:system:user:create"],
         "entry_keys": [],
         "http": [
           {
@@ -206,9 +198,7 @@
       },
       "admin:high-risk:permission-admin:role-create": {
         "permission_resource": "role",
-        "btn": [
-          "admin:btn:system:role:create"
-        ],
+        "btn": ["admin:btn:system:role:create"],
         "entry_keys": [],
         "http": [
           {
@@ -231,12 +221,8 @@
             "method": "POST"
           },
           {
-            "method": "GET",
-            "path": "/dictionary"
-          },
-          {
             "method": "PATCH",
-            "path": "/dictionary/{id}"
+            "path": "/action/group"
           }
         ],
         "grpc": []
@@ -248,22 +234,32 @@
           "admin:btn:system:user:approve",
           "admin:btn:system:user:lock",
           "admin:btn:system:user:unlock",
-          "admin:btn:system:user:unlock-password"
+          "admin:btn:system:user:reset-password"
         ],
         "entry_keys": [],
         "http": [
           {
             "path": "/user/{id}",
             "method": "PATCH"
+          },
+          {
+            "method": "POST",
+            "path": "/user/{id}/lock"
+          },
+          {
+            "method": "POST",
+            "path": "/user/{id}/unlock"
+          },
+          {
+            "method": "POST",
+            "path": "/user/{id}/reset-password"
           }
         ],
         "grpc": []
       },
       "admin:high-risk:permission-admin:role-update": {
         "permission_resource": "role",
-        "btn": [
-          "admin:btn:system:role:edit"
-        ],
+        "btn": ["admin:btn:system:role:edit"],
         "entry_keys": [],
         "http": [
           {
@@ -277,6 +273,7 @@
         "permission_resource": "action",
         "btn": [
           "admin:btn:system:action:edit",
+          "admin:btn:system:action:edit-group",
           "admin:btn:system:action:reorder-groups"
         ],
         "entry_keys": [],
@@ -286,12 +283,12 @@
             "method": "PATCH"
           },
           {
-            "method": "GET",
-            "path": "/dictionary"
+            "method": "PATCH",
+            "path": "/action/group"
           },
           {
             "method": "PATCH",
-            "path": "/dictionary/{id}"
+            "path": "/action/group/order"
           }
         ],
         "grpc": []
@@ -340,12 +337,8 @@
             "method": "DELETE"
           },
           {
-            "method": "GET",
-            "path": "/dictionary"
-          },
-          {
             "method": "PATCH",
-            "path": "/dictionary/{id}"
+            "path": "/action/group"
           }
         ],
         "grpc": []

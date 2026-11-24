@@ -10,6 +10,22 @@ import AuthenticationFormView from './form.vue';
 import SloganIcon from './icons/slogan.vue';
 import Toolbar from './toolbar.vue';
 
+const props = withDefaults(defineProps<Props>(), {
+  appName: '',
+  copyright: true,
+  illustrationFullBleed: false,
+  logo: '',
+  logoDark: '',
+  pageDescription: '',
+  pageTitle: '',
+  sloganImage: '',
+  toolbar: true,
+  toolbarList: () => ['color', 'language', 'layout', 'timezone', 'theme'],
+  clickLogo: () => {},
+});
+
+const shortTitle = 'Go Cinch';
+
 interface Props {
   appName?: string;
   logo?: string;
@@ -23,20 +39,6 @@ interface Props {
   toolbarList?: ToolbarType[];
   clickLogo?: () => void;
 }
-
-const props = withDefaults(defineProps<Props>(), {
-  appName: '',
-  copyright: true,
-  illustrationFullBleed: false,
-  logo: '',
-  logoDark: '',
-  pageDescription: '',
-  pageTitle: '',
-  sloganImage: '',
-  toolbar: true,
-  toolbarList: () => ['color', 'language', 'layout', 'theme'],
-  clickLogo: () => {},
-});
 
 const { authPanelCenter, authPanelLeft, authPanelRight, isDark } =
   usePreferences();
@@ -99,7 +101,7 @@ const logoSrc = computed(() => {
             width="42"
           />
           <p v-if="appName" class="m-0 whitespace-nowrap font-medium">
-            <span class="text-base min-[360px]:hidden">Go Cinch</span>
+            <span class="text-base min-[360px]:hidden">{{ shortTitle }}</span>
             <span class="hidden text-lg min-[360px]:inline lg:hidden">
               Go Cinch Admin
             </span>
@@ -156,7 +158,7 @@ const logoSrc = computed(() => {
     <div v-if="authPanelCenter" class="relative flex-center w-full">
       <div class="login-background absolute top-0 left-0 size-full"></div>
       <AuthenticationFormView
-        class="w-full rounded-3xl pb-20 shadow-float shadow-primary/5 md:w-2/3 md:bg-background lg:w-1/2 xl:w-[36%]"
+        class="w-full rounded-lg pb-20 shadow-float shadow-primary/5 md:w-2/3 md:bg-background lg:w-1/2 xl:w-[36%]"
         data-side="bottom"
       >
         <template v-if="copyright" #copyright>

@@ -1,19 +1,18 @@
+import type { I18nCatalog } from '#/api/core/i18n';
+
 import { ref } from 'vue';
 
-import { setSupportLanguages } from '@vben/constants';
 import { i18n, loadLocaleMessages } from '@vben/locales';
 import { updatePreferences } from '@vben/preferences';
 
-export interface I18nCatalog {
-  group_order?: string[];
-  default_locale: string;
-  locales: { enabled: boolean; name: string; tag: string }[];
-  messages: Record<string, { frontend?: Record<string, unknown> }>;
-  schema_version: number;
-}
+import { getPublicI18nCatalogApi } from '#/api/core/i18n';
+import { loadSystemProperties } from '#/store/system-properties';
+
+export type { I18nCatalog } from '#/api/core/i18n';
+
 let catalog: I18nCatalog | undefined;
 const catalogRevision = ref(0);
-let pending: Promise<void> | undefined;
+let pending: Promise<boolean> | undefined;
 let lastSnapshot = '';
 const fallbacks = new Map<string, Record<string, unknown>>();
 export function registerCatalogFallback(
@@ -24,8 +23,38 @@ export function registerCatalogFallback(
   i18n.global.setLocaleMessage(locale, messages);
 }
 
+function resolveBlankMessages(
+  messages: Record<string, unknown>,
+  fallback: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(messages).flatMap(([key, value]): [string, unknown][] => {
+      const other = fallback[key];
+      if (typeof value === 'string' && !value.trim())
+        return typeof other === 'string' && other.trim() ? [[key, other]] : [];
+      if (value && typeof value === 'object' && !Array.isArray(value))
+        return [
+          [
+            key,
+            resolveBlankMessages(
+              value as Record<string, unknown>,
+              other && typeof other === 'object' && !Array.isArray(other)
+                ? (other as Record<string, unknown>)
+                : {},
+            ),
+          ],
+        ];
+      return [[key, value]];
+    }),
+  );
+}
+
 export function catalogMessages(locale: string) {
-  return catalog?.messages[locale]?.frontend ?? {};
+  if (!catalog) return {};
+  return resolveBlankMessages(
+    catalog.messages[locale]?.frontend ?? {},
+    catalog.messages[catalog.default_locale]?.frontend ?? {},
+  );
 }
 export function catalogDefaultLocale() {
   void catalogRevision.value;
@@ -46,7 +75,7 @@ export function catalogGroupWords() {
           : [];
       }),
     ),
-  ].sort((left, right) => left.localeCompare(right));
+  ].toSorted((left, right) => left.localeCompare(right));
 }
 export function catalogGroupOrder() {
   void catalogRevision.value;
@@ -71,43 +100,35 @@ export function resolveCatalogLocale(requested: string) {
 }
 
 /** Public translation data only; this must also work before a session exists. */
-export async function refreshI18nCatalog() {
-  if (pending) return pending;
-  pending = (async () => {
+export async function refreshI18nCatalog(
+  onUnavailable?: () => void,
+): Promise<void> {
+  pending ??= (async () => {
     try {
-      const base = (
-        import.meta.env.VITE_GLOB_AUTH_API_URL || '/api/auth'
-      ).replace(/\/$/, '');
-      const response = await fetch(
-        `${base}/dictionary/pub/i18n?f=default_locale,locales,group_order,frontend_messages`,
-        {
-          headers: {
-            'Accept-Language': String(i18n.global.locale.value || 'en-US'),
-            'X-Auth-Scope': 'admin',
-          },
-          signal: AbortSignal.timeout(5000),
-        },
-      );
-      if (!response.ok) return;
-      const next = (await response.json()) as I18nCatalog;
+      const options = await loadSystemProperties({ fresh: Boolean(catalog) });
+      const translationCatalog = await getPublicI18nCatalogApi();
+      const next = {
+        ...translationCatalog,
+        default_locale:
+          options?.default_locale ?? translationCatalog.default_locale,
+        locales: options?.locales ?? translationCatalog.locales,
+      };
       if (
         next.schema_version !== 2 ||
         !Array.isArray(next.locales) ||
         !next.messages
       )
-        return;
+        return false;
       const enabled = next.locales.filter(
         (item) => item.enabled && item.tag && next.messages[item.tag],
       );
-      if (!enabled.some((item) => item.tag === next.default_locale)) return;
+      if (!enabled.some((item) => item.tag === next.default_locale))
+        return false;
       const snapshot = JSON.stringify(next);
-      if (lastSnapshot === snapshot) return;
+      if (lastSnapshot === snapshot) return true;
       catalog = next;
       catalogRevision.value++;
       lastSnapshot = snapshot;
-      setSupportLanguages(
-        enabled.map((item) => ({ label: item.name, value: item.tag })),
-      );
       i18n.global.fallbackLocale.value = next.default_locale;
       for (const tag of new Set([
         ...Object.keys(next.messages),
@@ -119,10 +140,7 @@ export async function refreshI18nCatalog() {
           JSON.parse(JSON.stringify(fallbacks.get(tag) ?? {})),
         );
         if (enabled.some((item) => item.tag === tag))
-          i18n.global.mergeLocaleMessage(
-            tag,
-            next.messages[tag]?.frontend ?? {},
-          );
+          i18n.global.mergeLocaleMessage(tag, catalogMessages(tag));
       }
       const current = String(i18n.global.locale.value);
       if (current && !enabled.some((item) => item.tag === current)) {
@@ -131,11 +149,13 @@ export async function refreshI18nCatalog() {
           void loadLocaleMessages(next.default_locale);
         });
       }
+      return true;
     } catch {
       // Keep the last good catalog (or bundled startup fallback) while offline.
+      return false;
     }
   })().finally(() => {
     pending = undefined;
   });
-  return pending;
+  if (!(await pending)) onUnavailable?.();
 }

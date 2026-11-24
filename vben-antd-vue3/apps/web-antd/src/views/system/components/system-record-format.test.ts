@@ -3,6 +3,7 @@ import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import {
   actionMapping,
   jsonStructure,
@@ -95,9 +96,9 @@ describe('management record projections', () => {
       { method: '/raw', path: 'suffix|more' },
       { method: '', path: '*' },
     ]);
-    expect(ruleColor(rules[0]!)).toBe('green');
-    expect(ruleColor(rules[1]!)).toBe('purple');
-    expect(ruleColor(rules[3]!)).toBe('default');
+    expect(ruleColor(required(rules[0]))).toBe('green');
+    expect(ruleColor(required(rules[1]))).toBe('purple');
+    expect(ruleColor(required(rules[3]))).toBe('default');
   });
   it('shows wildcard mappings only for explicitly configured wildcard definitions', () => {
     expect(actionMapping({ resource: 'GET|/user' }, 'resource')).toBe(

@@ -1,15 +1,19 @@
+import type { Catalog } from './catalog-model';
+
 import type { ResourceChildOrder } from '#/api/system';
+
+import { requiredEntry } from '#/utils/required-entry';
+
 import {
   childOrderKey,
   resourceChildren,
   storeResourceOrder,
 } from '../components/resource-order';
-import type { Catalog } from './catalog-model';
-import { clone } from './catalog-model';
 import {
   referenceGraphIssues,
   resourceReachable,
 } from '../components/resource-references';
+import { clone } from './catalog-model';
 
 export interface ResourceDestination {
   parent: string;
@@ -26,15 +30,17 @@ export function siblingKeys(catalog: Catalog, key: string) {
   const resources = catalog.resource_catalog.resources;
   const node = resources[key];
   if (!node) return [];
-  return Object.keys(resources)
+  const scope = key.split(':')[0];
+  return Object.entries(resources)
     .filter(
-      (id) =>
-        id.split(':')[0] === key.split(':')[0] &&
-        (resources[id]!.parent ?? '') === (node.parent ?? ''),
+      ([id, sibling]) =>
+        id.split(':')[0] === scope &&
+        (sibling.parent ?? '') === (node.parent ?? ''),
     )
-    .sort(
-      (a, b) => resources[a]!.sort - resources[b]!.sort || a.localeCompare(b),
-    );
+    .toSorted(
+      ([a, left], [b, right]) => left.sort - right.sort || a.localeCompare(b),
+    )
+    .map(([id]) => id);
 }
 
 export function canMoveResource(catalog: Catalog, key: string, parent: string) {
@@ -62,14 +68,15 @@ export function moveResource(
   const next = clone(catalog);
   const rc = next.resource_catalog;
   const original = catalog.resource_catalog.resources;
-  const scope = key.split(':')[0]!;
-  const oldParent = original[key]!.parent ?? '';
+  const scope = key.split(':')[0] ?? '';
+  const oldParent =
+    requiredEntry(original[key], 'resource catalog entry').parent ?? '';
   // Freeze each owner's displayed order before keys or ownership change.
   for (const [owner, node] of Object.entries(rc.resources)) {
     if (owner.startsWith(`${scope}:`) && node.kind === 'directory')
       node.child_order = resourceChildren(rc, owner, scope);
   }
-  const changedParent = (original[key]!.parent ?? '') !== destination.parent;
+  const changedParent = oldParent !== destination.parent;
   const changes: ResourceKeyChange[] = [];
   const resourceKeys: Record<string, string> = {};
   const featureKeys: Record<string, string> = {};
@@ -83,12 +90,14 @@ export function moveResource(
     collect(key);
     const occupied = new Set(Object.keys(original));
     for (const from of subtree) {
-      const parent =
-        from === key
-          ? destination.parent
-          : resourceKeys[original[from]!.parent!]!;
-      const prefix = parent || from.split(':')[0]!;
-      const leaf = from.split(':').at(-1)!;
+      const node = requiredEntry(original[from], from);
+      let parent = destination.parent;
+      if (from !== key) {
+        if (!node.parent) throw new Error('invalidMove');
+        parent = requiredEntry(resourceKeys[node.parent], node.parent);
+      }
+      const prefix = parent || (from.split(':')[0] ?? '');
+      const leaf = from.split(':').at(-1) ?? '';
       let to = `${prefix}:${leaf}`;
       let sequence = 1;
       while (
@@ -101,7 +110,7 @@ export function moveResource(
       resourceKeys[from] = to;
       if (from !== to)
         changes.push({ before: from, after: to, numbered: sequence > 1 });
-      for (const operation of Object.values(original[from]!.operations ?? {}))
+      for (const operation of Object.values(node.operations ?? {}))
         for (const feature of operation.button_keys)
           featureKeys[feature] = `${to}:${feature.slice(from.length + 1)}`;
     }
@@ -128,7 +137,14 @@ export function moveResource(
             ),
           ];
         if (node.reference_operations)
-          node.reference_operations = Object.fromEntries(Object.entries(node.reference_operations).map(([target, operations]) => [resourceKeys[target] ?? target, operations]));
+          node.reference_operations = Object.fromEntries(
+            Object.entries(node.reference_operations).map(
+              ([target, operations]) => [
+                resourceKeys[target] ?? target,
+                operations,
+              ],
+            ),
+          );
         for (const operation of Object.values(node.operations ?? {}))
           operation.button_keys = operation.button_keys.map(
             (feature) => featureKeys[feature] ?? feature,
@@ -146,7 +162,11 @@ export function moveResource(
     }
     for (const node of Object.values(rc.resources))
       if (node.reference_operations)
-        node.reference_operations = Object.fromEntries(Object.entries(node.reference_operations).filter(([target]) => node.references?.includes(target)));
+        node.reference_operations = Object.fromEntries(
+          Object.entries(node.reference_operations).filter(([target]) =>
+            node.references?.includes(target),
+          ),
+        );
     rc.buttons = Object.fromEntries(
       Object.entries(rc.buttons).map(([id, feature]) => [
         featureKeys[id] ?? id,
@@ -200,8 +220,8 @@ export function moveResource(
     const oldIndex = previous.findIndex(
       (item) => childOrderKey(item) === childOrderKey(anchor),
     );
-    if (oldIndex < 0) throw new Error('invalidMove');
-    const remaining = new Set(order.map(childOrderKey));
+    if (oldIndex === -1) throw new Error('invalidMove');
+    const remaining = new Set(order.map((item) => childOrderKey(item)));
     index = previous
       .slice(0, oldIndex)
       .filter((item) =>
@@ -216,10 +236,11 @@ export function moveResource(
     oldParent,
     scope,
   )
-    .map(childOrderKey)
+    .map((item) => childOrderKey(item))
     .join('|');
   const moved =
-    changedParent || previousOrder !== order.map(childOrderKey).join('|');
+    changedParent ||
+    previousOrder !== order.map((item) => childOrderKey(item)).join('|');
   if (!moved)
     return {
       document: catalog,
@@ -232,7 +253,7 @@ export function moveResource(
   if (oldParent !== destination.parent)
     storeResourceOrder(rc, oldParent, resourceChildren(rc, oldParent, scope));
   storeResourceOrder(rc, destination.parent, order);
-  if (referenceGraphIssues(rc).length) throw new Error('invalidMove');
+  if (referenceGraphIssues(rc).length > 0) throw new Error('invalidMove');
   return {
     document: next,
     key: selectedKey,
@@ -255,7 +276,7 @@ export function moveReference(
   )
     throw new Error('invalidMove');
   const next = clone(catalog);
-  const scope = owner.split(':')[0]!;
+  const scope = owner.split(':')[0] ?? '';
   const order = resourceChildren(next.resource_catalog, owner, scope).filter(
     (item) => !(item.kind === 'reference' && item.key === key),
   );
@@ -278,17 +299,17 @@ export function resourceStep(
   catalog: Catalog,
   key: string,
   direction: -1 | 1,
-): ResourceDestination | null {
+): null | ResourceDestination {
   const rc = catalog.resource_catalog;
   const node = rc.resources[key];
   if (!node) return null;
-  const scope = key.split(':')[0]!;
+  const scope = key.split(':')[0] ?? '';
   const parent = node.parent ?? '';
   const order = resourceChildren(rc, parent, scope);
   const index = order.findIndex(
     (item) => item.kind === 'node' && item.key === key,
   );
-  if (index < 0) return null;
+  if (index === -1) return null;
   const neighbor = order[index + direction];
   if (neighbor)
     return {
@@ -327,7 +348,7 @@ export function resourceStep(
     i >= 0 && i < directories.length;
     i += direction
   ) {
-    const target = directories[i]!;
+    const target = requiredEntry(directories[i], 'resource catalog entry');
     if (!canMoveResource(catalog, key, target)) continue;
     const children = resourceChildren(rc, target, scope);
     const first = children[0];

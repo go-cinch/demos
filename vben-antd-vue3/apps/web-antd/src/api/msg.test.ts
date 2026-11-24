@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { msgApi, msgChanged, msgPreviewFields, msgSentDetailFields } from './msg';
+import { messagesChangedEvent } from '#/api/message-events';
+
+import {
+  msgApi,
+  msgChanged,
+  msgPreviewFields,
+  msgSentDetailFields,
+} from './msg';
 
 const client = vi.hoisted(() => ({
   get: vi.fn(),
@@ -27,15 +34,37 @@ describe('message service contract', () => {
       await msgApi.list(sent, params);
       expect(client.get).toHaveBeenLastCalledWith(`/msg/${path}`, { params });
       await msgApi.get(7, sent);
-      if (sent) {
-        expect(client.get).toHaveBeenLastCalledWith('/msg/sent/7', { params: { f: msgSentDetailFields } });
-        expect(msgSentDetailFields.split(',')).toContain('recipients');
-        expect(msgSentDetailFields.split(',')).not.toContain('recipient_ids');
-      } else {
-        expect(client.get).toHaveBeenLastCalledWith('/msg/inbox/7');
-      }
+      const detailArgs = sent
+        ? ['/msg/sent/7', { params: { f: msgSentDetailFields } }]
+        : ['/msg/inbox/7'];
+      expect(client.get.mock.lastCall).toEqual(detailArgs);
+      expect(msgSentDetailFields.split(',')).toContain('recipients');
+      expect(msgSentDetailFields.split(',')).not.toContain('recipient_ids');
       await msgApi.remove(7, sent);
       expect(client.delete).toHaveBeenCalledExactlyOnceWith(`/msg/${path}/7`);
+    },
+  );
+
+  it('completes a batch withdrawal when the message is already gone', async () => {
+    client.delete.mockRejectedValue({
+      response: { status: 404, data: { error_code: 'MSG_NOT_FOUND' } },
+    });
+    await expect(msgApi.withdrawIfPresent(7)).resolves.toBeUndefined();
+    expect(client.delete).toHaveBeenCalledExactlyOnceWith('/msg/sent/7', {
+      suppressErrorMessage: true,
+    });
+  });
+
+  it.each([
+    [404, 'HTTP_NOT_FOUND'],
+    [403, 'AUTH_FORBIDDEN'],
+    [502, 'MSG_NOT_FOUND'],
+  ])(
+    'preserves a batch withdrawal failure for %s / %s',
+    async (status, error_code) => {
+      const error = { response: { status, data: { error_code } } };
+      client.delete.mockRejectedValue(error);
+      await expect(msgApi.withdrawIfPresent(7)).rejects.toBe(error);
     },
   );
 
@@ -59,6 +88,7 @@ describe('message service contract', () => {
     });
     await msgApi.sentSummary();
     expect(client.get).toHaveBeenLastCalledWith('/msg/sent/summary', {
+      suppressErrorMessage: true,
       params: { f: 'total,counts' },
     });
   });
@@ -94,14 +124,23 @@ describe('message service contract', () => {
       finish({ user_id: 1, count: 99 });
       await expect(first).resolves.toEqual({ user_id: 1, count: 1 });
       expect(client.get).toHaveBeenCalledTimes(2);
-      expect(client.get).toHaveBeenLastCalledWith('/msg/unread-count');
-      if (mutation === 'read')
-        expect(client.request).toHaveBeenCalledWith('/msg/inbox/7', {
-          method: 'PATCH',
-          data: { read: true },
-        });
-      if (mutation === 'readAll')
-        expect(client.post).toHaveBeenCalledWith('/msg/inbox/read-all');
+      expect(client.get).toHaveBeenLastCalledWith('/msg/unread-count', {
+        suppressErrorMessage: true,
+      });
+      const reads = client.request.mock.calls.filter(
+        ([path]) => path === '/msg/inbox/7',
+      );
+      expect(reads).toEqual(
+        mutation === 'read'
+          ? [['/msg/inbox/7', { method: 'PATCH', data: { read: true } }]]
+          : [],
+      );
+      const readAll = client.post.mock.calls.filter(
+        ([path]) => path === '/msg/inbox/read-all',
+      );
+      expect(readAll).toEqual(
+        mutation === 'readAll' ? [['/msg/inbox/read-all']] : [],
+      );
     },
   );
 
@@ -123,12 +162,12 @@ describe('message service contract', () => {
 
   it('emits the shared change event', () => {
     const listener = vi.fn();
-    window.addEventListener('go-cinch-msg-changed', listener);
+    window.addEventListener(messagesChangedEvent, listener);
     try {
       msgChanged();
       expect(listener).toHaveBeenCalledOnce();
     } finally {
-      window.removeEventListener('go-cinch-msg-changed', listener);
+      window.removeEventListener(messagesChangedEvent, listener);
     }
   });
 });

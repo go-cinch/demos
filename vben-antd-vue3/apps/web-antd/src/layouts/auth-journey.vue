@@ -131,7 +131,11 @@ function render(p: number, dt: number) {
       'transform',
       `translate(${(8 - age * 106).toFixed(2)} ${(68 - age * 30.7).toFixed(2)}) scale(${(0.6 + age * 2.4).toFixed(3)} ${(0.6 + age * 1.1).toFixed(3)})`,
     );
-    attr(`wake-flow-${layer}`, 'opacity', Math.sin(age * Math.PI) ** 1.4 * 0.85);
+    attr(
+      `wake-flow-${layer}`,
+      'opacity',
+      Math.sin(age * Math.PI) ** 1.4 * 0.85,
+    );
   }
   attr('water-displacement', 'scale', 1.3 + Math.sin(elapsed * 1.1) * 0.45);
   attr('harbor', 'opacity', smooth(0.02, 0.22, p));
@@ -154,12 +158,9 @@ function tick(now: number) {
   const dt = Math.min((now - (lastTime || now)) / 1000, 0.05);
   lastTime = now;
   elapsed += dt;
-  const p =
-    phase.value === 'arrived'
-      ? 1
-      : arrivalStart === undefined
-        ? 0
-        : clamp((now - arrivalStart) / 1600);
+  const elapsedArrival =
+    arrivalStart === undefined ? 0 : clamp((now - arrivalStart) / 1600);
+  const p = phase.value === 'arrived' ? 1 : elapsedArrival;
   render(p, dt);
   if (p === 1 && phase.value === 'arriving') {
     phase.value = 'arrived';
@@ -170,10 +171,11 @@ function tick(now: number) {
 async function collect() {
   await nextTick();
   parts = new Map(
-    [...(root.value?.querySelectorAll('[data-part]') ?? [])].map((el) => [
-      el.getAttribute('data-part')!,
-      el,
-    ]),
+    [
+      ...(root.value?.querySelectorAll<HTMLElement | SVGElement>(
+        '[data-part]',
+      ) ?? []),
+    ].map((el) => [el.dataset.part ?? '', el]),
   );
   render(phase.value === 'arrived' ? 1 : 0, 0);
 }
@@ -329,10 +331,25 @@ onBeforeUnmount(() => {
             y2="0"
             gradientUnits="userSpaceOnUse"
           >
-            <stop :stop-color="darkScene ? '#bed4df' : '#e6f4f7'" stop-opacity="0" />
-            <stop offset=".35" :stop-color="darkScene ? '#bed4df' : '#e6f4f7'" stop-opacity=".15" />
-            <stop offset=".78" :stop-color="darkScene ? '#bed4df' : '#e6f4f7'" stop-opacity=".55" />
-            <stop offset="1" :stop-color="darkScene ? '#bed4df' : '#e6f4f7'" stop-opacity=".8" />
+            <stop
+              :stop-color="darkScene ? '#bed4df' : '#e6f4f7'"
+              stop-opacity="0"
+            />
+            <stop
+              offset=".35"
+              :stop-color="darkScene ? '#bed4df' : '#e6f4f7'"
+              stop-opacity=".15"
+            />
+            <stop
+              offset=".78"
+              :stop-color="darkScene ? '#bed4df' : '#e6f4f7'"
+              stop-opacity=".55"
+            />
+            <stop
+              offset="1"
+              :stop-color="darkScene ? '#bed4df' : '#e6f4f7'"
+              stop-opacity=".8"
+            />
           </linearGradient>
           <linearGradient
             :id="`${id}-reflection-fade`"
@@ -435,10 +452,12 @@ onBeforeUnmount(() => {
               stroke-linecap="round"
             >
               <path
-:d="layer % 2 === 0
-                ? 'M-7-5Q-1-2 1 1Q2 4-5 7M-10 1Q-7 3-9 5'
-                : 'M-6-6Q1-3 2 1Q3 5-4 8M-9-2Q-5 1-7 4'"
-/>
+                :d="
+                  layer % 2 === 0
+                    ? 'M-7-5Q-1-2 1 1Q2 4-5 7M-10 1Q-7 3-9 5'
+                    : 'M-6-6Q1-3 2 1Q3 5-4 8M-9-2Q-5 1-7 4'
+                "
+              />
             </g>
           </g>
         </g>
@@ -452,8 +471,12 @@ onBeforeUnmount(() => {
         </g>
         <g data-part="bow-wash" :filter="paint('foam')">
           <g data-part="bow-foam" :fill="darkScene ? '#b0c8d1' : '#eff9fa'">
-            <path d="M167 118Q185 125 198 121L201 119Q205 125 196 128Q182 128 167 121Z" />
-            <path d="M254 104Q272 111 282 108L284 106Q289 112 280 115Q267 114 254 107Z" />
+            <path
+              d="M167 118Q185 125 198 121L201 119Q205 125 196 128Q182 128 167 121Z"
+            />
+            <path
+              d="M254 104Q272 111 282 108L284 106Q289 112 280 115Q267 114 254 107Z"
+            />
           </g>
         </g>
       </svg>
@@ -472,31 +495,36 @@ onBeforeUnmount(() => {
   background: var(--sky);
   isolation: isolate;
 }
+
 .auth-journey[data-lighting='night'] {
   --sky: #0c1727;
   --edge: hsl(var(--background-deep));
 }
+
 .auth-journey::after {
   position: absolute;
-  z-index: 2;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
   content: '';
   background: linear-gradient(90deg, transparent 82%, var(--edge) 100%);
 }
+
 .auth-journey[data-form-side='left']::after {
   background: linear-gradient(270deg, transparent 82%, var(--edge) 100%);
 }
+
 .journey-composition {
   position: absolute;
   top: 50%;
   left: 50%;
   display: flex;
-  width: min(88%, 560px);
   flex-direction: column;
   align-items: center;
+  width: min(88%, 560px);
   transform: translate(-50%, -50%);
 }
+
 .journey-stage {
   display: block;
   width: 100%;
@@ -505,9 +533,11 @@ onBeforeUnmount(() => {
   pointer-events: none;
   user-select: none;
 }
+
 .auth-journey[data-form-side='left'] .journey-stage {
   transform: scaleX(-1);
 }
+
 @media (max-height: 640px) {
   .journey-composition {
     width: min(80%, 440px);

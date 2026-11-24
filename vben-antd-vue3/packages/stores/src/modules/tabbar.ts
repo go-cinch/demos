@@ -21,6 +21,7 @@ import {
 } from '@vben-core/shared/utils';
 
 import { acceptHMRUpdate, defineStore } from 'pinia';
+
 import { canCloseTabPaths } from '../tab-close-guards';
 
 interface RouteCached {
@@ -75,6 +76,29 @@ const MAX_VISIT_HISTORY = 50;
  */
 export const useTabbarStore = defineStore('core-tabbar', {
   actions: {
+    restoreWorkspace(saved?: {
+      tabs?: TabDefinition[];
+      visitHistory?: { items?: string[] };
+    }) {
+      this.$reset();
+      if (Array.isArray(saved?.tabs))
+        this.tabs = saved.tabs.filter(
+          (tab) => tab && typeof tab.path === 'string',
+        );
+      if (Array.isArray(saved?.visitHistory?.items)) {
+        this.visitHistory.push(
+          ...saved.visitHistory.items.filter(
+            (path) => typeof path === 'string',
+          ),
+        );
+      }
+    },
+    retainAuthorizedTabs(paths: Set<string>) {
+      if (!this.tabs.some((tab) => !paths.has(tab.path))) return;
+      this.tabs = this.tabs.filter((tab) => paths.has(tab.path));
+      this.visitHistory.retain(this.tabs.map(getTabKeyFromTab));
+      void this.updateCacheTabs();
+    },
     /**
      * Close tabs in bulk
      */
@@ -311,7 +335,7 @@ export const useTabbarStore = defineStore('core-tabbar', {
       if (currentKey === closingKey) {
         if (this.getTabs.length <= 1) return;
         const history = isVisitHistory()
-          ? this.visitHistory.toArray().reverse()
+          ? this.visitHistory.toArray().toReversed()
           : [];
         const previous = history
           .filter((key) => key !== closingKey)
@@ -609,30 +633,6 @@ export const useTabbarStore = defineStore('core-tabbar', {
       return this.cachedRoutes;
     },
   },
-  persist: [
-    // tabs不需要保存在localStorage
-    {
-      pick: ['tabs', 'visitHistory'],
-      storage: sessionStorage,
-      serializer: {
-        serialize: JSON.stringify,
-        deserialize(value: string) {
-          const parsed = JSON.parse(value);
-          // Stack 类实例经 JSON 序列化后会变成普通对象 {dedup, items, maxSize}，
-          // 丢失所有方法和 getter，需要重新构建 Stack 实例
-          if (parsed.visitHistory && !(parsed.visitHistory instanceof Stack)) {
-            const raw = parsed.visitHistory;
-            const stack = createStack<string>(true, MAX_VISIT_HISTORY);
-            if (Array.isArray(raw.items)) {
-              stack.push(...raw.items);
-            }
-            parsed.visitHistory = stack;
-          }
-          return parsed;
-        },
-      },
-    },
-  ],
   state: (): TabbarState => ({
     visitHistory: createStack<string>(true, MAX_VISIT_HISTORY),
     cachedRoutes: new Map<string, RouteCached>(),

@@ -2,6 +2,7 @@ import type { ActionConfig } from '#/api/system';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { required } from '../../../../../../scripts/test-utils/required';
 import { actionDisplayName, automaticActionName } from './action-name';
 
 const state = vi.hoisted(() => ({
@@ -54,14 +55,16 @@ describe('permission display names', () => {
     expect(automaticActionName(config, 'fr-FR')).toBe('Read Users');
   });
   it('prefers explicit action translations and default-language translations', () => {
-    state.messages['en-US']!.actions = {
+    required(state.messages['en-US']).actions = {
       'admin:read:custom:name': 'Review accounts',
     };
     state.locale.value = 'zh-CN';
     expect(actionDisplayName('admin:read:custom:name', config)).toBe(
       'Review accounts',
     );
-    state.messages['zh-CN']!.actions = { 'admin:read:custom:name': '审核账户' };
+    required(state.messages['zh-CN']).actions = {
+      'admin:read:custom:name': '审核账户',
+    };
     expect(actionDisplayName('admin:read:custom:name', config)).toBe(
       '审核账户',
     );
@@ -70,7 +73,7 @@ describe('permission display names', () => {
     expect(
       automaticActionName({
         ...config,
-        bindings: [...config.bindings!, ...config.bindings!],
+        bindings: [...required(config.bindings), ...required(config.bindings)],
       }),
     ).toBe('Read Users');
     expect(

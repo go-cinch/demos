@@ -10,6 +10,7 @@ import type {
   DictionaryPayload,
   PageResult,
   RolePayload,
+  UpdateUserPayload,
   UserGroupPayload,
   UserPayload,
 } from '#/api';
@@ -38,39 +39,48 @@ import {
   updateUser,
   updateUserGroup,
 } from '#/api';
+import { quietRequest } from '#/api/request-types';
 import { $t } from '#/locales';
+import { emailEnabled } from '#/store/system-properties';
+
 export const apiByResource: Record<ResourceKind, CrudApi> = {
   action: {
-    create: (key, data) => createAction(key, data as ActionPayload),
+    create: (key, data) =>
+      createAction(key, data as ActionPayload, quietRequest),
     delete: deleteActions,
     list: (params) => listActions(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateAction(id, data as ActionPayload),
+    update: (id, data) => updateAction(id, data as ActionPayload, quietRequest),
   },
   dictionary: {
-    create: (key, data) => createDictionary(key, data as DictionaryPayload),
+    create: (key, data) =>
+      createDictionary(key, data as DictionaryPayload, quietRequest),
     delete: deleteDictionaries,
     list: (params) =>
       listDictionaries(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateDictionary(id, data as DictionaryPayload),
+    update: (id, data) =>
+      updateDictionary(id, data as DictionaryPayload, quietRequest),
   },
   role: {
-    create: (key, data) => createRole(key, data as RolePayload),
+    create: (key, data) => createRole(key, data as RolePayload, quietRequest),
     delete: deleteRoles,
     list: (params) => listRoles(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateRole(id, data as RolePayload),
+    update: (id, data) => updateRole(id, data as RolePayload, quietRequest),
   },
   user: {
-    create: (key, data) => createUser(key, data as UserPayload),
+    create: (key, data) => createUser(key, data as UserPayload, quietRequest),
     delete: deleteUsers,
     list: (params) => listUsers(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateUser(id, data as UserPayload),
+    update: (id, data) =>
+      updateUser(id, data as UpdateUserPayload, quietRequest),
   },
   'user-group': {
-    create: (key, data) => createUserGroup(key, data as UserGroupPayload),
+    create: (key, data) =>
+      createUserGroup(key, data as UserGroupPayload, quietRequest),
     delete: deleteUserGroups,
     list: (params) =>
       listUserGroups(params) as Promise<PageResult<SystemRecord>>,
-    update: (id, data) => updateUserGroup(id, data as UserGroupPayload),
+    update: (id, data) =>
+      updateUserGroup(id, data as UserGroupPayload, quietRequest),
   },
 };
 
@@ -299,6 +309,16 @@ export function useManagementResource(resource: () => ResourceKind) {
             title: $t('system.fields.username'),
             width: 170,
           },
+          ...(emailEnabled.value
+            ? [
+                {
+                  dataIndex: 'email',
+                  key: 'email',
+                  title: $t('email-auth.email'),
+                  width: 280,
+                },
+              ]
+            : []),
           {
             dataIndex: 'code',
             key: 'code',
@@ -370,8 +390,7 @@ export function useManagementResource(resource: () => ResourceKind) {
           },
           {
             createRequired: true,
-            editLabel: $t('system.fields.newPassword'),
-            editPlaceholder: $t('system.user.keepPassword'),
+            editVisible: false,
             key: 'password',
             label: $t('system.fields.password'),
             type: 'password',
@@ -380,6 +399,12 @@ export function useManagementResource(resource: () => ResourceKind) {
             key: 'role_id',
             label: $t('system.fields.role'),
             type: 'role-select',
+          },
+          {
+            createVisible: false,
+            key: 'metadata',
+            label: $t('system.fields.metadata'),
+            type: 'json',
           },
           {
             key: 'action_codes',

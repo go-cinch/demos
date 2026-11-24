@@ -5,6 +5,7 @@ import type { ActionRecordMode } from './action-detail';
 import type { ResourceKind, SystemRecord } from './management-types';
 import type { ManagementPermissions } from './use-management-permissions';
 
+import type { LoadFailure } from '#/api/request-error';
 import type { SystemSummaryGroup } from '#/api/system/insights';
 
 import { onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
@@ -14,6 +15,7 @@ import { IconifyIcon } from '@vben/icons';
 import { Button } from 'ant-design-vue';
 
 import { getSystemRecord } from '#/api';
+import { loadFailure } from '#/api/request-error';
 import { $t } from '#/locales';
 
 import { loadActionRecord } from './action-detail';
@@ -29,10 +31,11 @@ const props = defineProps<{
   loading: boolean;
   groups: string[];
   refresh: () => Promise<void>;
-  resetMfa: (record: Recordable<any>) => void;
+  resetTotp: (record: Recordable<any>) => void;
 }>();
 const {
   canRead,
+  canResetTOTP,
   canUpdate,
   canCreate,
   canDetail,
@@ -44,12 +47,12 @@ const config = useManagementResource(() => props.resource);
 const formRef = ref<InstanceType<typeof ManagementRecordForm>>();
 const selectedRecord = ref<null | SystemRecord>(null);
 const active = ref(true);
-const confirmResetMFA = (record: Recordable<any>) => props.resetMfa(record);
+const confirmResetTOTP = (record: Recordable<any>) => props.resetTotp(record);
 const detailsOpen = ref(false);
 const detailDrawerReady = ref(false);
 const detailFocusField = ref<'button' | 'menu'>();
 const detailLoading = ref(false);
-const detailError = ref(false);
+const detailError = ref<LoadFailure>(false);
 let detailRequest = 0;
 const detailRecordID = ref<number>();
 watch(detailsOpen, (open) => {
@@ -89,8 +92,9 @@ async function loadRecordDetail(mode: ActionRecordMode = 'detail') {
       selectedRecord.value = record;
       return record;
     }
-  } catch {
-    if (request === detailRequest && active.value) detailError.value = true;
+  } catch (requestError) {
+    if (request === detailRequest && active.value)
+      detailError.value = loadFailure(requestError);
   } finally {
     if (request === detailRequest) detailLoading.value = false;
   }
@@ -114,9 +118,8 @@ const {
   formModel,
   editorFields,
   editorDirty,
-  editingPermission,
+  editingPermissionWord,
   drawerTitle,
-  editorError,
   actionValidation,
   assignmentValidation,
   formRules,
@@ -176,11 +179,9 @@ defineExpose({
     @close="closeEditorPanel()"
     @after-open-change="detailDrawerReady = $event"
   >
-    <template v-if="editingPermission" #description>
+    <template v-if="editingPermissionWord !== undefined" #description>
       <span>{{ $t('system.fields.word') }}</span>
-      <code data-testid="action-editing-word">{{
-        editingPermission.word
-      }}</code>
+      <code data-testid="action-editing-word">{{ editingPermissionWord }}</code>
     </template>
     <SystemRecordDetail
       v-if="!modalOpen"
@@ -202,9 +203,9 @@ defineExpose({
       :submitting="submitting"
       :can-update="canUpdate"
       :can-create="canCreate"
+      :can-create-action-group="permissions.hasButtonAccess('create-group')"
       :can-assign-permissions="canAssignPermissions"
       :groups="groups"
-      :editor-error="editorError"
       @edit-existing="openEditor({ id: $event })"
       @action-validity="actionValidation = $event"
       @assignment-validity="assignmentValidation = $event"
@@ -244,17 +245,15 @@ defineExpose({
       </template>
       <template v-else>
         <Button @click="closeEditorPanel()">
-{{
-          $t('system-cards.backToList')
-        }}
-</Button>
+          {{ $t('system-cards.backToList') }}
+        </Button>
         <Button
-          v-if="props.resource === 'user' && canRead && selectedRecord"
-          :disabled="detailLoading || detailError"
-          @click="confirmResetMFA(selectedRecord)"
-          >
-{{ $t('mfa.reset') }}
-</Button>
+          v-if="canResetTOTP && selectedRecord"
+          :disabled="Boolean(detailLoading || detailError)"
+          @click="confirmResetTOTP(selectedRecord)"
+        >
+          {{ buttonLabel('reset-totp', 'verification.reset') }}
+        </Button>
         <Button
           v-if="
             canUpdate &&
@@ -262,7 +261,7 @@ defineExpose({
             canManageDefinitionRecord(selectedRecord)
           "
           type="primary"
-          :disabled="detailLoading || detailError"
+          :disabled="Boolean(detailLoading || detailError)"
           @click="editDetail(selectedRecord)"
         >
           <IconifyIcon icon="lucide:pencil" />{{

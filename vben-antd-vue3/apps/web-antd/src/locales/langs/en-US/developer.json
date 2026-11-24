@@ -1,4 +1,9 @@
 {
+  "publicationChecking": "Checking publication status…",
+  "publicationUnknown": "Publication status is unknown.",
+  "publicationRecheck": "Check publication status",
+  "publicationMatched": "The live catalog matches the submitted changes.",
+  "publicationDifferent": "The live catalog differs from the submission. Review the changes before publishing again.",
   "frontendVisible": "Show in navigation",
   "frontendVisibleHint": "Show this root directory and its children in the sidebar. Page permissions remain unchanged. Takes effect after publishing.",
   "frontendShown": "Shown",
@@ -162,6 +167,8 @@
   "submit": "Submit online",
   "restored": "Your unsubmitted draft has been restored. Continue editing.",
   "catalogMissing": "No valid I18N_CATALOG was found. Configure it in Dictionary Management first.",
+  "translationRefreshFailed": "Catalog saved. Reload the page to refresh translations.",
+  "initialLoadFailed": "Could not load the online catalog. Retry to create a local draft.",
   "loadFailed": "Could not fetch online data. Your local draft is preserved; retry when ready.",
   "catalogDisabled": "I18N_CATALOG is disabled. Enable it in Dictionary Management first.",
   "validationFailed": "Fix catalog validation errors before submitting.",

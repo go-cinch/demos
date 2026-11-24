@@ -32,7 +32,7 @@ watch(
       .split(/\r?\n/)
       .filter((text) => text.trim())
       .map((text) => ({ id: ++nextID, text }));
-    if (!rows.value.length) rows.value.push({ id: ++nextID, text: '' });
+    if (rows.value.length === 0) rows.value.push({ id: ++nextID, text: '' });
   },
   { immediate: true },
 );
@@ -104,9 +104,9 @@ function remove(id: number) {
             $t('system-editor.removeItem', { name: `${label} ${index + 1}` })
           "
           @click="remove(row.id)"
-          >
-<IconifyIcon icon="lucide:minus" />
-</Button>
+        >
+          <IconifyIcon icon="lucide:minus" />
+        </Button>
       </div>
       <Button
         block
@@ -114,11 +114,11 @@ function remove(id: number) {
         :disabled="disabled"
         class="rule-add"
         @click="add"
-        >
-<IconifyIcon icon="lucide:plus" />{{
+      >
+        <IconifyIcon icon="lucide:plus" />{{
           $t('system-editor.addItem', { entity: label })
         }}
-</Button>
+      </Button>
     </div>
   </FormItemRest>
 </template>
@@ -127,40 +127,45 @@ function remove(id: number) {
   display: grid;
   gap: 10px;
 }
+
 .rule-entry {
   display: flex;
-  align-items: stretch;
   gap: 8px;
+  align-items: stretch;
   padding: 10px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) * 0.875);
 }
+
 .rule-entry :deep(textarea) {
   min-width: 0;
   font:
     13px/1.7 ui-monospace,
     monospace;
 }
+
 .rule-entry :deep(.ant-btn) {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  flex: none;
   width: 32px;
   height: auto;
   min-height: 32px;
   padding: 0;
   color: hsl(var(--muted-foreground));
 }
+
 .rule-entry :deep(.ant-btn:hover:not(:disabled)) {
   color: hsl(var(--destructive));
   border-color: hsl(var(--destructive));
 }
+
 .rule-add {
   display: flex;
+  gap: 7px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
   min-height: 38px;
   color: hsl(var(--primary));
 }

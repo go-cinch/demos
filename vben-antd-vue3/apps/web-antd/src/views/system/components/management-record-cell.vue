@@ -48,8 +48,8 @@ const {
           :disabled="!canDetail"
           @click="emit('detail')"
         >
-          {{ record.username }}
-</Button><span>{{ record.code }}</span>
+          {{ record.username }} </Button
+        ><span>{{ record.code }}</span>
       </div>
     </div>
   </template>
@@ -160,11 +160,9 @@ const {
       type="link"
       size="small"
       @click="emit('detail')"
-      >
-{{
-        $t('system-members.viewAll', { count: memberCount(record) })
-      }}
-</Button>
+    >
+      {{ $t('system-members.viewAll', { count: memberCount(record) }) }}
+    </Button>
   </template>
   <template v-else-if="columnDisplay(column) === 'role'">
     <PermissionLink
@@ -242,46 +240,50 @@ const {
 <style scoped>
 .system-user-identity {
   display: flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
   min-width: 0;
 }
+
 .system-user-identity :deep(.ant-avatar) {
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
   flex-shrink: 0;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 10%);
 }
+
 .system-user-identity > div {
   min-width: 0;
 }
+
 .system-user-identity :deep(.ant-btn) {
   max-width: 100%;
+  height: auto;
   padding: 0;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  text-align: left;
   overflow-wrap: anywhere;
   white-space: normal;
-  height: auto;
-  text-align: left;
-  color: hsl(var(--foreground));
-  font-weight: 500;
 }
-.system-user-identity > div > span {
-  font-size: 11px;
-}
+
 .system-user-identity > div > span {
   display: block;
-  color: hsl(var(--muted-foreground));
   margin-top: 2px;
-}
-.system-matrix-word {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
-  line-height: 1.8;
 }
+
+.system-matrix-word {
+  font-size: 11px;
+  line-height: 1.8;
+  color: hsl(var(--muted-foreground));
+}
+
 .system-action-list-cell {
   max-height: 160px;
   overflow: auto;
-  overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
   scrollbar-width: thin;
 }
 

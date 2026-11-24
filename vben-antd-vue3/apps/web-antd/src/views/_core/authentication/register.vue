@@ -2,16 +2,18 @@
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
-import { computed, markRaw, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationRegister, z } from '@vben/common-ui';
 import { LOGIN_PATH } from '@vben/constants';
-import { $t } from '@vben/locales';
+import { $placeholder, $t } from '@vben/locales';
 
-import { message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { getUsernameAvailabilityApi, registerApi } from '#/api';
+import { getLoginFailure } from '#/api/core/auth';
+import { showRequestErrorToast } from '#/api/request-feedback';
 import { stageRegistrationLogin } from '#/store';
 import {
   isValidUsername,
@@ -25,21 +27,25 @@ defineOptions({ name: 'Register' });
 
 interface RegisterFormInstance {
   getFormApi: () => {
-    clearValidation: (fieldName: string) => Promise<void>;
-    getFieldComponentRef: <T>(fieldName: string) => T | undefined;
     setFieldError: (fieldName: string, error?: string) => Promise<void>;
-    setFieldValue: (fieldName: string, value: unknown) => Promise<void>;
   };
 }
 
-interface SliderCaptchaExpose {
-  resume: () => void;
-}
-
 const loading = ref(false);
+const pendingRegistration = ref<null | { password: string; username: string }>(
+  null,
+);
 const registerFormRef = ref<null | RegisterFormInstance>(null);
 const router = useRouter();
 const usernameAvailabilityChecks = new Map<string, Promise<boolean>>();
+let revision = 0;
+let active = true;
+
+onBeforeUnmount(() => {
+  active = false;
+  revision += 1;
+  pendingRegistration.value = null;
+});
 
 function checkUsernameAvailability(username: string) {
   const cached = usernameAvailabilityChecks.get(username);
@@ -61,7 +67,9 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: 'VbenInput',
       componentProps: {
-        placeholder: $t('authentication.usernameTip'),
+        class: 'h-11',
+        disabled: loading.value,
+        placeholder: $placeholder('authentication.usernameTip'),
       },
       fieldName: 'username',
       formFieldProps: {
@@ -75,8 +83,15 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: 'VbenInputPassword',
       componentProps: {
-        passwordStrength: true,
-        placeholder: $t('authentication.password'),
+        class: 'h-11',
+        disabled: loading.value,
+        placeholder: $placeholder('authentication.password'),
+      },
+      dependencies: {
+        resolve: ({ values }) => ({
+          componentProps: { passwordStrength: Boolean(values.password) },
+        }),
+        triggerFields: ['password'],
       },
       fieldName: 'password',
       label: $t('authentication.password'),
@@ -87,7 +102,9 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: 'VbenInputPassword',
       componentProps: {
-        placeholder: $t('authentication.confirmPassword'),
+        class: 'h-11',
+        disabled: loading.value,
+        placeholder: $placeholder('authentication.confirmPassword'),
       },
       dependencies: {
         rules(values) {
@@ -104,33 +121,8 @@ const formSchema = computed((): VbenFormSchema[] => {
       fieldName: 'confirmPassword',
       label: $t('authentication.confirmPassword'),
     },
-    {
-      component: markRaw(ServerSliderCaptcha),
-      componentProps: { purpose: 'register', username: '' },
-      dependencies: {
-        componentProps(values) {
-          return {
-            purpose: 'register',
-            username: String(values.username ?? '').trim(),
-          };
-        },
-        triggerFields: ['username'],
-      },
-      fieldName: 'sliderProof',
-      rules: z.string().min(1, {
-        message: $t('authentication.verifyRequiredTip'),
-      }),
-    },
   ];
 });
-
-async function resetSliderCaptcha() {
-  const formApi = registerFormRef.value?.getFormApi();
-  if (!formApi) return;
-  await formApi.setFieldValue('sliderProof', '');
-  formApi.getFieldComponentRef<SliderCaptchaExpose>('sliderProof')?.resume();
-  await formApi.clearValidation('sliderProof');
-}
 
 async function handleFormFocusout(event: FocusEvent) {
   const input = event.target;
@@ -143,7 +135,7 @@ async function handleFormFocusout(event: FocusEvent) {
   }
   try {
     const available = await checkUsernameAvailability(username);
-    if (input.value.trim() !== username) {
+    if (!active || input.value.trim() !== username) {
       return;
     }
     await registerFormRef.value
@@ -157,42 +149,71 @@ async function handleFormFocusout(event: FocusEvent) {
   }
 }
 
-async function handleValuesChange(
-  _values: Recordable<any>,
-  changedFields: string[],
-) {
-  if (changedFields.includes('username')) {
-    await resetSliderCaptcha();
+function handleValuesChange(_values: Recordable<any>, changedFields: string[]) {
+  if (
+    changedFields.some((field) =>
+      ['confirmPassword', 'password', 'username'].includes(field),
+    )
+  ) {
+    revision += 1;
+    pendingRegistration.value = null;
   }
 }
 
 async function handleSubmit(value: Recordable<any>) {
-  let registered = false;
+  if (loading.value || pendingRegistration.value) return;
+  const currentRevision = revision;
   try {
     loading.value = true;
     const username = value.username.trim();
-    const password = value.password;
+    const password = value.password.trim();
     const available = await checkUsernameAvailability(username);
+    if (!active || currentRevision !== revision) return;
     if (!available) {
       await registerFormRef.value
         ?.getFormApi()
         .setFieldError('username', $t('app.register.usernameExists'));
       return;
     }
-    await registerApi({
-      password,
-      slider_proof: value.sliderProof,
-      username,
-    });
-    stageRegistrationLogin({ password, username });
-    registered = true;
-    message.success($t('app.register.success'));
-    await router.replace(LOGIN_PATH);
+    pendingRegistration.value = { password, username };
+  } catch {
+    // The request client already displays backend and network errors.
   } finally {
     loading.value = false;
-    if (!registered) {
-      await resetSliderCaptcha();
+  }
+}
+
+async function handleVerified(proof: string) {
+  if (!proof || loading.value || !pendingRegistration.value || !active) return;
+  const { password, username } = pendingRegistration.value;
+  const currentRevision = revision;
+  try {
+    loading.value = true;
+    await registerApi({
+      password,
+      slider_proof: proof,
+      username,
+    });
+    if (!active || currentRevision !== revision) return;
+    stageRegistrationLogin({ password, username });
+    message.success($t('app.register.success'));
+    await router.replace({
+      path: LOGIN_PATH,
+      query: router.currentRoute.value.query,
+    });
+  } catch (error) {
+    usernameAvailabilityChecks.delete(username);
+    if (!active || currentRevision !== revision) return;
+    if (getLoginFailure(error)?.error_code === 'AUTH_USERNAME_EXISTS') {
+      await registerFormRef.value
+        ?.getFormApi()
+        .setFieldError('username', $t('app.register.usernameExists'));
+    } else {
+      showRequestErrorToast(error);
     }
+  } finally {
+    loading.value = false;
+    pendingRegistration.value = null;
   }
 }
 </script>
@@ -205,5 +226,33 @@ async function handleSubmit(value: Recordable<any>) {
     @focusout="handleFormFocusout"
     @submit="handleSubmit"
     @values-change="handleValuesChange"
-  />
+  >
+    <template #submit="{ submit }">
+      <div v-if="pendingRegistration" class="mt-2">
+        <ServerSliderCaptcha
+          :key="revision"
+          purpose="register"
+          :username="pendingRegistration.username"
+          @update:model-value="handleVerified"
+        />
+      </div>
+      <Button
+        v-else
+        type="primary"
+        block
+        aria-label="register"
+        class="register-submit mt-2"
+        :loading="loading"
+        @click="submit"
+      >
+        {{ $t('authentication.signUp') }}
+      </Button>
+    </template>
+  </AuthenticationRegister>
 </template>
+
+<style scoped>
+.register-submit {
+  height: 44px;
+}
+</style>

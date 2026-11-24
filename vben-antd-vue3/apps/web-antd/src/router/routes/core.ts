@@ -34,12 +34,32 @@ const coreRoutes: RouteRecordRaw[] = [
     name: 'Root',
     path: '/',
     redirect: preferences.app.defaultHomePath,
-    children: [{ name: 'PermissionForbidden', path: 'forbidden', component: () => import('#/views/_core/fallback/forbidden.vue'), meta: { hideInMenu: true, hideInTab: true, title: '403' } }],
+    children: [
+      {
+        name: 'PersonalProfileFallback',
+        path: 'profile',
+        component: () => import('#/views/_core/profile/index.vue'),
+        meta: {
+          hideInMenu: true,
+          fullPathKey: false,
+          keepAlive: true,
+          reloadOnTimezoneChange: false,
+          title: 'page.profile.title',
+        },
+      },
+      {
+        name: 'PermissionForbidden',
+        path: 'forbidden',
+        component: () => import('#/views/_core/fallback/forbidden.vue'),
+        meta: { hideInMenu: true, hideInTab: true, title: '403' },
+      },
+    ],
   },
   {
     component: AuthPageLayout,
     meta: {
       hideInTab: true,
+      ignoreAccess: true,
       title: 'Authentication',
     },
     name: 'Authentication',
@@ -47,10 +67,23 @@ const coreRoutes: RouteRecordRaw[] = [
     redirect: LOGIN_PATH,
     children: [
       {
-        name: 'BindMFA',
-        path: 'bind-mfa',
-        component: () => import('#/views/_core/authentication/bind-mfa.vue'),
-        meta: { title: 'mfa.enrollTitle' },
+        name: 'UnbindEmail',
+        path: 'unbind-email',
+        component: () =>
+          import('#/views/_core/authentication/unbind-email.vue'),
+        meta: { title: 'email-auth.unlink' },
+      },
+      {
+        name: 'BindEmail',
+        path: 'bind-email',
+        component: () => import('#/views/_core/authentication/bind-email.vue'),
+        meta: { title: 'email-auth.bindTitle' },
+      },
+      {
+        name: 'BindTOTP',
+        path: 'bind-totp',
+        component: () => import('#/views/_core/authentication/bind-totp.vue'),
+        meta: { title: 'verification.enrollTitle' },
       },
       {
         name: 'ResetPassword',

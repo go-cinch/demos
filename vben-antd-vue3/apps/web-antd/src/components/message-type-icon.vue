@@ -27,14 +27,16 @@ defineProps<{ type: string }>();
   place-items: center;
   width: 36px;
   height: 38px;
-  border-radius: calc(var(--radius) * 0.875);
   color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.08);
+  background: hsl(var(--primary) / 8%);
+  border-radius: calc(var(--radius) * 0.875);
 }
+
 .message-type-icon.notice {
   color: #aa741d;
   background: #dca53816;
 }
+
 .dark .message-type-icon.notice {
   color: #f1c477;
 }

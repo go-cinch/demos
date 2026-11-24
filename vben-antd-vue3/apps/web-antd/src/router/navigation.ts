@@ -1,5 +1,8 @@
 import type { RouteRecordRaw } from '@vben/types';
+
 import type { PermissionMenu, PermissionNavigation } from '#/api/core/user';
+
+import { requiredEntry } from '#/utils/required-entry';
 
 /** Page components are local; hierarchy, visibility and order come from the catalog. */
 export function resourceNavigationRoutes(
@@ -52,7 +55,7 @@ export function resourceNavigationRoutes(
         ];
       }
       const children = build(node.children ?? []);
-      if (!children.length) return [];
+      if (children.length === 0) return [];
       const directory = directories.get(node.resource_key);
       return [
         {
@@ -66,7 +69,7 @@ export function resourceNavigationRoutes(
             order,
             authority: [...allowed.values()],
           },
-          redirect: children[0]!.path,
+          redirect: requiredEntry(children[0], 'child route').path,
           children,
         } as RouteRecordRaw,
       ];

@@ -567,7 +567,7 @@ defineExpose({
             !isNodeDisabled(item) && onToggle(item);
           }
         "
-        class="tree-node focus:ring-grass8 my-0.5 rounded outline-hidden"
+        class="tree-node focus:ring-grass8 my-0.5 rounded-sm outline-hidden"
       >
         <!-- 内容行通过 paddingLeft 控制缩进，不受 TreeItem 自身的渲染行为影响 -->
         <div

@@ -15,7 +15,7 @@ import type {
 
 import type { SegmentedItem } from '@vben-core/shadcn-ui';
 
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 
 import { Copy, Pin, PinOff, RotateCw } from '@vben/icons';
 import { $t, loadLocaleMessages } from '@vben/locales';
@@ -23,7 +23,8 @@ import {
   clearCache,
   preferences,
   resetPreferences,
-  updateCustomPreferences,
+  resetUserPreferences,
+  updateUserCustomPreferences as updateCustomPreferences,
   usePreferences,
 } from '@vben/preferences';
 
@@ -33,9 +34,9 @@ import {
   VbenIconButton,
   VbenSegmented,
 } from '@vben-core/shadcn-ui';
+import { userCache } from '@vben-core/shared/cache';
 import { globalShareState } from '@vben-core/shared/global-state';
-
-import { useClipboard } from '@vueuse/core';
+import { copyText } from '@vben-core/shared/utils';
 
 import {
   Animation,
@@ -65,7 +66,6 @@ const emit = defineEmits<{ clearPreferencesAndLogout: [] }>();
 const message = globalShareState.getMessage();
 
 const appLocale = defineModel<SupportedLanguagesType>('appLocale');
-const appTimezone = defineModel<string>('appTimezone');
 const appDynamicTitle = defineModel<boolean>('appDynamicTitle');
 const appLayout = defineModel<LayoutType>('appLayout');
 const appColorGrayMode = defineModel<boolean>('appColorGrayMode');
@@ -207,7 +207,6 @@ const {
   customPreferences,
   diffCustomPreference,
   diffPreference,
-  isDark,
   isFullContent,
   isHeaderNav,
   isHeaderSidebarNav,
@@ -217,10 +216,11 @@ const {
   isSideMode,
   isSideNav,
 } = usePreferences();
-const { copy } = useClipboard({ legacy: true });
 
 const [Drawer] = useVbenDrawer();
 
+const manualCopy = ref(false);
+const copyField = ref<HTMLTextAreaElement>();
 const activeTab = ref('appearance');
 
 const customPreferencesTab = computed(() => {
@@ -297,7 +297,18 @@ const showBreadcrumbConfig = computed(() => {
 });
 
 async function handleCopy() {
-  await copy(JSON.stringify(mergedDiffPreference.value, null, 2));
+  const json = JSON.stringify(mergedDiffPreference.value, null, 2);
+  try {
+    await copyText(json);
+    manualCopy.value = false;
+  } catch {
+    manualCopy.value = true;
+    message.copyPreferencesFailed?.();
+    await nextTick();
+    copyField.value?.focus();
+    copyField.value?.select();
+    return;
+  }
 
   message.copyPreferencesSuccess?.(
     $t('preferences.copyPreferencesSuccessTitle'),
@@ -306,16 +317,18 @@ async function handleCopy() {
 }
 
 async function handleClearCache() {
+  const current = userCache.capture();
   await resetPreferences();
+  if (!current()) return;
   await clearCache();
-  emit('clearPreferencesAndLogout');
+  if (current()) emit('clearPreferencesAndLogout');
 }
 
 async function handleReset() {
   if (!mergedDiffPreference.value) {
     return;
   }
-  await resetPreferences();
+  await resetUserPreferences();
   await loadLocaleMessages(preferences.app.locale);
 }
 
@@ -382,7 +395,6 @@ function handleCustomPreferencesUpdate(updates: CustomPreferencesRecord) {
                 v-model:app-enable-check-updates="appEnableCheckUpdates"
                 v-model:app-enable-copy-preferences="appEnableCopyPreferences"
                 v-model:app-locale="appLocale"
-                v-model:app-timezone="appTimezone"
                 v-model:app-watermark="appWatermark"
                 v-model:app-watermark-content="appWatermarkContent"
               />
@@ -410,7 +422,6 @@ function handleCustomPreferencesUpdate(updates: CustomPreferencesRecord) {
               <BuiltinTheme
                 v-model="themeBuiltinType"
                 v-model:theme-color-primary="themeColorPrimary"
-                :is-dark="isDark"
               />
             </Block>
             <Block :title="$t('preferences.theme.radius')">
@@ -577,6 +588,15 @@ function handleCustomPreferencesUpdate(updates: CustomPreferencesRecord) {
         </VbenSegmented>
       </div>
 
+      <textarea
+        v-if="manualCopy && appEnableCopyPreferences"
+        ref="copyField"
+        class="w-full rounded-md border p-2 font-mono text-xs"
+        rows="5"
+        readonly
+        :aria-label="$t('preferences.copyPreferences')"
+        :value="JSON.stringify(mergedDiffPreference, null, 2)"
+      ></textarea>
       <template #footer>
         <VbenButton
           v-if="appEnableCopyPreferences"
