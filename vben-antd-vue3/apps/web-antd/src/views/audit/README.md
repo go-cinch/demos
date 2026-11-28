@@ -32,7 +32,7 @@ Range changes show a fixed-height native Skeleton until the matching summary is 
 
 ## Validation and design references
 
-The generated preview runs on port 5666 with auth on port 8081. Black-box coverage lives in `e2e/tests/vben-antd-vue3/audit.spec.ts`. Follow LOCAL_DEV_WORKFLOW.md, including type checks, discovery, the complete headless local full suite and verified fixture cleanup.
+The generated preview runs on port 5666 with auth on port 8081. The E2E repository covers login audits in `tests/vben-antd-vue3/audit-login/` and operation audits in `tests/vben-antd-vue3/audit-operation/`. See the E2E repository README for the deployed test environment and Make commands.
 
 Research informed interaction concepts, not copied layouts or source code:
 
@@ -47,4 +47,4 @@ Research informed interaction concepts, not copied layouts or source code:
 
 Operation details show the operation type, target type/ID, request parameters, and response parameters. Payloads are fetched by the detail endpoint only and rendered as plain text in keyboard-accessible, bounded scrolling regions. They are never interpreted as HTML. Sensitive values are fully hidden by the backend; files appear as `file`, missing payloads use localized empty text, and omitted payloads retain the backend's omission marker. Login details remain metadata-only.
 
-`audit-params.spec.ts` verifies encrypted credential redaction, nested secret filtering, ordinary values, expanded details, safe text rendering and scroll bounds. `audit-permissions.spec.ts` verifies independent login/operation menus, read/export buttons, manual-route denial, and export-only grants without read access. All mutations use disposable users/dictionaries and UI cleanup.
+In the E2E suite, `audit-operation/redaction.spec.ts` checks credential redaction, nested sensitive fields and plain-text rendering. The `permissions.spec.ts` files in `audit-login/` and `audit-operation/` cover read and export permissions, direct access and permission changes for active sessions.

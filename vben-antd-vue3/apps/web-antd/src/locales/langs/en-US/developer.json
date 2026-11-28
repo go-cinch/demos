@@ -49,6 +49,8 @@
   "directoryTypeHasChildren": "Move or delete all direct child resources and subdirectories before switching to a resource.",
   "directoryTypeHasReferences": "Manually remove this subdirectory's references before switching to a resource.",
   "typeChangeAvailable": "Switch between resource and subdirectory while keeping the identifier, names, parent and sibling position. Save to add the change to pending updates.",
+  "duplicateMenuPath": "Menu paths must be unique within a scope.",
+  "menuPathConflictOwner": "This path is already used in this scope by {key}.",
   "route": "Route path",
   "actions": "Actions",
   "entries": "Menu entries",

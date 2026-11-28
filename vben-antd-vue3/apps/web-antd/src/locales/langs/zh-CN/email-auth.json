@@ -7,7 +7,6 @@
   "identifier": "用户名或邮箱",
   "identifierRequired": "请输入用户名或邮箱",
   "identifierPlaceholder": "输入用户名或已绑定邮箱",
-  "verifyTitle": "邮箱验证",
   "code": "验证码",
   "account": "账号",
   "change": "更换",

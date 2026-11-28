@@ -7,6 +7,7 @@ import { userCache } from '@vben/utils/cache';
 
 import { updateUIPreferencesApi } from '#/api/core/user';
 
+import { getLoginPagePreferences } from './login-page-preferences';
 import { acknowledgeDraft, readDraft, writeDraft } from './preference-drafts';
 import {
   applyUIPreferences,
@@ -60,12 +61,16 @@ function valuesOf(entries: PendingValues) {
 
 export function initializeUIPreferences(value?: UIPreferences) {
   configureDefaults(value);
+  const base = currentDefaults();
+  const inherited = userPreferencePatch({
+    preferences: getLoginPagePreferences(),
+  });
   const pending = readPending();
   applyUIPreferences(
     overlayPreferences(
-      currentDefaults(),
+      overlayPreferences(base, inherited, base),
       expandPreferences(valuesOf(pending)),
-      currentDefaults(),
+      base,
     ),
   );
 }

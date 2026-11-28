@@ -1,9 +1,13 @@
 import { createApp } from 'vue';
 
 import { i18n, loadLocaleMessages } from '@vben/locales';
+import { userCache } from '@vben/utils/cache';
 
 import dayjs from 'dayjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { rememberLoginPagePreferences } from '#/store/login-page-preferences';
+import { writeDraft } from '#/store/preference-drafts';
 
 import { required } from '../../../../scripts/test-utils/required';
 
@@ -17,6 +21,8 @@ vi.mock('#/api/core/i18n', () => ({ getPublicI18nCatalogApi: getCatalog }));
 const { antdLocale, setupI18n, refreshI18nCatalog } = await import('./index');
 afterEach(() => {
   getCatalog.mockReset();
+  userCache.anonymous().removeItem('login-page-preferences');
+  writeDraft('language');
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });
@@ -42,6 +48,19 @@ function messages(value: object, prefix = ''): Record<string, string> {
 }
 
 describe('application internationalization', () => {
+  it('starts with the signed-out language and honors a newer choice on the login page', async () => {
+    getCatalog.mockRejectedValue(new Error('offline'));
+    await setupI18n(createApp({}), { defaultLocale: 'zh-CN' });
+    rememberLoginPagePreferences();
+
+    await setupI18n(createApp({}));
+    expect(document.documentElement.lang).toBe('zh-CN');
+
+    writeDraft('language', { value: 'en-US', changed_at: Date.now() });
+    await setupI18n(createApp({}));
+    expect(document.documentElement.lang).toBe('en-US');
+  });
+
   it('drops catalog-only labels after the actual startup and locale switching sequence', async () => {
     const catalog = {
       schema_version: 2,

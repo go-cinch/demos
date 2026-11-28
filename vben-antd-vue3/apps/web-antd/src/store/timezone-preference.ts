@@ -7,6 +7,7 @@ import {
   createGlobalPreferenceSync,
   pendingSelection,
 } from './global-preference';
+import { getLoginPagePreferences } from './login-page-preferences';
 
 export function isValidTimezone(value: unknown): value is string {
   if (
@@ -37,11 +38,10 @@ function applyTimezone(timezone: string) {
 
 export function initializeTimezonePreference() {
   const pending = pendingSelection('timezone');
-  applyTimezone(
-    pending && isValidTimezone(pending.value)
-      ? pending.value
-      : systemTimezone(),
-  );
+  const inherited = getLoginPagePreferences()?.app?.timezone;
+  const timezone =
+    pending && isValidTimezone(pending.value) ? pending.value : inherited;
+  applyTimezone(resolveTimezone(timezone ?? ''));
 }
 
 export function createTimezonePreferenceSync() {

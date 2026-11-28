@@ -385,7 +385,13 @@ export function applyResourceEditor(
     }
   }
   const normalized = normalizeCatalog(next);
-  const problem = validate(normalized).find((problem) => !problem.warning);
+  // Allow old catalogs with several conflicts to be repaired one node at a time.
+  // Publishing still validates the complete document.
+  const problem = validate(normalized).find(
+    (issue) =>
+      !issue.warning &&
+      (issue.code !== 'duplicateMenuPath' || issue.path[2] === draft.key),
+  );
   if (problem) fail(problem.code, problem.path.join(' / '));
   return normalized;
 }

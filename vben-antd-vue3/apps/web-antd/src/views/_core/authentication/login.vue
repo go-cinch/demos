@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuthApi } from '#/api/core/auth';
+import type { AuthApi, EmailCodeStatus } from '#/api/core/auth';
 
 import {
   computed,
@@ -28,6 +28,7 @@ import { showRequestErrorToast } from '#/api/request-feedback';
 import { $t } from '#/locales';
 import { isValidEmailAddress } from '#/security/email-address';
 import { emailBrowserUUID, useEmailCode } from '#/security/email-code';
+import EmailCodeLabel from '#/security/email-code-label.vue';
 import MFALogin from '#/security/mfa-login.vue';
 import VerificationCodeInput from '#/security/verification-code-input.vue';
 import {
@@ -86,6 +87,9 @@ const codeInvalid = ref(false);
 const codeAttempts = ref(0);
 const formError = ref('');
 const email = useEmailCode();
+const canVerifyCode = computed(
+  () => !!email.state.value?.verification_id && !email.expired.value,
+);
 const codeInput = ref<{ focus: () => void }>();
 const busy = computed(
   () => sending.value || auth.loginLoading || restoring.value,
@@ -197,7 +201,16 @@ async function activate() {
   await restoreCode();
 }
 
-async function restoreCode() {
+function restoreCodeStage(status: EmailCodeStatus) {
+  email.accept(status);
+  if (
+    identifierValid.value &&
+    (canVerifyCode.value || email.remaining.value > 0)
+  )
+    stage.value = 'code';
+}
+
+async function restoreCode(minimumRetryAt = 0) {
   if (
     !active ||
     human.value ||
@@ -215,9 +228,10 @@ async function restoreCode() {
       username.value.trim(),
     );
     if (!active || request !== epoch) return;
-    email.accept(status);
-    stage.value =
-      status.verification_id && !email.expired.value ? 'code' : 'identifier';
+    restoreCodeStage({
+      ...status,
+      retry_at: Math.max(status.retry_at, minimumRetryAt),
+    });
   } catch (error) {
     if (active && request === epoch) {
       showRequestErrorToast(error);
@@ -240,13 +254,10 @@ const lookup = useDebounceFn(async () => {
     username.value,
     method.value === 'email_code' ? emailBrowserUUID() : undefined,
   );
-  if (!active || request !== epoch) return;
+  if (!active || request !== epoch || human.value || sending.value) return;
   if (method.value === 'email_code') {
-    if (status) {
-      email.accept(status);
-      stage.value =
-        status.verification_id && !email.expired.value ? 'code' : 'identifier';
-    } else await restoreCode();
+    if (status) restoreCodeStage(status);
+    else await restoreCode();
   }
 }, 300);
 watch(username, () => {
@@ -310,7 +321,8 @@ async function beginAction() {
   if (identifierInvalid.value || passwordInvalid.value) return;
   if (method.value === 'email_code' && stage.value === 'code')
     return submitCode();
-  if (method.value === 'email_code' && email.remaining.value > 0) return;
+  if (method.value === 'email_code' && email.remaining.value > 0)
+    return restoreCode(email.state.value?.retry_at);
   formError.value = '';
   human.value = true;
   sliderProof.value = '';
@@ -350,7 +362,7 @@ async function afterHuman() {
     editIdentifier();
     return;
   }
-  const request = epoch;
+  const request = ++epoch;
   if (method.value === 'password') {
     await auth.authLogin({
       username: username.value.trim(),
@@ -390,6 +402,12 @@ async function afterHuman() {
     if (email.acceptError(error)) {
       human.value = false;
       formError.value = '';
+      stage.value = 'code';
+      if (!canVerifyCode.value) {
+        // A simultaneous send can start the cooldown before it returns a ticket.
+        sending.value = false;
+        await restoreCode(email.state.value?.retry_at);
+      }
       return;
     }
     const failure = getLoginFailure(error);
@@ -426,8 +444,10 @@ function updateCode(value: string) {
 }
 async function submitCode() {
   clearTimeout(autoSubmit);
-  if (busy.value || human.value) return;
-  if (!/^\d{6}$/.test(code.value) || !email.state.value?.verification_id) {
+  const verificationID = email.state.value?.verification_id;
+  if (busy.value || human.value || email.expired.value || !verificationID)
+    return;
+  if (!/^\d{6}$/.test(code.value)) {
     codeInvalid.value = true;
     codeAttempts.value++;
     return;
@@ -437,7 +457,7 @@ async function submitCode() {
     method: 'email_code',
     username: username.value.trim(),
     browser_uuid: emailBrowserUUID(),
-    verification_id: email.state.value.verification_id,
+    verification_id: verificationID,
     verification_code: code.value,
   });
   if (!active || request !== epoch) return;
@@ -464,20 +484,7 @@ async function submitCode() {
       @verified="mfaCompleting = true"
     />
     <section v-else class="email-auth-page" aria-labelledby="login-title">
-      <Button
-        v-if="stage === 'code'"
-        type="text"
-        class="email-auth-back"
-        @click="editIdentifier"
-        >‹ {{ $t('verification.backToLogin') }}</Button
-      >
-      <h1 id="login-title">
-        {{
-          stage === 'code'
-            ? $t('email-auth.verifyTitle')
-            : `${$t('app.journey.title')} 👋🏻`
-        }}
-      </h1>
+      <h1 id="login-title">{{ $t('app.journey.title') }} 👋🏻</h1>
       <Form layout="vertical" novalidate @submit.prevent="beginAction">
         <template v-if="stage === 'identifier'">
           <Form.Item
@@ -546,15 +553,11 @@ async function submitCode() {
           </Form.Item>
         </template>
         <template v-else>
-          <div class="email-auth-label">
-            <label for="login-email-code">{{ $t('email-auth.code') }}</label
-            ><span
-              >{{ $t('email-auth.account') }} <b>{{ username }}</b
-              ><Button type="link" @click="editIdentifier">{{
-                $t('email-auth.change')
-              }}</Button></span
-            >
-          </div>
+          <EmailCodeLabel
+            input-id="login-email-code"
+            :account="username"
+            @change="editIdentifier"
+          />
           <VerificationCodeInput
             id="login-email-code"
             :described-by="codeInvalid ? 'login-email-code-error' : undefined"
@@ -564,7 +567,7 @@ async function submitCode() {
             :feedback="codeInvalid ? 'failure' : 'idle'"
             :animation="codeInvalid ? 'failure' : 'idle'"
             :animation-attempt="codeAttempts"
-            :disabled="busy || human"
+            :disabled="busy || human || !canVerifyCode"
             autofocus
             @update:model-value="updateCode"
           />
@@ -597,7 +600,11 @@ async function submitCode() {
                   ? $t('email-auth.countdown', {
                       seconds: email.remaining.value,
                     })
-                  : $t('email-auth.resend')
+                  : $t(
+                      email.state.value?.verification_id
+                        ? 'email-auth.resend'
+                        : 'email-auth.send',
+                    )
               }}</Button
             >
           </div>
@@ -607,22 +614,14 @@ async function submitCode() {
             block
             class="email-auth-primary"
             :loading="busy"
-            :disabled="
-              method === 'email_code' &&
-              stage === 'identifier' &&
-              email.remaining.value > 0
-            "
+            :disabled="stage === 'code' && !canVerifyCode"
           >
             {{
               stage === 'code'
                 ? $t('email-auth.continue')
                 : method === 'password'
                   ? $t('common.login')
-                  : email.remaining.value
-                    ? $t('email-auth.countdown', {
-                        seconds: email.remaining.value,
-                      })
-                    : $t('email-auth.send')
+                  : $t('email-auth.send')
             }}
           </Button>
         </template>
@@ -669,19 +668,21 @@ async function submitCode() {
       </Form>
       <div
         v-if="registrationEnabled && stage === 'identifier'"
-        class="email-auth-footer"
+        class="mt-[22px] flex min-h-8 items-center justify-center gap-1 text-sm"
       >
-        <span>{{ $t('authentication.accountTip') }}</span
-        ><Button
-          type="link"
+        {{ $t('authentication.accountTip') }}
+        <button
+          type="button"
+          class="vben-link text-sm font-normal"
           @click="
             router.push({
               path: '/auth/register',
               query: router.currentRoute.value.query,
             })
           "
-          >{{ $t('authentication.createAccount') }}</Button
         >
+          {{ $t('authentication.createAccount') }}
+        </button>
       </div>
     </section>
   </div>
@@ -700,12 +701,6 @@ h1 {
   font-weight: 650;
   line-height: 1.4;
   letter-spacing: -0.5px;
-}
-
-.email-auth-back {
-  padding: 0;
-  margin: 0 0 22px;
-  color: hsl(var(--muted-foreground));
 }
 
 .email-auth-page :deep(.ant-input-affix-wrapper),
@@ -762,34 +757,6 @@ h1 {
   }
 }
 
-.email-auth-label {
-  display: flex;
-  gap: 16px;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.email-auth-label > span {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  min-width: 0;
-  color: hsl(var(--muted-foreground));
-}
-
-.email-auth-label b {
-  font-weight: 500;
-  color: hsl(var(--foreground));
-  overflow-wrap: anywhere;
-}
-
-.email-auth-label :deep(.ant-btn) {
-  height: auto;
-  padding: 0;
-}
-
 .email-auth-primary {
   height: 44px;
   margin-top: 0;
@@ -811,20 +778,6 @@ h1 {
 
 .email-auth-switch {
   margin-top: 16px;
-  font-size: 13px;
-}
-
-.email-auth-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 22px;
-  font-size: 13px;
-  color: hsl(var(--muted-foreground));
-}
-
-.email-auth-footer :deep(.ant-btn) {
-  padding-inline: 8px;
   font-size: 13px;
 }
 </style>

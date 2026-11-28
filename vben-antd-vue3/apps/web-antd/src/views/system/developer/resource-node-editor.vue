@@ -38,7 +38,7 @@ import { resourceBreadcrumb } from '../components/resource-catalog';
 import { resourceChildren } from '../components/resource-order';
 import { supportsResourceReferences } from '../components/resource-references';
 import { useResourceDraft } from './catalog-editor-context';
-import { text } from './catalog-model';
+import { menuPathConflicts, text } from './catalog-model';
 import { resourceTypeChangeIssue } from './resource-editor-model';
 import ResourceFeatureEditor from './resource-feature-editor.vue';
 import ResourceReferencePicker from './resource-reference-picker.vue';
@@ -54,6 +54,12 @@ const props = defineProps<{
 const emit = defineEmits<{ save: []; cancel: [] }>();
 const draft = useResourceDraft();
 const t = (key: string) => $t(`developer.${key}`);
+const conflictingPaths = computed(() =>
+  menuPathConflicts(props.catalog, { scope: props.scope, draft: draft.value }),
+);
+const hasPathConflict = computed(() =>
+  draft.value.entries.some((entry) => conflictingPaths.value.has(entry.key)),
+);
 const siblings = computed(() =>
   resourceChildren(
     props.catalog.resource_catalog,
@@ -368,7 +374,7 @@ function removeFeature(feature: ResourceFeatureDraft) {
         <Button @click="emit('cancel')">{{ t('cancel') }}</Button>
         <Button
           type="primary"
-          :disabled="disabled"
+          :disabled="disabled || hasPathConflict"
           data-testid="save-resource-node"
           @click="emit('save')"
         >
@@ -646,8 +652,18 @@ function removeFeature(feature: ResourceFeatureDraft) {
                   class="catalog-node-wide"
                   :label="t('route')"
                   required
-                  :validate-status="status(entry.path)"
-                  :help="help(entry.path)"
+                  :validate-status="
+                    conflictingPaths.has(entry.key)
+                      ? 'error'
+                      : status(entry.path)
+                  "
+                  :help="
+                    conflictingPaths.has(entry.key)
+                      ? $t('developer.menuPathConflictOwner', {
+                          key: conflictingPaths.get(entry.key),
+                        })
+                      : help(entry.path)
+                  "
                 >
                   <Input
                     v-model:value="entry.path"

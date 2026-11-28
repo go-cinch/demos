@@ -49,6 +49,8 @@
   "directoryTypeHasChildren": "请先移出或删除所有直属子资源、子目录，再切换为资源。",
   "directoryTypeHasReferences": "请先手动清空此子目录的引用关系，再切换为资源。",
   "typeChangeAvailable": "可在资源与子目录之间切换，标识、名称、上级目录及同级位置保持不变；保存后加入待提交变更。",
+  "duplicateMenuPath": "同一作用域下的菜单路由地址不能重复。",
+  "menuPathConflictOwner": "此路由地址已被当前作用域的入口 {key} 使用。",
   "route": "路由地址",
   "actions": "操作",
   "entries": "菜单入口",

@@ -23,6 +23,7 @@ import antdDefaultLocale from 'ant-design-vue/es/locale/zh_CN';
 import dayjs from 'dayjs';
 
 import { pendingSelection } from '#/store/global-preference';
+import { getLoginPagePreferences } from '#/store/login-page-preferences';
 
 import {
   catalogDefaultLocale,
@@ -133,14 +134,19 @@ async function loadAntdLocale(lang: SupportedLanguagesType) {
   }
 }
 
-async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
-  await refreshI18nCatalog();
-  const locale = resolveCatalogLocale(
-    options.defaultLocale ??
+function loginPageLocale(defaultLocale?: string) {
+  return resolveCatalogLocale(
+    defaultLocale ??
       pendingSelection('language')?.value ??
+      getLoginPagePreferences()?.app?.locale ??
       preferencesManager.getInitialPreferences().app.locale ??
       catalogDefaultLocale(),
   );
+}
+
+async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
+  await refreshI18nCatalog();
+  const locale = loginPageLocale(options.defaultLocale);
   updatePreferences({ app: { locale } });
   i18n.global.fallbackLocale.value = catalogDefaultLocale();
   // Load the fallback catalog even when the first visit starts in Chinese.
@@ -171,5 +177,5 @@ function catalogLabel(
   }
   return key;
 }
-export { $t, antdLocale, catalogLabel, setupI18n };
+export { $t, antdLocale, catalogLabel, loginPageLocale, setupI18n };
 export { refreshI18nCatalog } from './catalog';

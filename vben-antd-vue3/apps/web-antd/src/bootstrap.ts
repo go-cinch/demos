@@ -6,6 +6,7 @@ import { loadLocaleMessages, onLocaleSelected } from '@vben/locales';
 import {
   onUserPreferencesChange,
   preferences,
+  updatePreferences,
   updateUserPreferences,
 } from '@vben/preferences';
 import {
@@ -23,7 +24,7 @@ import { userCache } from '@vben/utils/cache';
 import { useTitle } from '@vueuse/core';
 import { message, Modal, notification } from 'ant-design-vue';
 
-import { $t, setupI18n } from '#/locales';
+import { $t, loginPageLocale, setupI18n } from '#/locales';
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
@@ -80,6 +81,11 @@ async function bootstrap(namespace: string) {
     Modal.destroyAll();
     message.destroy();
     notification.destroy();
+    if (userCache.account === undefined) {
+      updatePreferences({ app: { locale: loginPageLocale() } });
+      initializeTimezonePreference();
+      initializeUIPreferences();
+    }
     void loadLocaleMessages(preferences.app.locale);
   });
   watch(

@@ -130,6 +130,23 @@ const access = (path: string, from = '/auth/login') =>
   required(guards[1])(resolved(path), resolved(from), vi.fn());
 
 describe('route authorization', () => {
+  it('re-resolves a pending target if permission loading replaces its same-name route record', async () => {
+    state.access.accessToken = 'session';
+    state.access.isAccessChecked = true;
+    const permission = { menus: [{ menu_path: '/system/user', btns: [] }] };
+    state.auth.fetchUserInfo.mockImplementationOnce(async () => {
+      router.addRoute({ name: 'User', path: '/system/user', component: {} });
+      return { permission };
+    });
+    const target = '/system/user?q=test#details';
+    await expect(access(target)).resolves.toMatchObject({
+      fullPath: target,
+      replace: true,
+    });
+    state.auth.fetchUserInfo.mockResolvedValue({ permission });
+    await expect(access(target)).resolves.toBe(true);
+  });
+
   it('repairs legacy login URLs while preserving unrelated query and hash', async () => {
     const nested = `/auth/bind-totp?redirect=${encodeURIComponent(encodeURIComponent('/system/user?code=A%26B#account'))}`;
     const result = await access(

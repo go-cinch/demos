@@ -27,6 +27,7 @@ import { showRequestErrorToast } from '#/api/request-feedback';
 import { $t } from '#/locales';
 
 import { isValidEmailAddress } from './email-address';
+import EmailCodeLabel from './email-code-label.vue';
 import { emailBrowserUUID, useEmailCode } from './email-code';
 import VerificationCodeInput from './verification-code-input.vue';
 import { VerificationCancelled } from './verification-prompt';
@@ -449,15 +450,12 @@ async function submit() {
       >
     </Form.Item>
     <template v-else>
-      <div class="email-binding-address">
-        <span>{{ address }}</span>
-        <Button type="link" :disabled="busy" @click="editAddress">
-          {{ $t('email-auth.change') }}
-        </Button>
-      </div>
-      <label class="email-binding-label" for="binding-code">{{
-        $t('email-auth.code')
-      }}</label>
+      <EmailCodeLabel
+        input-id="binding-code"
+        :account="address"
+        :disabled="busy"
+        @change="editAddress"
+      />
       <VerificationCodeInput
         id="binding-code"
         name="email_binding_code"
@@ -509,30 +507,14 @@ async function submit() {
 </template>
 
 <style scoped>
-.email-binding-address {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  margin-bottom: 24px;
-  background: hsl(var(--muted) / 50%);
-}
-
-.email-binding-address span {
-  overflow-wrap: anywhere;
-}
-
-.email-binding-label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
 .email-binding-resend {
   display: flex;
   justify-content: flex-end;
-  margin: 12px 0 24px;
+  margin: 14px 0 24px;
+}
+
+.email-binding-resend :deep(.ant-btn) {
+  padding: 0;
 }
 
 .profile-field {

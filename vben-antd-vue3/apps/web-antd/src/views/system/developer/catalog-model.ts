@@ -596,6 +596,38 @@ export function catalogPath(path: string, params = false) {
           (params && /^\{[a-z][a-z0-9_-]*\}$/.test(part))),
     );
 }
+// When an editor is open its current entries replace that node's cached entries.
+export function menuPathConflicts(
+  catalog: Catalog,
+  edit?: { scope: string; draft: ResourceEditor },
+) {
+  const first = new Map<string, string>();
+  const conflicts = new Map<string, string>();
+  function visit(scope: string, key: string, path: string) {
+    if (!path) return;
+    const id = `${scope}:${path}`;
+    const previous = first.get(id);
+    if (previous === undefined) first.set(id, key);
+    else {
+      conflicts.set(key, previous);
+      conflicts.set(previous, key);
+    }
+  }
+  for (const [resource, node] of Object.entries(
+    catalog.resource_catalog.resources,
+  )) {
+    if (edit && resource === edit.draft.original) continue;
+    const [scope = ''] = resource.split(':', 1);
+    for (const [key, entry] of Object.entries(node.entries ?? {}))
+      visit(scope, key, entry.path);
+  }
+  if (edit) {
+    for (const entry of edit.draft.entries)
+      visit(edit.scope, entry.key, entry.path);
+  }
+  return conflicts;
+}
+
 // Unconfigured resources are valid local drafts. Mirror the remaining catalog
 // structural rules for actionable local errors. The server
 // remains authoritative, including validation of defaults and language adapters.
@@ -660,6 +692,7 @@ export function validate(c: Catalog): Problem[] {
   const features = c.resource_catalog.buttons;
   const owners = new Set<string>();
   const entries = new Set<string>();
+  const conflictingPaths = menuPathConflicts(c);
   for (const [key, resource] of Object.entries(resources)) {
     const p = ['resource_catalog', 'resources', key];
     const parts = key.split(':');
@@ -747,6 +780,8 @@ export function validate(c: Catalog): Problem[] {
             entry.parent_menu_key === entryKey))
       )
         add([...p, 'entries', entryKey]);
+      if (conflictingPaths.has(entryKey))
+        add([...p, 'entries', entryKey, 'path'], 'duplicateMenuPath');
       entries.add(entryKey);
     }
     for (const [op, binding] of Object.entries(resource.operations ?? {})) {

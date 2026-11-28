@@ -14,7 +14,8 @@ import { isValidUserPassword } from '#/user-validation';
 import OnboardingSignOut from './onboarding-sign-out.vue';
 
 const authStore = useAuthStore();
-const submitting = ref(false);
+const pendingAction = ref<'reset' | 'skip' | null>(null);
+const busy = computed(() => pendingAction.value !== null);
 const descriptionKey = computed(() => {
   if (authStore.passwordResetByAdmin) {
     return authStore.passwordResetSkipAllowed
@@ -58,26 +59,26 @@ const rules = computed<FormProps['rules']>(() => ({
 }));
 
 async function submit() {
-  if (submitting.value) return;
-  submitting.value = true;
+  if (busy.value) return;
+  pendingAction.value = 'reset';
   try {
     await authStore.completePasswordReset(form.value.newPassword);
     form.value = { newPassword: '', confirmPassword: '' };
   } catch {
     // The request client displays the localized error.
   } finally {
-    submitting.value = false;
+    pendingAction.value = null;
   }
 }
 async function skip() {
-  if (submitting.value || !authStore.passwordResetSkipAllowed) return;
-  submitting.value = true;
+  if (busy.value || !authStore.passwordResetSkipAllowed) return;
+  pendingAction.value = 'skip';
   try {
     await authStore.skipOnboarding('password');
   } catch {
     /* The request client displays the localized error. */
   } finally {
-    submitting.value = false;
+    pendingAction.value = null;
   }
 }
 </script>
@@ -108,7 +109,7 @@ async function skip() {
               : undefined
           "
           autocomplete="new-password"
-          :disabled="submitting"
+          :disabled="busy"
         />
         <template v-if="validationErrors.newPassword?.length" #help>
           <span :id="`${errorId}-newPassword`">{{
@@ -130,7 +131,7 @@ async function skip() {
               : undefined
           "
           autocomplete="new-password"
-          :disabled="submitting"
+          :disabled="busy"
         />
         <template v-if="validationErrors.confirmPassword?.length" #help>
           <span :id="`${errorId}-confirmPassword`">{{
@@ -142,23 +143,26 @@ async function skip() {
         type="primary"
         html-type="submit"
         block
-        :loading="submitting"
-        :aria-busy="submitting"
+        :loading="pendingAction === 'reset'"
+        :disabled="pendingAction === 'skip'"
+        :aria-busy="pendingAction === 'reset'"
       >
         {{ $t('app.resetPassword.submit') }}
       </Button>
       <Button
-        v-if="authStore.passwordResetSkipAllowed"
+        v-if="authStore.passwordResetSkipAllowed || pendingAction === 'skip'"
         type="link"
         block
         class="mt-3"
-        :disabled="submitting"
+        :loading="pendingAction === 'skip'"
+        :disabled="pendingAction === 'reset'"
+        :aria-busy="pendingAction === 'skip'"
         @click="skip"
       >
         {{ $t('app.onboarding.skip') }}
       </Button>
     </Form>
-    <OnboardingSignOut :disabled="submitting" />
+    <OnboardingSignOut :disabled="busy" />
   </div>
 </template>
 

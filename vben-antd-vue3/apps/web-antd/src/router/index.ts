@@ -7,6 +7,7 @@ import {
 import { resetStaticRoutes } from '@vben/utils';
 
 import { createRouterGuard } from './guard';
+import { trackPermissionRouteChanges } from './permission-routes';
 import { routes } from './routes';
 
 /**
@@ -34,6 +35,7 @@ const router = createRouter({
 const resetRoutes = () => resetStaticRoutes(router, routes);
 
 // 创建路由守卫
+trackPermissionRouteChanges(router);
 createRouterGuard(router);
 
 export { resetRoutes, router };

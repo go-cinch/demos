@@ -24,6 +24,7 @@ import {
   equal,
   initialUI,
   isCatalog,
+  menuPathConflicts,
   merge,
   normalizeCatalog,
   validate,
@@ -528,7 +529,13 @@ export function useCatalogDraft() {
         const refreshed = await refresh();
         if (current === run && state.draft) {
           state.draft.ui.tab = 'diff';
-          if (refreshed) state.error = 'submitFailed';
+          if (refreshed) {
+            const candidate = merged.value?.document ?? state.draft.document;
+            state.error =
+              menuPathConflicts(candidate).size > 0
+                ? 'duplicateMenuPath'
+                : 'submitFailed';
+          }
         }
       }
       return false;

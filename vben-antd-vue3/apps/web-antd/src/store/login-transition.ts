@@ -1,25 +1,31 @@
 type LoginTransition = () => Promise<void> | void;
 
-let transition: LoginTransition | undefined;
+let transition: { play: LoginTransition; timeoutMs: number } | undefined;
 
 /** Only the mounted authentication illustration can delay navigation. */
-export function registerLoginTransition(handler: LoginTransition) {
-  transition = handler;
+export function registerLoginTransition(
+  play: LoginTransition,
+  timeoutMs: number,
+) {
+  const current = { play, timeoutMs };
+  transition = current;
   return () => {
-    if (transition === handler) transition = undefined;
+    if (transition === current) transition = undefined;
   };
 }
 
 export async function playLoginTransition() {
-  const handler = transition;
-  if (!handler) return;
+  const current = transition;
+  if (!current) return;
 
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
+    const animation = current.play();
+    if (!animation) return;
     await Promise.race([
-      Promise.resolve().then(handler),
+      animation,
       new Promise<void>((resolve) => {
-        timeout = setTimeout(resolve, 2200);
+        timeout = setTimeout(resolve, current.timeoutMs);
       }),
     ]);
   } catch {

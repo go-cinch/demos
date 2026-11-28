@@ -9,6 +9,9 @@ import { $t } from '#/locales';
 import AuthJourney from './auth-journey.vue';
 
 const { authPanelLeft, isDark } = usePreferences();
+const loginAnimationDurationMs = Number(
+  '2000',
+);
 const appName = computed(() => preferences.app.name);
 const logo = computed(() => preferences.logo.source);
 const logoDark = computed(() => preferences.logo.sourceDark);
@@ -24,7 +27,11 @@ const logoDark = computed(() => preferences.logo.sourceDark);
     :page-title="$t('authentication.pageTitle')"
   >
     <template #illustration>
-      <AuthJourney :dark="isDark" :form-on-left="authPanelLeft" />
+      <AuthJourney
+        :dark="isDark"
+        :duration-ms="loginAnimationDurationMs"
+        :form-on-left="authPanelLeft"
+      />
     </template>
   </AuthPageLayout>
 </template>

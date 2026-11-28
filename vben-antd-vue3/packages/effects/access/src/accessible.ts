@@ -24,10 +24,10 @@ async function generateAccessible(
 ) {
   const { router } = options;
 
-  options.routes = cloneDeep(options.routes);
-
-  // 生成路由
-  const accessibleRoutes = await generateRoutes(mode, options);
+  const accessibleRoutes = await prepareAccessibleRoutes(mode, {
+    ...options,
+    routes: cloneDeep(options.routes),
+  });
   if (options.isCurrent?.() === false)
     throw new Error('Navigation belongs to an expired session');
 
@@ -74,12 +74,41 @@ async function generateAccessible(
   return { accessibleMenus, accessibleRoutes };
 }
 
+type PageModule = { default: Component | DefineComponent };
+type PageImport = () => Promise<PageModule>;
+const namedImports = new WeakMap<
+  PageImport,
+  Map<string, () => Promise<Component | PageModule>>
+>();
+
+// KeepAlive uses both the tab key and component type. Re-reading the menu must
+// yield the same loader and named component for the same local page.
+function namedPage(original: PageImport, name: string) {
+  let names = namedImports.get(original);
+  if (!names) namedImports.set(original, (names = new Map()));
+  const existing = names.get(name);
+  if (existing) return existing;
+  let wrapper: Component | undefined;
+  const load = async () => {
+    const page = await original();
+    if (!page.default) return page;
+    return (wrapper ??= defineComponent({
+      name,
+      setup(props, { attrs, slots }) {
+        return () => h(page.default, { ...props, ...attrs }, slots);
+      },
+    }));
+  };
+  names.set(name, load);
+  return load;
+}
+
 /**
  * Generate routes
  * @param mode
  * @param options
  */
-async function generateRoutes(
+async function prepareAccessibleRoutes(
   mode: AccessModeType,
   options: GenerateMenuAndRoutesOptions,
 ) {
@@ -125,19 +154,7 @@ async function generateRoutes(
       route.name &&
       isString(route.name)
     ) {
-      const originalComponent = route.component as () => Promise<{
-        default: Component | DefineComponent;
-      }>;
-      route.component = async () => {
-        const component = await originalComponent();
-        if (!component.default) return component;
-        return defineComponent({
-          name: route.name as string,
-          setup(props, { attrs, slots }) {
-            return () => h(component.default, { ...props, ...attrs }, slots);
-          },
-        });
-      };
+      route.component = namedPage(route.component as PageImport, route.name);
     }
 
     // 如果有redirect或者没有子路由，则直接返回
@@ -239,4 +256,4 @@ function mergeRoutesByName(
   return result;
 }
 
-export { generateAccessible };
+export { generateAccessible, prepareAccessibleRoutes };

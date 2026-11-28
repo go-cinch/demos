@@ -5,13 +5,14 @@ import type {
 
 import type { PermissionMenu, PermissionNavigation } from '#/api/core/user';
 
-import { generateAccessible } from '@vben/access';
+import { prepareAccessibleRoutes } from '@vben/access';
+import { generateMenus } from '@vben/utils';
 import { userCache } from '@vben/utils/cache';
 
 import { BasicLayout, IFrameView } from '#/layouts';
-import { coreRouteNames } from '#/router/routes';
 
 import { resourceNavigationRoutes } from './navigation';
+import { installPermissionRoutes } from './permission-routes';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
@@ -28,15 +29,9 @@ async function generateAccess(
     IFrameView,
   };
 
-  // Remove prior business routes before rebuilding the current navigation.
-  const root = options.router.getRoutes().find((route) => route.path === '/');
-  if (root)
-    root.children = root.children.filter((route) =>
-      coreRouteNames.includes(route.name as string),
-    );
-  return await generateAccessible('frontend', {
+  const current = userCache.capture();
+  const accessibleRoutes = await prepareAccessibleRoutes('frontend', {
     ...options,
-    isCurrent: userCache.capture(),
     routes: resourceNavigationRoutes(
       options.routes,
       options.permissionMenus ?? [],
@@ -48,6 +43,12 @@ async function generateAccess(
     layoutMap,
     pageMap,
   });
+  if (!current()) throw new Error('Navigation belongs to an expired session');
+  installPermissionRoutes(options.router, accessibleRoutes);
+  return {
+    accessibleRoutes,
+    accessibleMenus: generateMenus(accessibleRoutes, options.router),
+  };
 }
 
 export { generateAccess };

@@ -18,9 +18,9 @@ describe('login transition lifecycle', () => {
 
   it('does not remove a new illustration when the previous one unmounts', async () => {
     const old = vi.fn();
-    const removeOld = registerLoginTransition(old);
+    const removeOld = registerLoginTransition(old, 2000);
     const current = vi.fn();
-    unregister = registerLoginTransition(current);
+    unregister = registerLoginTransition(current, 2000);
     removeOld();
     await playLoginTransition();
     expect(current).toHaveBeenCalledOnce();
@@ -30,20 +30,26 @@ describe('login transition lifecycle', () => {
   it('contains animation errors without rejecting sign-in', async () => {
     unregister = registerLoginTransition(() => {
       throw new Error('animation failed');
-    });
+    }, 2000);
     await expect(playLoginTransition()).resolves.toBeUndefined();
   });
 
-  it('bounds a stalled animation so navigation cannot hang', async () => {
-    vi.useFakeTimers();
-    unregister = registerLoginTransition(() => new Promise<void>(() => {}));
-    const complete = vi.fn();
-    const waiting = playLoginTransition().then(complete);
-    await vi.advanceTimersByTimeAsync(2199);
-    expect(complete).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await waiting;
-    expect(complete).toHaveBeenCalledOnce();
-    expect(vi.getTimerCount()).toBe(0);
-  });
+  it.each([350, 2000])(
+    'bounds a stalled animation at %i ms',
+    async (durationMs) => {
+      vi.useFakeTimers();
+      unregister = registerLoginTransition(
+        () => new Promise<void>(() => {}),
+        durationMs,
+      );
+      const complete = vi.fn();
+      const waiting = playLoginTransition().then(complete);
+      await vi.advanceTimersByTimeAsync(durationMs - 1);
+      expect(complete).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await waiting;
+      expect(complete).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 });

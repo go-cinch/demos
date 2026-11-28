@@ -1,5 +1,6 @@
 import { createApp, ref } from 'vue';
 
+import { preferences } from '@vben/preferences';
 import { resetAllStores } from '@vben/stores';
 import { browserSession } from '@vben/stores/session';
 
@@ -23,6 +24,7 @@ import {
   stageRegistrationLogin,
   useAuthStore,
 } from './auth';
+import { getLoginPagePreferences } from './login-page-preferences';
 import { readDraft, writeDraft } from './preference-drafts';
 import { releaseSessionCache } from './session-cache';
 
@@ -126,7 +128,15 @@ vi.mock('#/router', () => ({
   resetRoutes: mocks.resetRoutes,
 }));
 vi.mock('@vben/preferences', () => ({
-  preferences: { app: { defaultHomePath: '/dashboard/overview', locale: 'en-US' } },
+  preferences: {
+    app: {
+      authPageLayout: 'panel-right',
+      defaultHomePath: '/dashboard/overview',
+      locale: 'en-US',
+      timezone: 'Asia/Shanghai',
+    },
+    theme: { builtinType: 'default', colorPrimary: '', mode: 'dark' },
+  },
 }));
 vi.mock('@vben/locales', () => ({ loadLocaleMessages: mocks.loadLocale }));
 vi.mock('#/locales/catalog', () => ({ resolveCatalogLocale: (locale: string) => locale }));
@@ -228,7 +238,10 @@ describe('authentication session lifecycle', () => {
       permission: { words: [], menus: [] },
     });
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    releaseSessionCache();
+    vi.restoreAllMocks();
+  });
 
   it('binds a login-page choice when accepting the session even if onboarding fails', async () => {
     const auth = useAuthStore();
@@ -287,6 +300,38 @@ describe('authentication session lifecycle', () => {
       path: '/auth/login',
       query: { redirect: '/profile' },
     });
+  });
+
+  it('keeps the signed-out appearance for the login page without claiming it for the next account', async () => {
+    const auth = useAuthStore();
+    const session = (id: string) => ({
+      ...complete,
+      access_token: new UnsecuredJWT({}).setSubject(id).encode(),
+    });
+    await auth.acceptSession(session('101'));
+    const appearance = {
+      app: { authPageLayout: 'panel-left', locale: 'zh-CN', timezone: 'Etc/UTC' },
+      theme: { builtinType: 'default', colorPrimary: '#123456', mode: 'light' },
+    };
+    const previousApp = { ...preferences.app };
+    const previousTheme = { ...preferences.theme };
+    try {
+      Object.assign(preferences.app, appearance.app);
+      Object.assign(preferences.theme, appearance.theme);
+      await auth.logout();
+      expect(getLoginPagePreferences()).toEqual(appearance);
+      expect(readDraft('language')).toBeUndefined();
+      expect(readDraft('timezone')).toBeUndefined();
+      expect(readDraft('theme.mode')).toBeUndefined();
+
+      await auth.acceptSession(session('202'));
+      expect(readDraft('language')).toBeUndefined();
+      expect(readDraft('timezone')).toBeUndefined();
+      expect(readDraft('theme.mode')).toBeUndefined();
+    } finally {
+      Object.assign(preferences.app, previousApp);
+      Object.assign(preferences.theme, previousTheme);
+    }
   });
 
   it('synchronizes account language once per session and retries optional failures without failing profile loading', async () => {
@@ -605,7 +650,7 @@ describe('authentication session lifecycle', () => {
       current,
     ]);
     expect(mocks.info).toHaveBeenCalledOnce();
-    expect(mocks.resetRoutes).toHaveBeenCalledOnce();
+    expect(mocks.resetRoutes).not.toHaveBeenCalled();
     expect(mocks.generateAccess).toHaveBeenCalledWith(
       expect.objectContaining({
         roles: current.roles,

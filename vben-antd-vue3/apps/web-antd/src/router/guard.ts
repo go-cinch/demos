@@ -21,6 +21,7 @@ import {
 import { loadSystemProperties } from '#/store/system-properties';
 
 import { generateAccess } from './access';
+import { matchChanged } from './permission-routes';
 
 // A failed initial navigation has no mounted route to render its retry action.
 export const sessionRetryTarget = ref('');
@@ -232,7 +233,8 @@ function setupAccessGuard(router: Router) {
 
     if (accessStore.isAccessChecked) {
       if (!allowed) return { path: '/forbidden', replace: true };
-      if (resolved.name !== to.name) return { ...resolved, replace: true };
+      if (matchChanged(to, resolved))
+        return { ...resolved, replace: true, force: true };
       return true;
     }
 

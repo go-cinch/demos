@@ -258,6 +258,41 @@ describe('developer draft workflow', () => {
       label: 'Local',
     });
   });
+  it('rechecks menu paths against refreshed online changes after a rejected publish', async () => {
+    const online = catalog();
+    online.resource_catalog.resources['admin:system'] = {
+      kind: 'directory',
+      sort: 1,
+    };
+    mock.load.mockResolvedValue({ items: [record(online)] });
+    const a = await start();
+    const resource = (menu: string) => ({
+      kind: 'resource' as const,
+      parent: 'admin:system',
+      sort: 1,
+      entries: { [menu]: { path: '/shared' } },
+    });
+    a.state.draft!.document.resource_catalog.resources['admin:system:local'] =
+      resource('admin:menu:local');
+    mock.update.mockImplementationOnce(() => {
+      const latest = clone(online);
+      latest.resource_catalog.resources['admin:system:remote'] =
+        resource('admin:menu:remote');
+      mock.load.mockResolvedValue({ items: [record(latest)] });
+      throw Object.assign(new Error('version conflict'), {
+        response: {
+          status: 409,
+          data: { error_code: 'DICTIONARY_VERSION_CONFLICT' },
+        },
+      });
+    });
+    expect(await a.publish()).toBe(false);
+    expect(mock.update).toHaveBeenCalledTimes(1);
+    expect(a.state.error).toBe('duplicateMenuPath');
+    expect(
+      a.state.draft!.document.resource_catalog.resources['admin:system:local'],
+    ).toBeDefined();
+  });
   it('does not report a failed local write as saved and refuses publication', async () => {
     const a = await start();
     vi.spyOn(DraftStorage.prototype, 'save').mockImplementation(() => {

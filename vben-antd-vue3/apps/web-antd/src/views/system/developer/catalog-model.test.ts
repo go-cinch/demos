@@ -9,11 +9,13 @@ import {
   editor,
   initialUI,
   isCatalog,
+  menuPathConflicts,
   merge,
   normalizeCatalog,
   validate,
 } from './catalog-model';
 import { DraftStorage } from './draft-storage';
+import { createResourceEditor } from './resource-editor-model';
 
 describe('catalog diff and merge', () => {
   it('ignores object key order but retains meaningful array ordering and null', () => {
@@ -109,6 +111,42 @@ describe('catalog validation', () => {
     expect(validate(c).filter((p) => !p.warning).length).toBe(1);
   });
 });
+describe('scoped menu paths', () => {
+  it('checks draft entries against their scope and replaces the original while editing', () => {
+    const catalog = fixture();
+    const draft = createResourceEditor(catalog, 'admin', 'admin:system:user');
+    const entries = draft.entries;
+    const original = entries[0]!;
+    const check = () => menuPathConflicts(catalog, { scope: 'admin', draft });
+    expect(check().size).toBe(0);
+    entries.push({ ...original, key: 'admin:menu:second' });
+    expect(check().get('admin:menu:second')).toBe(original.key);
+    entries.pop();
+    catalog.resource_catalog.resources['admin:system:other'] = {
+      kind: 'resource',
+      parent: 'admin:system',
+      sort: 3,
+      entries: { 'admin:menu:other': { path: '/other' } },
+    };
+    original.path = '/other';
+    expect(check().get(original.key)).toBe('admin:menu:other');
+    original.path = '/corrected';
+    expect(check().size).toBe(0);
+    catalog.resource_catalog.resources['mini:system:user'] = {
+      kind: 'resource',
+      sort: 1,
+      entries: { 'mini:menu:user': { path: '/system/user' } },
+    };
+    expect(menuPathConflicts(catalog).size).toBe(0);
+    catalog.resource_catalog.resources['admin:system:other']!.entries![
+      'admin:menu:other'
+    ]!.path = '/system/user';
+    expect(
+      validate(catalog).filter((issue) => issue.code === 'duplicateMenuPath'),
+    ).toHaveLength(2);
+  });
+});
+
 describe('synchronous local draft persistence', () => {
   function value() {
     return {

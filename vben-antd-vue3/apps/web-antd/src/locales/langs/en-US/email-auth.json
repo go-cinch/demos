@@ -7,7 +7,6 @@
   "identifier": "Username or email",
   "identifierRequired": "Enter your username or email",
   "identifierPlaceholder": "Enter username or linked email",
-  "verifyTitle": "Verify email",
   "code": "Verification code",
   "account": "Account",
   "change": "Change",

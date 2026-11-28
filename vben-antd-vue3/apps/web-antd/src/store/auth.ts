@@ -53,6 +53,7 @@ import {
   loginRedirectQuery,
   rememberAccountReturn,
 } from './login-destination';
+import { rememberLoginPagePreferences } from './login-page-preferences';
 import { playLoginTransition } from './login-transition';
 import { bindSessionCache, releaseSessionCache } from './session-cache';
 import { loadSystemProperties } from './system-properties';
@@ -389,6 +390,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     if (epoch !== sessionEpoch) return;
     setTOTPEnrollmentSource();
+    if (userCache.account !== undefined) rememberLoginPagePreferences();
     browserSession.end();
     releaseSessionCache();
     resetAllStores();
@@ -512,14 +514,12 @@ export const useAuthStore = defineStore('auth', () => {
         (previousPaths !== JSON.stringify(userInfo.roles) ||
           previousNavigation !== JSON.stringify(userInfo.permission.navigation))
       ) {
-        const [{ generateAccess }, { accessRoutes }, { resetRoutes }] =
+        const [{ generateAccess }, { accessRoutes }] =
           await Promise.all([
             import('#/router/access'),
             import('#/router/routes'),
-            import('#/router'),
           ]);
         assertSession();
-        resetRoutes();
         const { accessibleMenus, accessibleRoutes } = await generateAccess({
           roles: userInfo.roles,
           router,

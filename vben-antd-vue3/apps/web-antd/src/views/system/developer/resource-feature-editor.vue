@@ -102,6 +102,7 @@ const status = (value: string) =>
     <FormItem v-if="catalog" :label="t('featureEntries')">
       <Select
         mode="multiple"
+        option-filter-prop="label"
         :value="feature.entryKeys ?? []"
         :disabled="disabled"
         :aria-label="t('featureEntries')"

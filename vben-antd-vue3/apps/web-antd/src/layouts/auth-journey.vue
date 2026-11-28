@@ -13,7 +13,11 @@ import { usePreferredReducedMotion } from '@vueuse/core';
 
 import { registerLoginTransition } from '../store/login-transition';
 
-const props = defineProps<{ dark: boolean; formOnLeft?: boolean }>();
+const props = defineProps<{
+  dark: boolean;
+  durationMs: number;
+  formOnLeft?: boolean;
+}>();
 const darkScene = ref(props.dark);
 const lighting = computed(() => (darkScene.value ? 'night' : 'day'));
 const shipName = computed(() => `catamaran-${lighting.value}`);
@@ -89,7 +93,7 @@ function arrive() {
   pending = new Promise<void>((resolve) => {
     finish = resolve;
     // Keep the decoration bounded even if frames or asset loading stall.
-    timer = setTimeout(complete, 2000);
+    timer = setTimeout(complete, props.durationMs);
   });
   return pending;
 }
@@ -159,12 +163,14 @@ function tick(now: number) {
   lastTime = now;
   elapsed += dt;
   const elapsedArrival =
-    arrivalStart === undefined ? 0 : clamp((now - arrivalStart) / 1600);
+    arrivalStart === undefined
+      ? 0
+      : clamp((now - arrivalStart) / (props.durationMs * 0.8));
   const p = phase.value === 'arrived' ? 1 : elapsedArrival;
   render(p, dt);
   if (p === 1 && phase.value === 'arriving') {
     phase.value = 'arrived';
-    hold = setTimeout(settle, 200);
+    hold = setTimeout(settle, props.durationMs * 0.1);
   }
   if (phase.value !== 'arrived') frame = requestAnimationFrame(tick);
 }
@@ -191,6 +197,7 @@ function schedule() {
   cancelAnimationFrame(frame);
   lastTime = 0;
   if (
+    props.durationMs > 0 &&
     inView &&
     !document.hidden &&
     reducedMotion.value !== 'reduce' &&
@@ -208,7 +215,8 @@ function onVisibility() {
 }
 onMounted(() => {
   void collect();
-  unregister = registerLoginTransition(arrive);
+  if (props.durationMs === 0) return;
+  unregister = registerLoginTransition(arrive, props.durationMs);
   document.addEventListener('visibilitychange', onVisibility);
   observer = new IntersectionObserver(([entry]) => {
     inView = entry?.isIntersecting ?? false;

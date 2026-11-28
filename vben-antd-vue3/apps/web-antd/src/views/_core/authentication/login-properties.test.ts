@@ -201,6 +201,93 @@ describe('email-code login address validation', () => {
     }
   });
 
+  it('opens the code step during a shared cooldown and lets the user send when it ends', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'performance'] });
+    mocks.check.mockResolvedValue({ server_time: 1000, retry_at: 4000 });
+    const page = openLogin();
+    try {
+      await flushPromises();
+      await page.get('.email-auth-switch').trigger('click');
+      await page.get('#login-identifier').setValue('user@example.com');
+      await vi.advanceTimersByTimeAsync(300);
+
+      expect(page.get('h1').text()).toBe('app.journey.title 👋🏻');
+      expect(page.text()).not.toContain('verification.backToLogin');
+      expect(page.find('#login-identifier').exists()).toBe(false);
+      expect(
+        page.get('#login-email-code').attributes('disabled'),
+      ).toBeDefined();
+      expect(
+        page.get('.email-auth-primary').attributes('disabled'),
+      ).toBeDefined();
+      const resend = page.get('.email-auth-resend button');
+      expect(resend.text()).toBe('email-auth.countdown');
+      expect(resend.attributes('disabled')).toBeDefined();
+
+      await vi.advanceTimersByTimeAsync(3250);
+      expect(resend.text()).toBe('email-auth.send');
+      expect(resend.attributes('disabled')).toBeUndefined();
+      await resend.trigger('click');
+      expect(page.find('.email-auth-human').exists()).toBe(true);
+      expect(mocks.send).not.toHaveBeenCalled();
+    } finally {
+      page.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers the same email’s code when a simultaneous send returns only a cooldown', async () => {
+    mocks.status
+      .mockResolvedValueOnce({ server_time: 1000, retry_at: 0 })
+      .mockResolvedValue({
+        server_time: 1000,
+        retry_at: 0,
+        verification_id: 'existing-code',
+        expired_at: 120_000,
+      });
+    mocks.send.mockRejectedValue({
+      response: {
+        data: {
+          error_code: 'AUTH_EMAIL_COOLDOWN',
+          server_time: 1000,
+          retry_at: 61_000,
+        },
+      },
+    });
+    const page = openLogin();
+    try {
+      await flushPromises();
+      await page.get('.email-auth-switch').trigger('click');
+      await page.get('#login-identifier').setValue('user@example.com');
+      await page.get('form').trigger('submit');
+      page
+        .findComponent({ name: 'ServerSliderCaptcha' })
+        .vm.$emit('update:modelValue', 'proof');
+      await flushPromises();
+
+      expect(mocks.status).toHaveBeenLastCalledWith(
+        expect.any(String),
+        'user@example.com',
+      );
+      expect(page.get('h1').text()).toBe('app.journey.title 👋🏻');
+      expect(
+        page.get('.email-auth-resend button').attributes('disabled'),
+      ).toBeDefined();
+      await page.get('#login-email-code').setValue('123456');
+      await page.get('form').trigger('submit');
+      expect(mocks.login).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          username: 'user@example.com',
+          verification_id: 'existing-code',
+          verification_code: '123456',
+        }),
+      );
+      expect(mocks.send).toHaveBeenCalledOnce();
+    } finally {
+      page.unmount();
+    }
+  });
+
   it('shows a server mailbox rejection beside the editable address without a countdown', async () => {
     mocks.send.mockRejectedValue({
       response: { data: { error_code: 'AUTH_EMAIL_ADDRESS_INVALID' } },
