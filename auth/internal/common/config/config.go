@@ -30,6 +30,26 @@ func LoadDir(dir string) (*Config, []Override, error) {
 	if err := values.Unmarshal("", &cfg); err != nil {
 		return nil, nil, fmt.Errorf("decode configuration: %w", err)
 	}
+	if !values.Exists("auth.history.retentionDays") {
+		cfg.Auth.History.RetentionDays = 30
+	}
+	if cfg.Auth.History.RetentionDays < 1 || cfg.Auth.History.RetentionDays > 106751 {
+		return nil, nil, fmt.Errorf("auth.history.retentionDays must be between 1 and 106751")
+	}
+	if cfg.Dictionary.LocalizationRefreshInterval < 0 {
+		return nil, nil, fmt.Errorf("dictionary.localizationRefreshInterval must not be negative")
+	}
+	if err := loadRuntimeLimits(&cfg, values); err != nil {
+		return nil, nil, err
+	}
+	if err := loadOnboardingPolicy(&cfg, values); err != nil {
+		return nil, nil, err
+	}
+	// Resolve delivery after environment overrides. Explicitly unauthenticated
+	// relays do not need a password; other empty-password setups can start offline.
+	if cfg.Email.Enabled && strings.TrimSpace(cfg.Email.Password) == "" && !strings.EqualFold(cfg.Email.Authentication, "none") {
+		cfg.Email.SkipDelivery = true
+	}
 	return &cfg, overrides, nil
 }
 

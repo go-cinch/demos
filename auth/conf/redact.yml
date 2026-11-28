@@ -1,4 +1,14 @@
 redact:
   keys:
     - customerNumber
-    - auth.jwt.key
+    - auth.session.jwt.key
+    - auth.testing.emailQueueToken
+    - secret
+    - secret_ciphertext
+    - uri
+    - recovery_codes
+    - verification_code
+    - mfa_ticket
+    - x-totp-code
+    - x-recovery-code
+    - x-mfa-ticket

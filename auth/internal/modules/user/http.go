@@ -2,16 +2,15 @@ package user
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
 	actionmodule "auth/internal/modules/action"
 	authmodule "auth/internal/modules/auth"
-	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -33,14 +32,13 @@ type CreateUserRequest struct {
 }
 
 type UpdateUserRequest struct {
-	ActionBindings *[]actionmodule.ResourceBinding `json:"action_bindings,omitempty"`
-	ChallengeID    *string                         `json:"challenge_id,omitempty" example:"u7rUnVYJdWzvX41WeyuR1J6mM8Xr0jYjNQQHf9U5gEo"`
-	Credential     *string                         `json:"credential,omitempty" example:"eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0..."`
-	Username       *string                         `json:"username,omitempty"`
-	RoleID         *int64                          `json:"role_id,omitempty"`
-	ActionCodes    *[]string                       `json:"action_codes,omitempty"`
-	Status         *int16                          `json:"status,omitempty"`
-	Metadata       *map[string]any                 `json:"metadata,omitempty"`
+	UpdateUserInput
+	ReviewDecision *string `json:"review_decision,omitempty"`
+	RejectReason   *string `json:"reject_reason,omitempty"`
+}
+
+type LockUserRequest struct {
+	LockExpiredAt *int64 `json:"lock_expired_at"`
 }
 
 func (*Module) Name() string { return "/user" }
@@ -54,6 +52,9 @@ func (m *Module) HTTP() http.Handler {
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
 	r.Patch("/{id}", m.update)
+	r.Post("/{id}/lock", m.lock)
+	r.Post("/{id}/unlock", m.unlock)
+	r.Post("/{id}/reset-password", m.resetPassword)
 	r.Delete("/{id}", m.delete)
 	return r
 }
@@ -96,13 +97,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 
 	var request CreateUserRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := server.DecodeJSON(w, r, &request, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
@@ -149,6 +144,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
+	auditctx.ResourceOperation(r.Context(), "create", strconv.FormatInt(value.ID, 10))
 	server.WriteOK(w, value)
 }
 
@@ -156,55 +152,93 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 
-	if err != nil {
+	if err != nil || id <= 0 {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.UserID)
 		return
 	}
 	var request UpdateUserRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
+	if err := server.DecodeJSON(w, r, &request, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	var value *User
+	if request.ReviewDecision != nil || request.RejectReason != nil {
+		if !allNil(request.UpdateUserInput) || request.ReviewDecision == nil {
+			server.WriteError(w, r, http.StatusBadRequest, ErrInvalid)
+			return
+		}
+		reason := ""
+		if request.RejectReason != nil {
+			reason = *request.RejectReason
+		}
+		value, err = m.Review(r.Context(), id, *request.ReviewDecision, reason)
+	} else {
+		value, err = m.Update(r.Context(), id, request.UpdateUserInput)
+	}
+	writeUserMutation(w, r, id, value, err)
+}
+
+func (m *Module) lock(w http.ResponseWriter, r *http.Request) {
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+
+	if err != nil || id <= 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.UserID)
+		return
+	}
+	var request LockUserRequest
+	if err := server.DecodeJSON(w, r, &request, server.BodyBusiness); err != nil || request.LockExpiredAt == nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
-	input := UpdateUserInput{
-		Username:       request.Username,
-		RoleID:         request.RoleID,
-		ActionCodes:    request.ActionCodes,
-		ActionBindings: request.ActionBindings,
-		Status:         request.Status,
-		Metadata:       request.Metadata,
+	value, err := m.Lock(r.Context(), id, *request.LockExpiredAt)
+	writeUserMutation(w, r, id, value, err)
+}
+
+func (m *Module) unlock(w http.ResponseWriter, r *http.Request) {
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+
+	if err != nil || id <= 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.UserID)
+		return
 	}
-	if request.ChallengeID != nil || request.Credential != nil {
-		challengeID, credential := "", ""
-		if request.ChallengeID != nil {
-			challengeID = *request.ChallengeID
-		}
-		if request.Credential != nil {
-			credential = *request.Credential
-		}
-		password, err := m.registrationCredentials.OpenRegistrationPassword(r.Context(), authmodule.EncryptedRegisterInput{
-			ChallengeID: challengeID,
-			Credential:  credential,
-		})
-		if errors.Is(err, authmodule.ErrInvalidRegistrationCredential) {
-			server.WriteError(w, r, http.StatusBadRequest, authmodule.ErrInvalidRegistrationCredential)
-			return
-		}
-		if err != nil {
-			slog.ErrorContext(r.Context(), "decrypt user "+strconv.FormatInt(id, 10)+" update credential failed: "+err.Error(), "operation", "decrypt_user_update_credential", "outcome", "failure", "error", err, "user_id", id)
-			server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
-			return
-		}
-		input.Password = &password
+	if r.ContentLength != 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
+		return
 	}
-	value, err := m.Update(r.Context(), id, input)
+	value, err := m.Unlock(r.Context(), id)
+	writeUserMutation(w, r, id, value, err)
+}
+
+func (m *Module) resetPassword(w http.ResponseWriter, r *http.Request) {
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+
+	if err != nil || id <= 0 {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.UserID)
+		return
+	}
+	var request authmodule.EncryptedRegisterInput
+	if err := server.DecodeJSON(w, r, &request, server.BodyBusiness); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
+		return
+	}
+	password, err := m.registrationCredentials.OpenRegistrationPassword(r.Context(), request)
+	var value *User
+	if err == nil {
+		value, err = m.ResetPassword(r.Context(), id, password)
+	}
+	writeUserMutation(w, r, id, value, err)
+}
+
+func writeUserMutation(w http.ResponseWriter, r *http.Request, id int64, value *User, err error) {
 	if errors.Is(err, authn.ErrPermissionAdministrationRequired) || errors.Is(err, authn.ErrPermissionGrantRequired) {
 		server.WriteError(w, r, http.StatusForbidden, err)
+		return
+	}
+	if errors.Is(err, authmodule.ErrInvalidRegistrationCredential) {
+		server.WriteError(w, r, http.StatusBadRequest, authmodule.ErrInvalidRegistrationCredential)
 		return
 	}
 	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {

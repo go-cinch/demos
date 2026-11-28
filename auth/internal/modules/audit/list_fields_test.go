@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"auth/internal/common/config"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ func TestListFieldProjection(t *testing.T) {
 	}
 	defer database.Close()
 	// Nil association modules make accidental enrichment fail immediately.
-	m := &Module{store: &db.Store{DB: database}, limits: pagination.Limits{MaxP: 10000, MaxS: 10000}}
+	m := &Module{settings: config.DefaultAudit(), store: &db.Store{DB: database}, limits: pagination.Limits{MaxP: 10000, MaxS: 10000}}
 	input := Filter{Fields: report.Fields{"username"}, Kind: "login"}
 	mock.ExpectQuery("SELECT COUNT.*FROM t_audit_event").WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(1))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT username FROM t_audit_event")).WillReturnRows(sqlmock.NewRows([]string{"username"}).AddRow(""))

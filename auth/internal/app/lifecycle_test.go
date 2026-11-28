@@ -2,18 +2,15 @@ package app
 
 import (
 	"auth/internal/common/config"
-	"auth/internal/common/pagination"
 	"auth/internal/common/rpc"
-	"auth/internal/infra/db"
-	"auth/internal/modules/msg"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/DATA-DOG/go-sqlmock"
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -195,33 +192,25 @@ func TestGRPCLifecycle(t *testing.T) {
 	probe.Close()
 }
 
-func TestRunStopsMessageExpiryWorker(t *testing.T) {
-	database, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
-	mock.ExpectQuery("SELECT user_id FROM t_user_msg_status.*LIMIT 100").WillReturnRows(sqlmock.NewRows([]string{"user_id"}))
-	limits, _ := pagination.New(100, 100)
-	application := &Application{server: &http.Server{Addr: "127.0.0.1:0", Handler: http.NotFoundHandler()}, msgModule: msg.New(&db.Store{DB: database}, limits)}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- application.Run(ctx) }()
-	deadline := time.Now().Add(time.Second)
-	for mock.ExpectationsWereMet() != nil && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+func TestSignalContextCanBeCanceled(t *testing.T) {
+	ctx, cancel := SignalContext()
 	cancel()
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
+	case <-ctx.Done():
 	case <-time.After(time.Second):
-		t.Fatal("expiry worker did not stop")
+		t.Fatal("signal context was not canceled")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
+}
+
+func TestCloseReleasesResourcesInReverseOrder(t *testing.T) {
+	var released []string
+	a := &Application{cleanups: []func(){
+		func() { released = append(released, "database") },
+		func() { released = append(released, "sessions") },
+		func() { released = append(released, "dictionary cache") },
+	}}
+	a.Close()
+	if want := []string{"dictionary cache", "sessions", "database"}; !slices.Equal(released, want) {
+		t.Fatalf("cleanup order = %v, want %v", released, want)
 	}
 }

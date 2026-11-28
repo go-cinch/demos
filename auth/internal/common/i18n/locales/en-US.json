@@ -1,4 +1,6 @@
 {
+  "ACTION_GROUP_CONFLICT": "The permission groups have changed. Refresh and try again.",
+  "ACTION_GROUP_NOT_EMPTY": "The permission group is not empty.",
   "ACTION_CONFLICT": "action code or word already exists",
   "ACTION_INVALID_IDS": "provide 1-100 positive action ids",
   "ACTION_INVALID": "invalid action",
@@ -22,6 +24,7 @@
   "AUTH_SESSION_NOT_FOUND": "authentication session not found",
   "AUTH_UNAUTHORIZED": "unauthorized",
   "AUTH_USERNAME_EXISTS": "username already exists",
+  "DICTIONARY_CATALOG_PROTECTED": "This content cannot be changed",
   "DICTIONARY_CONFLICT": "dictionary key already exists",
   "DICTIONARY_INVALID_IDS": "provide 1-100 positive dictionary ids",
   "DICTIONARY_INVALID": "invalid dictionary",
@@ -74,13 +77,20 @@
   "MSG_INVALID": "Invalid message fields: title up to 200 characters, content up to 20000, and expiry must be in the future",
   "MSG_INVALID_RECIPIENT": "Choose 1–1000 existing users for targeted messages; broadcasts cannot specify recipients",
   "MSG_NOT_FOUND": "Message not found or unavailable",
-  "AUDIT_FILTER_INVALID": "Invalid audit filter or time range (maximum 90 days).",
+  "AUDIT_FILTER_INVALID": "Invalid audit filter or time range. Check the configured maximum window.",
   "AUDIT_NOT_FOUND": "Audit event not found.",
-  "AUDIT_EXPORT_LIMIT": "More than 10,000 events. Narrow the filters before exporting.",
+  "AUDIT_EXPORT_LIMIT": "The export exceeds the configured row limit. Narrow the filters before exporting.",
   "AUTH_INFO_SCOPE_REQUIRED": "Please specify a permission scope",
   "AUTH_INFO_SCOPE_INVALID": "Invalid permission scope",
   "AUTH_PERMISSION_ADMIN_REQUIRED": "Only an administrator with all permissions in the current scope can change permission definitions or account credentials",
   "AUTH_PERMISSION_GRANT_REQUIRED": "All permissions or the permission management grant in the current scope is required",
   "DICTIONARY_VERSION_CONFLICT": "The catalog changed. Compare the latest online version before submitting.",
-  "DICTIONARY_GROUP_NOT_EMPTY": "Only empty permission groups can be deleted"
+  "DICTIONARY_GROUP_NOT_EMPTY": "Only empty permission groups can be deleted",
+  "AUTH_VERIFICATION_INVALID": "invalid or already used verification code; use a new code",
+  "AUTH_STEP_UP_REQUIRED": "verify your identity before this sensitive operation",
+  "AUTH_TOTP_ENROLLMENT_REQUIRED": "bind an authenticator before continuing",
+  "AUTH_TOTP_ALREADY_BOUND": "a TOTP authenticator is already bound",
+  "AUTH_VERIFICATION_RATE_LIMITED": "too many verification attempts; try again later",
+  "AUTH_VERIFICATION_UNAVAILABLE": "identity verification is temporarily unavailable",
+  "AUTH_TOTP_USER_NOT_FOUND": "user not found"
 }

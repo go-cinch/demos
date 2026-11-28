@@ -1,6 +1,7 @@
 package server
 
 import (
+	"auth/internal/common/config"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,9 +19,10 @@ import (
 )
 
 type recordedAudit struct {
-	events []auditctx.Event
-	fail   bool
-	target auditctx.Target
+	deadline time.Time
+	events   []auditctx.Event
+	fail     bool
+	target   auditctx.Target
 }
 
 func (a *recordedAudit) AuditTarget(method, path string) auditctx.Target { return a.target }
@@ -29,6 +31,7 @@ func (a *recordedAudit) RecordHTTP(ctx context.Context, e auditctx.Event) error 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	a.deadline, _ = ctx.Deadline()
 	a.events = append(a.events, e)
 	if a.fail {
 		return errors.New("offline")
@@ -36,10 +39,15 @@ func (a *recordedAudit) RecordHTTP(ctx context.Context, e auditctx.Event) error 
 	return nil
 }
 
-func auditHandler(recorder *recordedAudit, handler http.HandlerFunc) http.Handler {
+func auditHandler(recorder *recordedAudit, handler http.HandlerFunc, configured ...config.AuditConfig) http.Handler {
 	policy := redact.New("tenantSecret")
+	trusted, _ := parseTrustedProxies("127.0.0.0/8,::1/128")
+	settings := config.DefaultAudit()
+	if len(configured) > 0 {
+		settings = configured[0]
+	}
 
-	return ClientIP()(Audit(recorder, policy)(Recoverer()(handler)))
+	return ClientIP(trusted...)(Audit(recorder, policy, settings)(Recoverer()(handler)))
 
 }
 
@@ -156,7 +164,7 @@ func TestAuditLoginAndIgnoredTarget(t *testing.T) {
 	recorder.fail = true
 	request := httptest.NewRequest("POST", "/test", nil).WithContext(ctx)
 	request.RemoteAddr = "local"
-	finishAudit(recorder, request, state, auditctx.Target{Kind: "operation"}, 0, time.Now(), http.Header{}, &auditBuffer{}, &auditBuffer{}, redact.New(), nil)
+	finishAudit(recorder, request, state, auditctx.Target{Kind: "operation"}, 0, time.Now(), http.Header{}, &auditBuffer{limit: config.DefaultAudit().PayloadLimit}, &auditBuffer{limit: config.DefaultAudit().PayloadLimit}, redact.New(), nil, config.DefaultAudit())
 	if recorder.events[1].Status != 200 || recorder.events[1].IP != "local" {
 		t.Fatal(recorder.events)
 	}
@@ -199,7 +207,7 @@ func TestAuditFailureLogsStructuredContext(t *testing.T) {
 	request := httptest.NewRequest("POST", "/reset/never-log-secret?password=never-log-query", nil).WithContext(ctx)
 	recorder := &recordedAudit{fail: true}
 	target := auditctx.Target{Kind: "operation", Module: "auth", Operation: "reset_password"}
-	finishAudit(recorder, request, state, target, 500, time.Now(), http.Header{}, &auditBuffer{}, &auditBuffer{}, redact.New(), nil)
+	finishAudit(recorder, request, state, target, 500, time.Now(), http.Header{}, &auditBuffer{limit: config.DefaultAudit().PayloadLimit}, &auditBuffer{limit: config.DefaultAudit().PayloadLimit}, redact.New(), nil, config.DefaultAudit())
 	var entry map[string]any
 	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
 		t.Fatal(err)
@@ -214,5 +222,34 @@ func TestAuditFailureLogsStructuredContext(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "never-log-") {
 		t.Fatalf("request secret leaked: %s", output.String())
+	}
+}
+
+func TestConfiguredAuditCaptureAndDeadline(t *testing.T) {
+	recorder := &recordedAudit{target: auditctx.Target{Kind: "operation", Module: "probe", Operation: "update"}}
+	settings := config.DefaultAudit()
+	settings.PayloadLimit = 128
+	settings.RecordTimeout = 150 * time.Millisecond
+	handler := auditHandler(recorder, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		WriteOK(w, map[string]string{"value": strings.Repeat("r", 256)})
+	}, settings)
+	request := httptest.NewRequest("POST", "/test?q="+strings.Repeat("q", 256), strings.NewReader(`{"value":"`+strings.Repeat("x", 256)+`"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Large", strings.Repeat("h", 256))
+	started := time.Now()
+	out := httptest.NewRecorder()
+	handler.ServeHTTP(out, request)
+	if out.Code != 200 || len(recorder.events) != 1 {
+		t.Fatal("capture changed business response")
+	}
+	e := recorder.events[0]
+	for _, data := range [][]byte{e.Header, e.RequestParams, e.ResponseParams} {
+		if !strings.Contains(string(data), "omitted") {
+			t.Fatal("configured payload limit ignored", string(data))
+		}
+	}
+	if recorder.deadline.Before(started.Add(settings.RecordTimeout)) || recorder.deadline.After(time.Now().Add(settings.RecordTimeout)) {
+		t.Fatal("audit persistence deadline ignored configuration")
 	}
 }

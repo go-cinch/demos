@@ -40,7 +40,7 @@ func TestCredentialVersionTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	captcha, err := auth.NewPointCaptcha(auth.NewMemoryPointCaptchaStore(), dictionaryModule, 5, time.Minute, 300, 180, 22, nil)
+	captcha, err := auth.NewPointCaptcha(auth.NewMemoryPointCaptchaStore(), dictionaryModule, 5, time.Minute, 300, 180, 22, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestCredentialVersionTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, localizer, nil)
+	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, localizer, nil, &auth.Verification{})
 	actions := action.New(store, limits, localizer)
 	users := user.New(store, limits, nil, guard, actions, role.New(store, limits, actions))
 	login := func(password string) *auth.LoginResult {
@@ -144,7 +144,7 @@ func TestCredentialVersionTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	resetPassword := "admin-secret"
-	if _, err := users.Update(ctx, 101, user.UpdateUserInput{Password: &resetPassword}); err != nil {
+	if _, err := users.ResetPassword(ctx, 101, resetPassword); err != nil {
 		t.Fatal(err)
 	}
 	version(3)
@@ -162,7 +162,7 @@ func TestCredentialVersionTransactions(t *testing.T) {
 		t.Fatal("password change commit unexpectedly succeeded")
 	}
 	version(3)
-	if _, err := users.Update(ctx, 101, user.UpdateUserInput{Password: &resetPassword}); err == nil {
+	if _, err := users.ResetPassword(ctx, 101, resetPassword); err == nil {
 		t.Fatal("admin reset commit unexpectedly succeeded")
 	}
 	version(3)

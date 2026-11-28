@@ -3,13 +3,13 @@ package audit
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
+	"auth/internal/common/config"
 	"auth/internal/common/pagination"
 	"auth/internal/common/report"
 	"auth/internal/infra/db"
+	"auth/internal/infra/rds"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,30 +18,43 @@ import (
 )
 
 var (
-	ErrFilter      = apperror.New("AUDIT_FILTER_INVALID", "invalid audit filter or time range (maximum 90 days)")
+	ErrFilter      = apperror.New("AUDIT_FILTER_INVALID", "invalid audit filter or time range; check the configured maximum window")
 	ErrNotFound    = apperror.New("AUDIT_NOT_FOUND", "audit event not found")
-	ErrExportLimit = apperror.New("AUDIT_EXPORT_LIMIT", "more than 10000 events; narrow the filters before exporting")
+	ErrExportLimit = apperror.New("AUDIT_EXPORT_LIMIT", "export exceeds the configured row limit; narrow the filters before exporting")
 )
 
 type Module struct {
+	stream       *rds.Stream
+	settings     config.AuditConfig
 	authHTTPPath string
 	store        *db.Store
 	limits       pagination.Limits
 }
 
-func New(store *db.Store, limits pagination.Limits) *Module {
-	return &Module{store: store, limits: limits}
+func New(store *db.Store, limits pagination.Limits, settings config.AuditConfig) *Module {
+	return &Module{store: store, limits: limits, settings: settings}
 }
 
+// MFA continuation is a recorded login step with no success or failure yet.
+const (
+	successSQL   = "status >= 200 AND status < 400"
+	challengeSQL = "kind = 'login' AND status = 403 AND error_code = 'AUTH_LOGIN_MFA_REQUIRED'"
+	failureSQL   = "(status < 200 OR status >= 400) AND NOT (" + challengeSQL + ")"
+	outcomeSQL   = "CASE WHEN " + challengeSQL + " THEN 'mfa_challenge' WHEN " + successSQL + " THEN 'success' ELSE 'failure' END"
+)
+
 type Event struct {
-	selectedFields report.Fields
-	Header         json.RawMessage `json:"header"`
-	Operation      string          `json:"operation"`
-	ResourceType   string          `json:"resource_type"`
-	ResourceID     string          `json:"resource_id"`
-	RequestParams  json.RawMessage `json:"request_params"`
-	ResponseParams json.RawMessage `json:"response_params"`
-	ID             int64           `json:"id"`
+	Outcome           string `json:"outcome"`
+	StepUpFingerprint string `json:"step_up_fingerprint"`
+	StepUpVerifiedAt  int64  `json:"step_up_verified_at"`
+	selectedFields    report.Fields
+	Header            json.RawMessage `json:"header"`
+	Operation         string          `json:"operation"`
+	ResourceType      string          `json:"resource_type"`
+	ResourceID        string          `json:"resource_id"`
+	RequestParams     json.RawMessage `json:"request_params"`
+	ResponseParams    json.RawMessage `json:"response_params"`
+	ID                int64           `json:"id"`
 
 	Kind       string `json:"kind"`
 	UserID     int64  `json:"user_id"`
@@ -58,6 +71,7 @@ type Event struct {
 	OccurredAt int64  `json:"occurred_at"`
 }
 type Filter struct {
+	UserID   *int64
 	Fields   report.Fields
 	Username string
 	IP       string
@@ -101,10 +115,33 @@ func (m *Module) RecordHTTP(ctx context.Context, event auditctx.Event) error {
 	if (event.Kind != "login" && event.Kind != "operation") || event.UserID < 0 {
 		return ErrFilter
 	}
+	if m.stream != nil {
+		return m.enqueue(ctx, event)
+	}
+	if event.Kind == "login" && event.AdditionalUserOperation != "" {
+		return m.store.Tx(ctx, func(tx context.Context) error { return m.writeEvents(tx, event, "") })
+	}
+	return m.insertEvent(ctx, event, "")
+}
+
+// writeEvents uses the caller's transaction, including for a paired login and operation.
+func (m *Module) writeEvents(ctx context.Context, event auditctx.Event, deliveryID string) error {
+	if err := m.insertEvent(ctx, event, deliveryID); err != nil {
+		return err
+	}
+	if event.Kind == "login" && event.AdditionalUserOperation != "" {
+		event.Kind, event.ResourceType, event.Operation = "operation", "user", event.AdditionalUserOperation
+		return m.insertEvent(ctx, event, deliveryID)
+	}
+	return nil
+}
+
+func (m *Module) insertEvent(ctx context.Context, event auditctx.Event, deliveryID string) error {
 	if event.ResourceID == "" && event.Kind == "operation" {
 		if event.Module == "auth" && event.ResourceType == "user" && event.UserID > 0 {
 			event.ResourceID = strconv.FormatInt(event.UserID, 10)
 		}
+		// Older producers may have queued a create without an explicit target ID.
 		if event.Operation == "create" && event.Status >= 200 && event.Status < 300 {
 			var body struct {
 				ID json.Number `json:"id"`
@@ -116,27 +153,43 @@ func (m *Module) RecordHTTP(ctx context.Context, event auditctx.Event) error {
 			}
 		}
 	}
-	_, err := m.store.SQL(ctx).ExecContext(ctx, `INSERT INTO t_audit_event
- (occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params,header)
- VALUES ($1,$2,NULLIF($3,0),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-		event.OccurredAt, event.Kind, event.UserID, clean(event.Username, 256), clean(event.Module, 64), clean(event.Method, 16), clean(event.Path, 1024), clean(event.IP, 128), clean(event.UserAgent, 512), clean(event.TraceID, 128), clean(event.ErrorCode, 128), event.Status, max(int64(0), event.DurationMS), clean(event.Operation, 32), clean(event.ResourceType, 64), clean(event.ResourceID, 1024), jsonValue(event.RequestParams), jsonValue(event.ResponseParams), jsonValue(event.Header))
+	const columns = "occurred_at,kind,user_id,username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params,header,step_up_fingerprint,step_up_verified_at"
+	const values = "$1,$2,NULLIF($3,0),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21::bigint,0)"
+	query := "INSERT INTO t_audit_event (" + columns + ") VALUES (" + values + ")"
+	args := []any{
+		event.OccurredAt, event.Kind, event.UserID, clean(event.Username, 256), clean(event.Module, 64),
+		clean(event.Method, 16), clean(event.Path, 1024), clean(event.IP, 128), clean(event.UserAgent, 512),
+		clean(event.TraceID, 128), clean(event.ErrorCode, 128), event.Status, max(int64(0), event.DurationMS),
+		clean(event.Operation, 32), clean(event.ResourceType, 64), clean(event.ResourceID, 1024),
+		jsonValue(event.RequestParams), jsonValue(event.ResponseParams), jsonValue(event.Header),
+		clean(event.StepUpFingerprint, 128), event.StepUpVerifiedAt,
+	}
+	if deliveryID != "" {
+		query = "INSERT INTO t_audit_event (" + columns + ",delivery_id) VALUES (" + values + ",$22)" +
+			" ON CONFLICT (delivery_id,kind) WHERE delivery_id IS NOT NULL DO NOTHING"
+		args = append(args, deliveryID)
+	}
+	_, err := m.store.SQL(ctx).ExecContext(ctx, query, args...)
 	return err
 }
 
-func normalize(f Filter) (Filter, error) {
+func normalize(f Filter, settings config.AuditConfig) (Filter, error) {
 	if f.Kind != "login" && f.Kind != "operation" {
 		return f, ErrFilter
 	}
-	// Preserve the existing seven-day default only when neither bound is supplied.
+	// Apply the configured default window only when neither bound is supplied.
 	if f.From == nil && f.To == nil {
 		to := time.Now().UnixMilli()
-		from := to - int64(7*24*time.Hour/time.Millisecond)
+		from := to - settings.DefaultWindow.Milliseconds()
 		f.From, f.To = &from, &to
 	}
 	const maxTimestamp int64 = 253402300799999
 	if (f.From != nil && (*f.From < 0 || *f.From > maxTimestamp)) ||
 		(f.To != nil && (*f.To < 0 || *f.To > maxTimestamp)) ||
-		(f.From != nil && f.To != nil && (*f.To <= *f.From || *f.To-*f.From > int64(90*24*time.Hour/time.Millisecond))) {
+		(f.From != nil && f.To != nil && (*f.To <= *f.From || *f.To-*f.From > settings.MaxWindow.Milliseconds())) {
+		return f, ErrFilter
+	}
+	if f.UserID != nil && *f.UserID <= 0 {
 		return f, ErrFilter
 	}
 	f.Query = strings.TrimSpace(f.Query)
@@ -164,9 +217,18 @@ func normalize(f Filter) (Filter, error) {
 	return f, nil
 }
 
+// Older logout records (including queued deliveries) retain their original stored kind.
+func kindWhere(kind string) string {
+	const oldLogout = "kind='operation' AND module='auth' AND operation='logout'"
+	if kind == "login" {
+		return " WHERE (kind=$1 OR (" + oldLogout + "))"
+	}
+	return " WHERE kind=$1 AND NOT (" + oldLogout + ")"
+}
+
 func where(f Filter) (string, []any) {
 	args := []any{f.Kind}
-	s := " WHERE kind=$1"
+	s := kindWhere(f.Kind)
 	if f.From != nil {
 		args = append(args, *f.From)
 		s += fmt.Sprintf(" AND occurred_at >= $%d", len(args))
@@ -184,10 +246,10 @@ func where(f Filter) (string, []any) {
 		s += fmt.Sprintf(" AND module=$%d", len(args))
 	}
 	if f.Result == "success" {
-		s += " AND status >= 200 AND status < 400"
+		s += " AND " + successSQL
 	}
 	if f.Result == "failure" {
-		s += " AND (status < 200 OR status >= 400)"
+		s += " AND " + failureSQL
 	}
 
 	for _, item := range []struct{ field, value string }{
@@ -197,6 +259,10 @@ func where(f Filter) (string, []any) {
 			args = append(args, item.value)
 			s += fmt.Sprintf(" AND %s=$%d", item.field, len(args))
 		}
+	}
+	if f.UserID != nil {
+		args = append(args, *f.UserID)
+		s += fmt.Sprintf(" AND user_id=$%d", len(args))
 	}
 	if f.Weekday != nil {
 		args = append(args, f.Timezone, *f.Weekday, *f.Hour)
@@ -209,7 +275,7 @@ func where(f Filter) (string, []any) {
 func order(f Filter) string {
 	switch f.Sort {
 	case "failure":
-		return " ORDER BY (status < 200 OR status >= 400) DESC,occurred_at DESC,id DESC"
+		return " ORDER BY (" + failureSQL + ") DESC,occurred_at DESC,id DESC"
 	case "duration":
 		return " ORDER BY duration_ms DESC,occurred_at DESC,id DESC"
 	default:
@@ -217,24 +283,11 @@ func order(f Filter) string {
 	}
 }
 
-const columns = "id,occurred_at,kind,COALESCE(user_id,0),username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,request_params,response_params,header"
-
-// List and export carry metadata only; bounded payloads are loaded by detail.
-const listColumns = "id,occurred_at,kind,COALESCE(user_id,0),username,module,method,path,ip,user_agent,trace_id,error_code,status,duration_ms,operation,resource_type,resource_id,'null'::jsonb,'null'::jsonb,'null'::jsonb"
-
-func scan(row interface{ Scan(...any) error }) (Event, error) {
-	var e Event
-	var at int64
-	err := row.Scan(&e.ID, &at, &e.Kind, &e.UserID, &e.Username, &e.Module, &e.Method, &e.Path, &e.IP, &e.UserAgent, &e.TraceID, &e.ErrorCode, &e.Status, &e.DurationMS, &e.Operation, &e.ResourceType, &e.ResourceID, &e.RequestParams, &e.ResponseParams, &e.Header)
-	e.OccurredAt = at
-	return e, err
-}
-
 func (m *Module) List(ctx context.Context, f Filter) (*Page, error) {
 	if err := f.Fields.Validate(listFields...); err != nil {
 		return nil, err
 	}
-	f, err := normalize(f)
+	f, err := normalize(f, m.settings)
 	if err != nil {
 		return nil, err
 	}
@@ -248,42 +301,20 @@ func (m *Module) List(ctx context.Context, f Filter) (*Page, error) {
 		return nil, err
 	}
 	args = append(args, s, int64(p-1)*int64(s))
-	if f.Fields != nil {
-		items, err := report.ReadRecords(ctx, m.store.SQL(ctx), f.Fields, listProjection, " FROM t_audit_event"+clause+order(f)+fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
-		result.Items = items
-		return result, err
-	}
-	rows, err := m.store.SQL(ctx).QueryContext(ctx, "SELECT "+listColumns+" FROM t_audit_event"+clause+order(f)+fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
-	if err != nil {
+	items, err := report.ReadRecords(ctx, m.store.SQL(ctx), f.Fields, listProjection, " FROM t_audit_event"+clause+order(f)+fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
+	if err != nil && items == nil && f.Fields == nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		e, err := scan(rows)
-		if err != nil {
-			return nil, err
-		}
-		result.Items = append(result.Items, e)
-	}
-	return result, rows.Err()
+	result.Items = items
+	return result, err
 }
 
 func (m *Module) Get(ctx context.Context, kind string, id int64) (*Event, error) {
-	if id <= 0 || (kind != "login" && kind != "operation") {
-		return nil, ErrFilter
-	}
-	e, err := scan(m.store.SQL(ctx).QueryRowContext(ctx, "SELECT "+columns+" FROM t_audit_event WHERE kind=$1 AND id=$2", kind, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
+	return m.GetSelected(ctx, kind, id, nil)
 }
 
 func (m *Module) Options(ctx context.Context, f Filter) ([]string, error) {
-	f, err := normalize(f)
+	f, err := normalize(f, m.settings)
 	if err != nil {
 		return nil, err
 	}
@@ -305,24 +336,28 @@ func (m *Module) Options(ctx context.Context, f Filter) ([]string, error) {
 }
 
 func (m *Module) Export(ctx context.Context, f Filter) ([]Event, error) {
-	f, err := normalize(f)
+	f, err := normalize(f, m.settings)
 	if err != nil {
 		return nil, err
 	}
 	clause, args := where(f)
-	rows, err := m.store.SQL(ctx).QueryContext(ctx, "SELECT "+listColumns+" FROM t_audit_event"+clause+order(f)+" LIMIT 10001", args...)
+	args = append(args, m.settings.ExportMaxRows+1)
+	var sample Event
+	projection := listProjection(&sample, nil)
+	rows, err := m.store.SQL(ctx).QueryContext(ctx, projection.SQL("t_audit_event")+clause+order(f)+fmt.Sprintf(" LIMIT $%d", len(args)), args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []Event{}
 	for rows.Next() {
-		e, err := scan(rows)
-		if err != nil {
+		var e Event
+		projection := listProjection(&e, nil)
+		if err := rows.Scan(projection.Targets...); err != nil {
 			return nil, err
 		}
 		items = append(items, e)
-		if len(items) > 10000 {
+		if len(items) > m.settings.ExportMaxRows {
 			return nil, ErrExportLimit
 		}
 	}

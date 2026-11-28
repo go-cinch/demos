@@ -2,6 +2,7 @@ package action
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
@@ -9,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -33,6 +33,8 @@ func (m *Module) HTTP() http.Handler {
 	r.Get("/effective", m.effective)
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
+	r.Patch("/group", m.updateGroup)
+	r.Patch("/group/order", m.reorderGroups)
 	r.Patch("/{id}", m.update)
 	r.Delete("/{id}", m.delete)
 	return r
@@ -100,13 +102,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 
 	var input CreateActionInput
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
@@ -115,7 +111,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, apperror.InvalidBody) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrPermissionConflict) || errors.Is(err, apperror.InvalidBody) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -124,6 +120,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
+	auditctx.ResourceOperation(r.Context(), "create", strconv.FormatInt(value.ID, 10))
 	server.WriteOK(w, value)
 }
 
@@ -136,13 +133,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input UpdateActionInput
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
@@ -375,4 +366,40 @@ func (m *Module) effective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server.WriteOK(w, value)
+}
+
+func (m *Module) updateGroup(w http.ResponseWriter, r *http.Request) {
+
+	var input GroupChange
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	writeGroupResult(w, r, m.UpdateGroup(r.Context(), input))
+}
+
+func (m *Module) reorderGroups(w http.ResponseWriter, r *http.Request) {
+
+	var input GroupOrder
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	writeGroupResult(w, r, m.ReorderGroups(r.Context(), input))
+}
+
+func writeGroupResult(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case err == nil:
+		server.WriteOK(w)
+	case errors.Is(err, authn.ErrPermissionGrantRequired), errors.Is(err, authn.ErrPermissionAdministrationRequired):
+		server.WriteError(w, r, http.StatusForbidden, err)
+	case errors.Is(err, ErrGroupConflict):
+		server.WriteError(w, r, http.StatusConflict, err)
+	case errors.Is(err, ErrInvalid), errors.Is(err, ErrGroupNotEmpty):
+		server.WriteError(w, r, http.StatusBadRequest, err)
+	default:
+		slog.ErrorContext(r.Context(), "permission group mutation failed", "error", err)
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+	}
 }

@@ -1,11 +1,13 @@
 package user
 
 import (
-	"auth/internal/common/report"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
+	"auth/internal/common/report"
 )
 
 var detailFields = append(append([]string{}, listFields...), "permission_sources")
@@ -22,11 +24,17 @@ func (m *Module) GetSelected(ctx context.Context, id int64, fields report.Fields
 		return nil, ErrInvalid
 	}
 	var value User
-	projection := listProjection(&value, fields, "")
+	args := []any{id}
+	now := ""
+	if fields.Has("status") || fields.Has("metadata") {
+		now = "$2"
+		args = append(args, time.Now().UnixMilli())
+	}
+	projection := listProjection(&value, fields, now)
 	if fields.Has("permission_sources") && !fields.Has("id") {
 		projection.Require("id", &value.ID)
 	}
-	err := m.store.SQL(ctx).QueryRowContext(ctx, projection.SQL("t_user")+" WHERE id = $1", id).Scan(projection.Targets...)
+	err := m.store.SQL(ctx).QueryRowContext(ctx, projection.SQL("t_user")+" WHERE id = $1", args...).Scan(projection.Targets...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

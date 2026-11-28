@@ -1,10 +1,7 @@
 package dictionary
 
 import (
-	"auth/internal/modules/localization"
-	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -12,6 +9,7 @@ import (
 	"strings"
 
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
 	"auth/internal/common/i18n"
 	"auth/internal/common/report"
@@ -31,9 +29,9 @@ func (m *Module) HTTP() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", m.list)
 	r.Get("/summary", m.summary)
-	r.Get("/pub/i18n", m.localization)
 	r.Get("/{id}", m.get)
 	r.Post("/", m.create)
+	r.Patch("/catalog", m.publishCatalog)
 	r.Patch("/{id}", m.update)
 	r.Delete("/{id}", m.delete)
 	return r
@@ -69,7 +67,8 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 
 	var input CreateDictionaryInput
-	if !decodeDictionaryInput(w, r, &input) {
+	if err := server.DecodeJSON(w, r, &input, server.BodyDictionary); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 	value, err := m.Create(r.Context(), input)
@@ -77,7 +76,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrGroupNotEmpty) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrCatalogProtected) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -86,6 +85,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
+	auditctx.ResourceOperation(r.Context(), "create", strconv.FormatInt(value.ID, 10))
 	server.WriteOK(w, value)
 }
 
@@ -97,7 +97,8 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input UpdateDictionaryInput
-	if !decodeDictionaryInput(w, r, &input) {
+	if err := server.DecodeJSON(w, r, &input, server.BodyDictionary); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 	value, err := m.Update(r.Context(), id, input)
@@ -109,7 +110,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrGroupNotEmpty) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, ErrCatalogProtected) {
 		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -125,18 +126,30 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 	server.WriteOK(w, value)
 }
 
-func decodeDictionaryInput(w http.ResponseWriter, r *http.Request, input any) bool {
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(input); err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return false
+func (m *Module) publishCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var input PublishCatalogInput
+	if err := server.DecodeJSON(w, r, &input, server.BodyDictionary); err != nil {
+		server.WriteError(w, r, http.StatusBadRequest, err)
+		return
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return false
+	value, err := m.PublishCatalog(r.Context(), input)
+	switch {
+	case err == nil:
+		auditctx.ResourceOperation(r.Context(), "update", strconv.FormatInt(value.ID, 10))
+		server.WriteOK(w, value)
+	case errors.Is(err, authn.ErrPermissionAdministrationRequired):
+		server.WriteError(w, r, http.StatusForbidden, err)
+	case errors.Is(err, ErrVersionConflict):
+		server.WriteError(w, r, http.StatusConflict, err)
+	case errors.Is(err, ErrInvalid), errors.Is(err, ErrGroupNotEmpty):
+		server.WriteError(w, r, http.StatusBadRequest, err)
+	case errors.Is(err, ErrNotFound):
+		server.WriteError(w, r, http.StatusNotFound, err)
+	default:
+		slog.ErrorContext(r.Context(), "publish catalog failed: "+err.Error(), "operation", "publish_catalog", "outcome", "failure", "error", err)
+		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 	}
-	return true
 }
 
 func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
@@ -160,8 +173,8 @@ func (m *Module) delete(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusForbidden, err)
 		return
 	}
-	if errors.Is(err, ErrIDs) {
-		server.WriteError(w, r, http.StatusBadRequest, ErrIDs)
+	if errors.Is(err, ErrIDs) || errors.Is(err, ErrCatalogProtected) {
+		server.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if errors.Is(err, ErrNotFound) {
@@ -260,32 +273,6 @@ func (m *Module) summary(w http.ResponseWriter, r *http.Request) {
 		server.WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
 		return
 	}
-	server.WriteOK(w, value)
-}
-
-func (m *Module) localization(w http.ResponseWriter, r *http.Request) {
-
-	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
-		return
-	}
-	for key := range query {
-		if key != "f" {
-			server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
-			return
-		}
-	}
-	fields, err := report.ParseFields(query, "default_locale", "locales", "scopes", "operations", "group_order", "messages", "frontend_messages")
-	if err != nil || (fields != nil && fields.Has("messages") && fields.Has("frontend_messages")) {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidQuery)
-		return
-	}
-	if fields == nil {
-		fields = report.Fields{"default_locale", "locales"}
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	var value localization.PublicCatalog = m.catalogSource.PublicCatalog(fields...)
 	server.WriteOK(w, value)
 }
 

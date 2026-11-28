@@ -9,6 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -68,52 +71,11 @@ func (a *Application) Run(ctx context.Context) error {
 		}
 		listeners = append(listeners, listener)
 	}
-	if a.msgModule != nil {
-		workerCtx, stopWorker := context.WithCancel(ctx)
-		workerDone := make(chan struct{})
-		go func() {
-			defer close(workerDone)
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-			for {
-				sweepCtx, cancel := context.WithTimeout(workerCtx, 4*time.Second)
-				err := a.msgModule.ExpireStatus(sweepCtx)
-				cancel()
-				if err != nil && workerCtx.Err() == nil {
-					slog.ErrorContext(workerCtx, "refresh expired message status: "+err.Error(), slog.String("operation", "message_expire_status"), slog.String("outcome", "failure"), slog.Any("error", err))
-				}
-				select {
-				case <-workerCtx.Done():
-					return
-				case <-ticker.C:
-				}
-			}
-		}()
-		defer func() { stopWorker(); <-workerDone }()
+	stopWorkers, err := a.startWorkers(ctx)
+	if err != nil {
+		return err
 	}
-	if a.dictionaryModule != nil {
-		workerCtx, stopWorker := context.WithCancel(ctx)
-		workerDone := make(chan struct{})
-		go func() {
-			defer close(workerDone)
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-workerCtx.Done():
-					return
-				case <-ticker.C:
-					refreshCtx, cancel := context.WithTimeout(workerCtx, 4*time.Second)
-					err := a.dictionaryModule.RefreshLocalization(refreshCtx)
-					cancel()
-					if err != nil && workerCtx.Err() == nil {
-						slog.ErrorContext(workerCtx, "refresh localization failed: "+err.Error(), "operation", "refresh_localization", "outcome", "failure", "error", err)
-					}
-				}
-			}
-		}()
-		defer func() { stopWorker(); <-workerDone }()
-	}
+	defer stopWorkers()
 	results := make(chan error, len(endpoints))
 	for index, item := range endpoints {
 		listener := listeners[index]
@@ -153,4 +115,14 @@ func (a *Application) Run(ctx context.Context) error {
 		slog.InfoContext(ctx, "servers stopped", slog.String("operation", "server_stop"), slog.String("outcome", "success"))
 	}
 	return serveErr
+}
+
+func SignalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
+func (a *Application) Close() {
+	for index := len(a.cleanups) - 1; index >= 0; index-- {
+		a.cleanups[index]()
+	}
 }

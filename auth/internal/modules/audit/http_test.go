@@ -31,7 +31,7 @@ func TestHTTP(t *testing.T) {
 		}
 		return w.Body.String()
 	}
-	for _, q := range []string{"p=", "p=1&p=2", "p=bad", "s=2147483648", "from=bad", "from=-1", "to=-1", "result=bad", "time_zone=missing", "q=%ZZ", "weekday=0", "hour=8", "weekday=0&hour=24", "weekday=7&hour=0", "weekday=0&weekday=1&hour=8", "hour=no&weekday=0", "sort=invalid", "username=a&username=b"} {
+	for _, q := range []string{"p=", "p=1&p=2", "p=bad", "s=2147483648", "from=bad", "from=-1", "to=-1", "result=bad", "time_zone=missing", "q=%ZZ", "weekday=0", "hour=8", "weekday=0&hour=24", "weekday=7&hour=0", "weekday=0&weekday=1&hour=8", "hour=no&weekday=0", "sort=invalid", "username=a&username=b", "user_id=", "user_id=0", "user_id=-1", "user_id=bad", "user_id=9223372036854775808", "user_id=1&user_id=2"} {
 		call("/audit/login?"+q, 400)
 	}
 	for _, route := range []string{"summary", "option", "export"} {
@@ -50,11 +50,11 @@ func TestHTTP(t *testing.T) {
 	call("/audit/login/detail/abc", 400)
 	call("/audit/login/detail/0", 400)
 	call("/audit/login/missing", 404)
-	mock.ExpectQuery("SELECT .* WHERE kind=").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT .* WHERE .*kind=").WillReturnError(sql.ErrNoRows)
 	call("/audit/login/detail/1", 404)
-	mock.ExpectQuery("SELECT .* WHERE kind=").WillReturnRows(row())
+	mock.ExpectQuery("SELECT .* WHERE .*kind=").WillReturnRows(detailRow())
 	call("/audit/login/detail/1", 200)
-	mock.ExpectQuery("SELECT .* WHERE kind=").WillReturnError(sqlmock.ErrCancelled)
+	mock.ExpectQuery("SELECT .* WHERE .*kind=").WillReturnError(sqlmock.ErrCancelled)
 	call("/audit/login/detail/1", 500)
 	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT .* ORDER BY").WillReturnRows(row())
@@ -69,12 +69,12 @@ func TestHTTP(t *testing.T) {
 	call("/audit/operation/summary", 200)
 	expectSummary(mock, 0)
 	call("/audit/operation/summary", 500)
-	mock.ExpectQuery("SELECT .* LIMIT 10001").WillReturnRows(row())
+	mock.ExpectQuery("SELECT .* LIMIT").WillReturnRows(row())
 	body := call("/audit/login/export", 200)
 	if !strings.Contains(body, "alice") || strings.Contains(body, "password") {
 		t.Fatal(body)
 	}
-	mock.ExpectQuery("SELECT .* LIMIT 10001").WillReturnError(sqlmock.ErrCancelled)
+	mock.ExpectQuery("SELECT .* LIMIT").WillReturnError(sqlmock.ErrCancelled)
 	call("/audit/login/export", 500)
 	for _, s := range []string{"=SUM(1)", " +1", "-1", "@cmd"} {
 		if !strings.HasPrefix(csvSafe(s), "'") {
@@ -94,8 +94,23 @@ func TestAuditTargets(t *testing.T) {
 		{"POST", "/pub/register", "operation", "register", ""},
 		{"PATCH", "/change/pwd", "operation", "change_password", ""},
 		{"PATCH", "/reset/pwd", "operation", "reset_password", ""},
-		{"POST", "/logout", "operation", "logout", ""},
+		{"POST", "/logout", "login", "logout", ""},
+		{"POST", "/pub/logout", "login", "logout", ""},
+		{"PATCH", "/pub/logout", "", "", ""},
 		{"POST", "/pub/challenge", "", "", ""},
+		{"POST", "/email/bind", "operation", "bind_email", ""},
+		{"PATCH", "/email/bind", "", "", ""},
+		{"POST", "/email/code", "", "", ""},
+		{"POST", "/totp/recovery/confirm", "operation", "reset_totp", ""},
+		{"POST", "/pub/totp/reset/confirm", "operation", "recover_totp_email", ""},
+		{"PATCH", "/pub/totp/reset/confirm", "", "", ""},
+		{"POST", "/totp/recovery/email-code", "", "", ""},
+		{"POST", "/pub/totp/reset/email-code", "", "", ""},
+		{"POST", "/email/unbind/request", "operation", "request_email_unlink", ""},
+		{"POST", "/email/unbind", "operation", "unlink_email", ""},
+		{"POST", "/pub/email/unbind", "operation", "confirm_email_unlink", ""},
+		{"GET", "/email/unbind/status", "", "", ""},
+		{"PATCH", "/pub/email/unbind", "", "", ""},
 		{"POST", "/other", "", "", ""},
 		{"POST", "/user", "operation", "create", ""},
 		{"PATCH", "/user/2", "operation", "update", "2"},
@@ -108,6 +123,9 @@ func TestAuditTargets(t *testing.T) {
 	}
 	for _, c := range cases {
 		target := m.AuditTarget(c.method, c.path)
+		if c.operation == "logout" && !target.OmitPayload {
+			t.Fatal("logout audit must omit credentials")
+		}
 		if target.Kind != c.kind || target.Operation != c.operation || target.ResourceID != c.id {
 			t.Fatalf("%s %s: %+v", c.method, c.path, target)
 		}
@@ -118,6 +136,12 @@ func TestAuditClassificationUsesConfiguredAuthPath(t *testing.T) {
 	for _, prefix := range []string{"", "/auth", "/identity/v2"} {
 		m := &Module{}
 		m.SetAuthHTTPPath(prefix)
+		for _, route := range []string{"/email/bind", "/email/unbind/request", "/email/unbind", "/pub/email/unbind", "/totp/recovery/confirm", "/pub/totp/reset/confirm"} {
+			target := m.AuditTarget("POST", prefix+route)
+			if target.Kind != "operation" || target.ResourceType != "user" || !target.OmitPayload {
+				t.Fatalf("incorrect sensitive audit target: %s %+v", route, target)
+			}
+		}
 		login := m.AuditTarget("POST", prefix+"/pub/login")
 		if login.Kind != "login" || login.Operation != "login" {
 			t.Fatal(prefix, login)

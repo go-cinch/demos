@@ -80,13 +80,17 @@ type EncryptedPasswordChangeInput struct {
 }
 
 type loginCredential struct {
-	ChallengeID   string         `json:"challenge_id"`
-	Username      string         `json:"username"`
-	Password      string         `json:"password"`
-	RememberMe    bool           `json:"remember_me"`
-	CaptchaID     string         `json:"captcha_id,omitempty"`
-	CaptchaPoints []CaptchaPoint `json:"captcha_points,omitempty"`
-	SliderProof   string         `json:"slider_proof,omitempty"`
+	Method           string         `json:"method,omitempty"`
+	BrowserUUID      string         `json:"browser_uuid,omitempty"`
+	VerificationID   string         `json:"verification_id,omitempty"`
+	VerificationCode string         `json:"verification_code,omitempty"`
+	ChallengeID      string         `json:"challenge_id"`
+	Username         string         `json:"username"`
+	Password         string         `json:"password"`
+	RememberMe       bool           `json:"remember_me"`
+	CaptchaID        string         `json:"captcha_id,omitempty"`
+	CaptchaPoints    []CaptchaPoint `json:"captcha_points,omitempty"`
+	SliderProof      string         `json:"slider_proof,omitempty"`
 }
 
 type registerCredential struct {
@@ -223,6 +227,7 @@ func (c *Credentials) Open(ctx context.Context, input EncryptedLoginInput) (Logi
 	}
 	return LoginInput{
 		Username: payload.Username, Password: payload.Password, RememberMe: payload.RememberMe,
+		Method: payload.Method, BrowserUUID: payload.BrowserUUID, VerificationID: payload.VerificationID, VerificationCode: payload.VerificationCode,
 		CaptchaID: payload.CaptchaID, CaptchaPoints: payload.CaptchaPoints, SliderProof: payload.SliderProof,
 	}, nil
 }
@@ -333,7 +338,10 @@ func decodeLoginCredential(plaintext []byte) (loginCredential, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return loginCredential{}, errors.New("login credential must contain one JSON object")
 	}
-	if payload.ChallengeID == "" || payload.Username == "" || payload.Password == "" {
+	if payload.ChallengeID == "" || payload.Username == "" ||
+		((payload.Method == "" || payload.Method == "password") && (payload.Password == "" || payload.VerificationCode != "")) ||
+		(payload.Method == "email_code" && (payload.Password != "" || payload.VerificationID == "" || len(payload.VerificationCode) != 6 || !browserUUIDPattern.MatchString(payload.BrowserUUID))) ||
+		(payload.Method != "" && payload.Method != "password" && payload.Method != "email_code") {
 		return loginCredential{}, errors.New("login credential fields are required")
 	}
 	if len(payload.CaptchaID) > 128 || len(payload.CaptchaPoints) > pointCaptchaMaxTargetCount {
@@ -518,4 +526,49 @@ func (c *Credentials) OpenPasswordReset(ctx context.Context, userID int64, input
 		return PasswordResetInput{}, err
 	}
 	return PasswordResetInput{NewPassword: payload.NewPassword}, nil
+}
+
+const totpSetupCredentialType = "totp-setup+jwe"
+
+func (c *Credentials) TOTPSetupChallenge(ctx context.Context, userID int64) (*CredentialChallenge, error) {
+	return c.challenge(ctx, totpSetupCredentialType, userID)
+}
+
+func (c *Credentials) OpenTOTPSetup(ctx context.Context, userID int64, input EncryptedLoginInput) (string, error) {
+	plaintext, err := c.decrypt(input.ChallengeID, input.Credential, totpSetupCredentialType, ErrInvalidCredential)
+	if err != nil {
+		return "", err
+	}
+	payload, err := decodeRegistrationPasswordCredential(plaintext)
+	if err != nil || subtle.ConstantTimeCompare([]byte(payload.ChallengeID), []byte(input.ChallengeID)) != 1 {
+		return "", ErrInvalidCredential
+	}
+	if err := c.consumeChallenge(ctx, input.ChallengeID, totpSetupCredentialType, userID, ErrInvalidCredential); err != nil {
+		return "", err
+	}
+	return payload.Password, nil
+}
+
+func (c *Credentials) EmailBindChallenge(ctx context.Context, userID int64) (*CredentialChallenge, error) {
+	return c.challenge(ctx, "email-bind+jwe", userID)
+}
+
+func (c *Credentials) OpenEmailBind(ctx context.Context, userID int64, input EncryptedLoginInput) (EmailBindInput, error) {
+	raw, err := c.decrypt(input.ChallengeID, input.Credential, "email-bind+jwe", ErrInvalidCredential)
+	if err != nil {
+		return EmailBindInput{}, err
+	}
+	var payload EmailBindInput
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		return payload, ErrInvalidCredential
+	}
+	if decoder.Decode(new(any)) != io.EOF || payload.ChallengeID != input.ChallengeID {
+		return payload, ErrInvalidCredential
+	}
+	if err := c.consumeChallenge(ctx, input.ChallengeID, "email-bind+jwe", userID, ErrInvalidCredential); err != nil {
+		return payload, err
+	}
+	return payload, nil
 }

@@ -1,0 +1,145 @@
+package auth
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"time"
+
+	"auth/internal/common/authn"
+)
+
+// Each request acknowledges exactly one onboarding step. These flags never
+// grant permissions or assert that a password or authenticator was changed.
+type OnboardingPreferences struct {
+	EmailBindingSkipped   bool `json:"email_binding_skipped,omitempty"`
+	TOTPEnrollmentSkipped bool `json:"totp_enrollment_skipped,omitempty"`
+	PasswordResetSkipped  bool `json:"password_reset_skipped,omitempty"`
+}
+
+func (p OnboardingPreferences) valid() bool {
+	count := 0
+	for _, selected := range []bool{p.EmailBindingSkipped, p.TOTPEnrollmentSkipped, p.PasswordResetSkipped} {
+		if selected {
+			count++
+		}
+	}
+	return count == 1
+}
+
+// OnboardingVisibility controls presentation only; required policies still win.
+type OnboardingVisibility struct {
+	TOTP          bool
+	PasswordReset bool
+	Email         bool
+}
+
+func (m *Module) SetOnboardingVisibility(visibility OnboardingVisibility) {
+	m.onboardingVisibility = visibility
+}
+
+// SetPasswordResetRequired applies the same policy to both password gates.
+func (m *Module) SetPasswordResetRequired(required bool) {
+	m.SetPasswordResetPolicy(required, required)
+}
+
+func (m *Module) SetPasswordResetPolicy(firstLoginRequired, afterAdminResetRequired bool) {
+	m.passwordResetOptional = !firstLoginRequired
+	m.adminPasswordResetOptional = !afterAdminResetRequired
+}
+
+// Use the same policy for presenting the gate and accepting an explicit skip.
+// An administrator changing the password also advances credential_version.
+func (m *Module) passwordResetPolicy(ctx context.Context, identity authn.Identity) (reason string, skipAllowed bool, err error) {
+	if !identity.PasswordResetRequired {
+		return "", false, nil
+	}
+	var afterAdminReset bool
+	err = m.store.SQL(ctx).QueryRowContext(ctx, `SELECT admin_password_reset_pending FROM t_user WHERE id=$1 AND code=$2 AND credential_version=$3 AND status=$4`,
+		identity.UserID, identity.Code, identity.CredentialVersion, userStatusActive).Scan(&afterAdminReset)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, ErrUnauthorized
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if afterAdminReset {
+		return "admin_reset", m.adminPasswordResetOptional, nil
+	}
+	return "first_login", m.passwordResetOptional, nil
+}
+
+func (m *Module) SkipOnboarding(ctx context.Context, input OnboardingPreferences) error {
+	if !input.valid() {
+		return ErrInvalid
+	}
+	identity, ok := authn.FromContext(ctx)
+	if !ok {
+		return ErrUnauthorized
+	}
+	if input.TOTPEnrollmentSkipped {
+		if !m.totpEnabled() || !m.verification.config.TOTPEnrollmentOptional {
+			return ErrTOTPEnrollmentRequired
+		}
+		// The row update serializes against enrollment/recovery and administrator
+		// credential updates. Never allow an old session or a recovered factor to skip.
+		result, err := m.store.SQL(ctx).ExecContext(ctx, `UPDATE t_user SET metadata = jsonb_set(metadata, '{totp_enrollment_skipped}', 'true'::jsonb), updated_at=$1
+            WHERE id=$2 AND code=$3 AND credential_version=$4 AND status=$5 AND totp_ever_bound IS FALSE
+            AND NOT EXISTS (SELECT 1 FROM t_user_totp WHERE user_id=t_user.id)`, time.Now().UnixMilli(), identity.UserID, identity.Code, identity.CredentialVersion, userStatusActive)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrTOTPEnrollmentRequired
+		}
+		return nil
+	}
+	if input.PasswordResetSkipped {
+		if !identity.PasswordResetRequired {
+			// A retried skip after completion has nothing left to acknowledge.
+			return nil
+		}
+		_, allowed, err := m.passwordResetPolicy(ctx, identity)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return authn.ErrPasswordResetRequired
+		}
+	}
+	required, err := m.totpEnrollmentRequired(ctx, identity)
+	if err != nil {
+		return err
+	}
+	if required {
+		return ErrTOTPEnrollmentRequired
+	}
+	if input.PasswordResetSkipped {
+		// A skip completes the first-login gate without changing the password or
+		// credential version. An administrator reset sets login_count=0 again.
+		result, err := m.store.SQL(ctx).ExecContext(ctx, `UPDATE t_user SET
+            last_logged_in_at=CASE WHEN login_count=0 THEN $1 ELSE last_logged_in_at END,
+            login_count=CASE WHEN login_count=0 THEN 1 ELSE login_count END,
+            admin_password_reset_pending=FALSE, metadata=jsonb_set(metadata, '{password_reset_skipped}', 'true'::jsonb), updated_at=$1
+            WHERE id=$2 AND code=$3 AND credential_version=$4 AND status=$5`, time.Now().UnixMilli(), identity.UserID, identity.Code, identity.CredentialVersion, userStatusActive)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrUnauthorized
+		}
+		return nil
+	}
+	if identity.PasswordResetRequired {
+		return authn.ErrPasswordResetRequired
+	}
+	return m.SkipEmailBinding(ctx)
+}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"auth/internal/common/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,23 +23,29 @@ func auditRecorder(mounted []modules.Module) modules.HTTPAuditRecorder {
 	return nil
 }
 
-func finishAudit(recorder modules.HTTPAuditRecorder, r *http.Request, s *auditctx.State, target auditctx.Target, status int, start time.Time, header http.Header, request, response *auditBuffer, policy redact.Policy, requestHeader json.RawMessage) {
+func finishAudit(recorder modules.HTTPAuditRecorder, r *http.Request, s *auditctx.State, target auditctx.Target, status int, start time.Time, header http.Header, request, response *auditBuffer, policy redact.Policy, requestHeader json.RawMessage, settings config.AuditConfig) {
 	if status == 0 {
 		status = http.StatusOK
 	}
 	e := s.Snapshot()
 	e.Kind, e.Module = target.Kind, target.Module
-	e.Operation, e.ResourceType, e.ResourceID = target.Operation, target.ResourceType, target.ResourceID
+	e.ResourceType = target.ResourceType
+	if e.Operation == "" {
+		e.Operation = target.Operation
+	}
+	if e.ResourceID == "" {
+		e.ResourceID = target.ResourceID
+	}
 	e.Method, e.Path = r.Method, r.URL.Path
 	e.Status, e.DurationMS, e.OccurredAt = status, time.Since(start).Milliseconds(), start.UnixMilli()
 	e.IP = clientIP(r)
 	e.Header = requestHeader
 	e.UserAgent, e.TraceID = r.UserAgent(), header.Get("X-Trace-Id")
-	if target.Kind == "operation" {
+	if target.Kind == "operation" && !target.OmitPayload {
 		e.RequestParams = auditRequest(r, request, policy)
 		e.ResponseParams = auditResponse(header, response, policy)
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), settings.RecordTimeout)
 	defer cancel()
 	if err := recorder.RecordHTTP(ctx, e); err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("persist %s audit event failed: %s %d %s: %v", target.Kind, r.Method, status, target.Operation, err),
@@ -47,7 +54,7 @@ func finishAudit(recorder modules.HTTPAuditRecorder, r *http.Request, s *auditct
 	}
 }
 
-func Audit(recorder modules.HTTPAuditRecorder, policy redact.Policy) func(http.Handler) http.Handler {
+func Audit(recorder modules.HTTPAuditRecorder, policy redact.Policy, settings config.AuditConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if recorder == nil {
@@ -62,19 +69,19 @@ func Audit(recorder modules.HTTPAuditRecorder, policy redact.Policy) func(http.H
 				return
 			}
 			start := time.Now()
-			requestHeader := auditHeaders(r, policy)
+			requestHeader := auditHeaders(r, policy, settings.PayloadLimit)
 			ctx, state := auditctx.WithState(r.Context())
 			r = r.WithContext(ctx)
-			request, response := &auditBuffer{}, &auditBuffer{}
+			request, response := &auditBuffer{limit: settings.PayloadLimit}, &auditBuffer{limit: settings.PayloadLimit}
 			writer := wrapResponseWriter(w, r.ProtoMajor)
-			if target.Kind == "operation" {
+			if target.Kind == "operation" && !target.OmitPayload {
 				if r.Body != nil && !auditFile(r.Header) {
 					r.Body = &auditBody{ReadCloser: r.Body, buffer: request}
 				}
 				writer.Tee(response)
 			}
 			next.ServeHTTP(writer, r)
-			finishAudit(recorder, r, state, target, writer.Status(), start, writer.Header(), request, response, policy, requestHeader)
+			finishAudit(recorder, r, state, target, writer.Status(), start, writer.Header(), request, response, policy, requestHeader, settings)
 		})
 
 	}

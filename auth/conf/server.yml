@@ -1,2 +1,4 @@
 server:
   name: "auth"
+  # Deployment namespace; override with SERVICE_SERVER_ENV.
+  env: dev

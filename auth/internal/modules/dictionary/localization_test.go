@@ -71,16 +71,60 @@ func TestLocalizationStartupRefreshAndRemoval(t *testing.T) {
 func TestInvalidLocalizationIsNotCommitted(t *testing.T) {
 	m, _, mock := newTestModule(t)
 	invalid := json.RawMessage(`{"schema_version":9}`)
-	if _, err := m.Create(t.Context(), CreateDictionaryInput{Key: LocalizationKey, Name: "Translations", Value: invalid}); !errors.Is(err, ErrInvalid) {
+	if _, err := m.Create(t.Context(), CreateDictionaryInput{Key: LocalizationKey, Name: "Translations", Value: invalid}); !errors.Is(err, ErrCatalogProtected) {
 		t.Fatalf("create invalid catalog: %v", err)
 	}
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT dictionary_key, value FROM t_dictionary").WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"dictionary_key", "value"}).AddRow(LocalizationKey, []byte(testLocalization)))
-	mock.ExpectExec("UPDATE t_dictionary SET").WillReturnResult(sqlmock.NewResult(0, 1))
-	expectDictionaryGet(mock, 3, LocalizationKey, "Translations", string(invalid), true)
+	mock.ExpectQuery("SELECT id, value = .* FOR UPDATE").WithArgs(LocalizationKey, testLocalization).WillReturnRows(sqlmock.NewRows([]string{"id", "matches"}).AddRow(3, true))
 	mock.ExpectRollback()
-	if _, err := m.Update(t.Context(), 3, UpdateDictionaryInput{Value: &invalid}); !errors.Is(err, ErrInvalid) {
+	if _, err := m.PublishCatalog(t.Context(), PublishCatalogInput{ExpectedValue: json.RawMessage(testLocalization), Value: invalid}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("update invalid catalog: %v", err)
+	}
+}
+
+func TestMenuPathUniquenessOnSubmit(t *testing.T) {
+	m, _, mock := newTestModule(t)
+	catalog, err := localization.Parse([]byte(testLocalization))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog.Scopes = []string{"admin", "mini"}
+	catalog.ResourceCatalog = localization.ResourceCatalog{
+		Resources: map[string]localization.Resource{}, Buttons: map[string]localization.Feature{},
+	}
+	add := func(scope, name string) {
+		parent := scope + ":system"
+		catalog.ResourceCatalog.Resources[parent] = localization.Resource{Kind: "directory"}
+		catalog.ResourceCatalog.Resources[parent+":"+name] = localization.Resource{
+			Kind: "resource", Parent: parent,
+			Entries: map[string]localization.ResourceEntry{scope + ":menu:" + name: {Path: "/system/user"}},
+		}
+	}
+	encode := func() []byte {
+		raw, err := json.Marshal(catalog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	add("admin", "user")
+	add("mini", "user")
+	if err := m.prepareLocalization(&Dictionary{Value: encode()}); err != nil {
+		t.Fatalf("same path in independent scopes: %v", err)
+	}
+	add("admin", "alias")
+	raw := encode()
+	if _, err := localization.Parse(raw); err != nil {
+		t.Fatalf("legacy catalog must remain readable: %v", err)
+	}
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT id, value = .* FOR UPDATE").WithArgs(LocalizationKey, testLocalization).WillReturnRows(sqlmock.NewRows([]string{"id", "matches"}).AddRow(3, true))
+	mock.ExpectRollback()
+	if _, err := m.PublishCatalog(t.Context(), PublishCatalogInput{Value: raw, ExpectedValue: json.RawMessage(testLocalization)}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("duplicate path published: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -95,12 +139,12 @@ func TestLocalizationRefreshesAfterCommittedWrite(t *testing.T) {
 	}
 	updated := json.RawMessage(strings.ReplaceAll(testLocalization, "Bonjour", "Salut"))
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT dictionary_key, value FROM t_dictionary").WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"dictionary_key", "value"}).AddRow(LocalizationKey, []byte(testLocalization)))
+	mock.ExpectQuery("SELECT id, value = .* FOR UPDATE").WithArgs(LocalizationKey, testLocalization).WillReturnRows(sqlmock.NewRows([]string{"id", "matches"}).AddRow(3, true))
 	mock.ExpectExec("UPDATE t_dictionary SET").WillReturnResult(sqlmock.NewResult(0, 1))
 	expectDictionaryGet(mock, 3, LocalizationKey, "Translations", string(updated), true)
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT value FROM t_dictionary").WithArgs(LocalizationKey).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow([]byte(updated)))
-	if _, err := m.Update(t.Context(), 3, UpdateDictionaryInput{Value: &updated}); err != nil {
+	if _, err := m.PublishCatalog(t.Context(), PublishCatalogInput{ExpectedValue: json.RawMessage(testLocalization), Value: updated}); err != nil {
 		t.Fatal(err)
 	}
 	if localizer.Translate("fr-FR", "TEST", "") != "Salut" {

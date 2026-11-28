@@ -5,8 +5,11 @@ package config
 import "time"
 
 type Config struct {
+	Audit       AuditConfig       `koanf:"audit"`
 	Auth        AuthConfig        `koanf:"auth"`
 	Database    DatabaseConfig    `koanf:"database"`
+	Dictionary  DictionaryConfig  `koanf:"dictionary"`
+	Email       EmailConfig       `koanf:"email"`
 	GRPC        GRPCConfig        `koanf:"grpc"`
 	HTTP        HTTPConfig        `koanf:"http"`
 	Idempotency IdempotencyConfig `koanf:"idempotency"`
@@ -18,20 +21,51 @@ type Config struct {
 	Tracer      TracerConfig      `koanf:"tracer"`
 }
 
+type AuditConfig struct {
+	DefaultWindow time.Duration `koanf:"defaultWindow"`
+	ExportMaxRows int           `koanf:"exportMaxRows"`
+	MaxWindow     time.Duration `koanf:"maxWindow"`
+	PayloadLimit  int           `koanf:"payloadLimit"`
+	RecordTimeout time.Duration `koanf:"recordTimeout"`
+	Stream        string        `koanf:"stream"`
+}
+
 type AuthConfig struct {
 	Authorization       AuthAuthorizationConfig       `koanf:"authorization"`
+	Captcha             AuthCaptchaConfig             `koanf:"captcha"`
 	ChallengeEncryption AuthChallengeEncryptionConfig `koanf:"challengeEncryption"`
-	Jwt                 AuthJwtConfig                 `koanf:"jwt"`
-	PasswordChange      AuthPasswordChangeConfig      `koanf:"passwordChange"`
+	Email               AuthEmailConfig               `koanf:"email"`
+	History             AuthHistoryConfig             `koanf:"history"`
+	MFA                 AuthMFAConfig                 `koanf:"mfa"`
+	Password            AuthPasswordConfig            `koanf:"password"`
 	Path                string                        `koanf:"path"`
-	PointCaptcha        AuthPointCaptchaConfig        `koanf:"pointCaptcha"`
-	Refresh             AuthRefreshConfig             `koanf:"refresh"`
-	SliderCaptcha       AuthSliderCaptchaConfig       `koanf:"sliderCaptcha"`
-	Switches            AuthSwitchesConfig            `koanf:"switches"`
+	Registration        AuthRegistrationConfig        `koanf:"registration"`
+	Session             AuthSessionConfig             `koanf:"session"`
+	Testing             AuthTestingConfig             `koanf:"testing"`
+	TOTP                AuthTOTPConfig                `koanf:"totp"`
+	Verification        AuthVerificationConfig        `koanf:"verification"`
 }
 
 type AuthAuthorizationConfig struct {
 	Enabled bool `koanf:"enabled"`
+}
+
+type AuthCaptchaConfig struct {
+	Point  AuthCaptchaPointConfig  `koanf:"point"`
+	Slider AuthCaptchaSliderConfig `koanf:"slider"`
+}
+
+type AuthCaptchaPointConfig struct {
+	Height    int           `koanf:"height"`
+	Threshold int           `koanf:"threshold"`
+	Tolerance int           `koanf:"tolerance"`
+	TTL       time.Duration `koanf:"ttl"`
+	Width     int           `koanf:"width"`
+}
+
+type AuthCaptchaSliderConfig struct {
+	MinimumDuration time.Duration `koanf:"minimumDuration"`
+	TTL             time.Duration `koanf:"ttl"`
 }
 
 type AuthChallengeEncryptionConfig struct {
@@ -40,10 +74,48 @@ type AuthChallengeEncryptionConfig struct {
 	TTL            time.Duration `koanf:"ttl"`
 }
 
-type AuthJwtConfig struct {
-	Issuer   string        `koanf:"issuer"`
-	Key      string        `koanf:"key"`
-	Lifetime time.Duration `koanf:"lifetime"`
+type AuthEmailConfig struct {
+	AlertTiers     []AuthEmailAlertTiersItemConfig `koanf:"alertTiers"`
+	AuditURL       string                          `koanf:"auditURL"`
+	CodeTTL        time.Duration                   `koanf:"codeTTL"`
+	HideOnboarding bool                            `koanf:"hideOnboarding"`
+	MaxAttempts    int                             `koanf:"maxAttempts"`
+	RequireBinding bool                            `koanf:"requireBinding"`
+	ResendInterval time.Duration                   `koanf:"resendInterval"`
+	SendLimit      int                             `koanf:"sendLimit"`
+	Templates      AuthEmailTemplatesConfig        `koanf:"templates"`
+	UnlinkURL      string                          `koanf:"unlinkURL"`
+}
+
+type AuthEmailAlertTiersItemConfig struct {
+	Count  int           `koanf:"count"`
+	Window time.Duration `koanf:"window"`
+}
+
+type AuthEmailTemplatesConfig struct {
+	AuthenticatorLinked            string `koanf:"authenticatorLinked"`
+	AuthenticatorRelinked          string `koanf:"authenticatorRelinked"`
+	AuthenticatorResetCode         string `koanf:"authenticatorResetCode"`
+	ConfirmEmailUnlinking          string `koanf:"confirmEmailUnlinking"`
+	EmailBindingCode               string `koanf:"emailBindingCode"`
+	EmailLinked                    string `koanf:"emailLinked"`
+	EmailUnlinked                  string `koanf:"emailUnlinked"`
+	SensitiveOperationCode         string `koanf:"sensitiveOperationCode"`
+	SensitiveOperationNotification string `koanf:"sensitiveOperationNotification"`
+	SignInCode                     string `koanf:"signInCode"`
+}
+
+type AuthHistoryConfig struct {
+	RetentionDays int `koanf:"retentionDays"`
+}
+
+type AuthMFAConfig struct {
+	LoginTicketTTL time.Duration `koanf:"loginTicketTTL"`
+}
+
+type AuthPasswordConfig struct {
+	Change AuthPasswordChangeConfig `koanf:"change"`
+	Reset  AuthPasswordResetConfig  `koanf:"reset"`
 }
 
 type AuthPasswordChangeConfig struct {
@@ -52,38 +124,90 @@ type AuthPasswordChangeConfig struct {
 	Threshold     int           `koanf:"threshold"`
 }
 
-type AuthPointCaptchaConfig struct {
-	Height    int           `koanf:"height"`
-	Threshold int           `koanf:"threshold"`
-	Tolerance int           `koanf:"tolerance"`
-	TTL       time.Duration `koanf:"ttl"`
-	Width     int           `koanf:"width"`
+type AuthPasswordResetConfig struct {
+	HideOnboarding          bool `koanf:"hideOnboarding"`
+	Required                bool `koanf:"required"`
+	RequiredAfterAdminReset bool `koanf:"requiredAfterAdminReset"`
 }
 
-type AuthRefreshConfig struct {
+type AuthRegistrationConfig struct {
+	Enabled bool `koanf:"enabled"`
+}
+
+type AuthSessionConfig struct {
+	Jwt     AuthSessionJwtConfig     `koanf:"jwt"`
+	Refresh AuthSessionRefreshConfig `koanf:"refresh"`
+}
+
+type AuthSessionJwtConfig struct {
+	Issuer   string        `koanf:"issuer"`
+	Key      string        `koanf:"key"`
+	Lifetime time.Duration `koanf:"lifetime"`
+}
+
+type AuthSessionRefreshConfig struct {
 	RememberLifetime time.Duration `koanf:"rememberLifetime"`
 	RetryWindow      time.Duration `koanf:"retryWindow"`
 	SessionLifetime  time.Duration `koanf:"sessionLifetime"`
 }
 
-type AuthSliderCaptchaConfig struct {
-	MinimumDuration time.Duration `koanf:"minimumDuration"`
-	TTL             time.Duration `koanf:"ttl"`
+type AuthTestingConfig struct {
+	EmailCode                 bool   `koanf:"emailCode"`
+	EmailQueueEndpoint        bool   `koanf:"emailQueueEndpoint"`
+	EmailQueueToken           string `koanf:"emailQueueToken"`
+	SkipPointCaptchaAnswer    bool   `koanf:"skipPointCaptchaAnswer"`
+	SkipSliderCaptchaDuration bool   `koanf:"skipSliderCaptchaDuration"`
+	TOTPCode                  bool   `koanf:"totpCode"`
 }
 
-type AuthSwitchesConfig struct {
-	EnableE2ETest     bool   `koanf:"enableE2ETest"`
-	EnableE2ETestFile string `koanf:"enableE2ETestFile"`
+type AuthTOTPConfig struct {
+	AccountNamePrefix string        `koanf:"accountNamePrefix"`
+	Enabled           bool          `koanf:"enabled"`
+	EnrollmentTTL     time.Duration `koanf:"enrollmentTTL"`
+	HideOnboarding    bool          `koanf:"hideOnboarding"`
+	Period            time.Duration `koanf:"period"`
+	RequireBinding    bool          `koanf:"requireBinding"`
+}
+
+type AuthVerificationConfig struct {
+	EncryptionKeyFile string                          `koanf:"encryptionKeyFile"`
+	RateLimit         AuthVerificationRateLimitConfig `koanf:"rateLimit"`
+	SensitiveLifetime time.Duration                   `koanf:"sensitiveLifetime"`
+}
+
+type AuthVerificationRateLimitConfig struct {
+	MaxAttempts int           `koanf:"maxAttempts"`
+	Window      time.Duration `koanf:"window"`
 }
 
 type DatabaseConfig struct {
 	AutoCreate      bool          `koanf:"autoCreate"`
 	ConnMaxLifetime time.Duration `koanf:"connMaxLifetime"`
-	Driver          string        `koanf:"driver"`
 	DSN             string        `koanf:"dsn"`
 	MaxIdleConns    int           `koanf:"maxIdleConns"`
 	MaxOpenConns    int           `koanf:"maxOpenConns"`
 	Migrate         bool          `koanf:"migrate"`
+}
+
+type DictionaryConfig struct {
+	CacheTTL                    time.Duration `koanf:"cacheTTL"`
+	LocalizationRefreshInterval time.Duration `koanf:"localizationRefreshInterval"`
+}
+
+type EmailConfig struct {
+	Authentication string        `koanf:"authentication"`
+	Domain         string        `koanf:"domain"`
+	Enabled        bool          `koanf:"enabled"`
+	From           string        `koanf:"from"`
+	FromName       string        `koanf:"fromName"`
+	Helo           string        `koanf:"helo"`
+	Host           string        `koanf:"host"`
+	Password       string        `koanf:"password"`
+	Port           int           `koanf:"port"`
+	Security       string        `koanf:"security"`
+	SkipDelivery   bool          `koanf:"skipDelivery"`
+	Timeout        time.Duration `koanf:"timeout"`
+	Username       string        `koanf:"username"`
 }
 
 type GRPCConfig struct {
@@ -94,12 +218,27 @@ type GRPCConfig struct {
 }
 
 type HTTPConfig struct {
-	Addr              string             `koanf:"addr"`
-	Docs              HTTPDocsConfig     `koanf:"docs"`
-	IdleTimeout       time.Duration      `koanf:"idleTimeout"`
-	Profiler          HTTPProfilerConfig `koanf:"profiler"`
-	ReadHeaderTimeout time.Duration      `koanf:"readHeaderTimeout"`
-	Timeout           time.Duration      `koanf:"timeout"`
+	Addr              string               `koanf:"addr"`
+	BodyLimits        HTTPBodyLimitsConfig `koanf:"bodyLimits"`
+	ClientIP          HTTPClientIPConfig   `koanf:"clientIP"`
+	Docs              HTTPDocsConfig       `koanf:"docs"`
+	IdleTimeout       time.Duration        `koanf:"idleTimeout"`
+	Profiler          HTTPProfilerConfig   `koanf:"profiler"`
+	ReadHeaderTimeout time.Duration        `koanf:"readHeaderTimeout"`
+	Timeout           time.Duration        `koanf:"timeout"`
+}
+
+type HTTPBodyLimitsConfig struct {
+	Auth             int `koanf:"auth"`
+	AuthChallenge    int `koanf:"authChallenge"`
+	AuthVerification int `koanf:"authVerification"`
+	Business         int `koanf:"business"`
+	Dictionary       int `koanf:"dictionary"`
+	SliderChallenge  int `koanf:"sliderChallenge"`
+}
+
+type HTTPClientIPConfig struct {
+	TrustedProxies string `koanf:"trustedProxies"`
 }
 
 type HTTPDocsConfig struct {
@@ -135,11 +274,11 @@ type RedactConfig struct {
 }
 
 type RedisConfig struct {
-	DSN    string `koanf:"dsn"`
-	Prefix string `koanf:"prefix"`
+	DSN string `koanf:"dsn"`
 }
 
 type ServerConfig struct {
+	Env  string `koanf:"env"`
 	Name string `koanf:"name"`
 }
 

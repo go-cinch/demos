@@ -32,10 +32,13 @@ func installAuthCatalog(t *testing.T, localizer *localization.Module) {
 	r := c.ResourceCatalog.Resources["admin:system:user"]
 	r.Entries = map[string]localization.ResourceEntry{"admin:menu:system:user": {Path: "/system/user", ParentMenuKey: "admin:menu:system"}}
 	r.Operations["read"] = localization.ResourceOperation{EntryKeys: []string{"admin:menu:system:user"}, ButtonKeys: []string{"admin:system:user:query", "admin:system:user:transport"}}
-	r.Operations["update"] = localization.ResourceOperation{EntryKeys: []string{}, ButtonKeys: []string{"admin:system:user:edit"}}
+	r.Operations["update"] = localization.ResourceOperation{EntryKeys: []string{}, ButtonKeys: []string{"admin:system:user:edit", "admin:system:user:reset-totp"}}
 	c.ResourceCatalog.Resources["admin:system:user"] = r
 	c.ResourceCatalog.Buttons["admin:system:user:query"] = localization.Feature{Btn: []string{"admin:btn:system:user:query"}, HTTP: []localization.HTTPPath{{Method: "GET", Path: "/user"}}, GRPC: []string{}}
 	c.ResourceCatalog.Buttons["admin:system:user:edit"] = localization.Feature{Btn: []string{"admin:btn:system:user:edit"}, HTTP: []localization.HTTPPath{{Method: "PATCH", Path: "/user/{id}"}}, GRPC: []string{}}
+	c.ResourceCatalog.Buttons["admin:system:user:reset-totp"] = localization.Feature{
+		Btn: []string{"admin:btn:system:user:reset-totp"}, HTTP: []localization.HTTPPath{{Method: "POST", Path: "/totp/reset/{id}"}}, GRPC: []string{},
+	}
 	delete(c.ResourceCatalog.Buttons, "admin:system:user:modify")
 	c.ResourceCatalog.Resources["admin:system:scope"] = localization.Resource{Kind: "resource", PermissionScope: "*"}
 	current := localizer.Current()
@@ -314,4 +317,8 @@ func TestHTTPPermissionSelectionSkipsUIAndOtherProtocols(t *testing.T) {
 	if len(permission.endpoints) != 1 || permission.endpoints[0].Path != "/user" || len(permission.Menus) != 0 || len(permission.Buttons) != 0 || len(permission.Words) != 0 {
 		t.Fatalf("%+v", permission)
 	}
+}
+
+func (s selectedPermissionCatalog) PublicCatalog(...string) localization.PublicCatalog {
+	panic("public catalog requested during authenticated permission lookup")
 }

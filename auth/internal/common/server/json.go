@@ -3,6 +3,7 @@ package server
 import (
 	"auth/internal/common/apperror"
 	"auth/internal/common/auditctx"
+	"auth/internal/common/authn"
 	"auth/internal/common/i18n"
 	"encoding/json"
 	"log/slog"
@@ -46,6 +47,9 @@ func ErrorMessage(r *http.Request, err error) string {
 }
 
 func WriteError(w http.ResponseWriter, r *http.Request, status int, err error) {
+	if apperror.Code(err) == apperror.Code(authn.ErrPasswordResetRequired) {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	auditctx.Error(r.Context(), apperror.Code(err))
 	w.Header().Set("Content-Language", i18n.Locale(r.Context(), r.Header.Get("Accept-Language")))
 	WriteJSON(w, status, ErrorResponse{ErrorCode: apperror.Code(err), Msg: ErrorMessage(r, err)})

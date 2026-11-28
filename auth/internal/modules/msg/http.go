@@ -2,18 +2,18 @@ package msg
 
 import (
 	"auth/internal/common/apperror"
+	"auth/internal/common/auditctx"
 	"auth/internal/common/authn"
 	"auth/internal/common/report"
 	"auth/internal/common/server"
 	"auth/internal/modules"
-	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 var _ modules.HTTPModule = (*Module)(nil)
@@ -22,6 +22,8 @@ var _ modules.IdempotentHTTPModule = (*Module)(nil)
 func (*Module) Name() string { return "/msg" }
 
 func (*Module) Idempotent() bool { return true }
+
+func (m *Module) TransactionalPOSTPaths() []string { return []string{m.Name()} }
 
 func (m *Module) HTTP() http.Handler {
 	r := chi.NewRouter()
@@ -48,21 +50,18 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input CreateInput
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return
-	}
+	input.requestKey = strings.TrimSpace(r.Header.Get(server.IdempotencyHeader))
 	value, err := m.Create(r.Context(), identity.UserID, input)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalid), errors.Is(err, ErrRecipient):
 			server.WriteError(w, r, http.StatusBadRequest, err)
+		case errors.Is(err, apperror.DuplicateRequest):
+			server.WriteError(w, r, http.StatusConflict, apperror.DuplicateRequest)
 		case errors.Is(err, ErrNotFound):
 			server.WriteError(w, r, http.StatusNotFound, err)
 		default:
@@ -71,6 +70,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	auditctx.ResourceOperation(r.Context(), "create", strconv.FormatInt(value.ID, 10))
 	server.WriteOK(w, value)
 }
 
@@ -153,13 +153,7 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Read *bool `json:"read"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := server.DecodeJSON(w, r, &input, server.BodyBusiness); err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, apperror.InvalidBody)
 		return
 	}

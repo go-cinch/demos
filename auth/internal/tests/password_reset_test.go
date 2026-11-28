@@ -60,7 +60,7 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	captcha, err := auth.NewPointCaptcha(auth.NewMemoryPointCaptchaStore(), dictionaryModule, 5, time.Minute, 300, 180, 22, nil)
+	captcha, err := auth.NewPointCaptcha(auth.NewMemoryPointCaptchaStore(), dictionaryModule, 5, time.Minute, 300, 180, 22, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, localizer, nil)
+	m := auth.New(store, manager, nil, sessions, captcha, slider, guard, localizer, nil, &auth.Verification{})
 	actions := action.New(store, limits, localizer)
 	users := user.New(store, limits, nil, guard, actions, role.New(store, limits, actions))
 
@@ -141,7 +141,7 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	state(0, 1, false)
 	a, b := login("old-secret"), login("old-secret")
 	for _, token := range []*auth.LoginResult{a, b} {
-		if _, err := authenticate(token.AccessToken, "/info"); !errors.Is(err, authn.ErrPasswordResetRequired) {
+		if _, err := authenticate(token.AccessToken, "/user"); !errors.Is(err, authn.ErrPasswordResetRequired) {
 			t.Fatalf("business bypass: %v", err)
 		}
 	}
@@ -230,7 +230,7 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	}
 	state(9, 2, true)
 	adminPassword := "admin-secret"
-	if _, err := users.Update(ctx, 101, user.UpdateUserInput{Password: &adminPassword}); err != nil {
+	if _, err := users.ResetPassword(ctx, 101, adminPassword); err != nil {
 		t.Fatal(err)
 	}
 	state(0, 3, true)
@@ -246,6 +246,12 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.SetPasswordResetPolicy(false, true)
+	skip := auth.OnboardingPreferences{PasswordResetSkipped: true}
+	if err := m.SkipOnboarding(againCtx, skip); !errors.Is(err, authn.ErrPasswordResetRequired) {
+		t.Fatalf("mandatory administrator reset accepted a skip: %v", err)
+	}
+	state(0, 3, true)
 	// A deferred commit failure must roll back the password, count, version and time together.
 	exec(`CREATE FUNCTION reject_reset_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'forced reset rollback'; END $$`)
 	exec(`CREATE CONSTRAINT TRIGGER reject_reset_commit AFTER UPDATE ON t_user DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (OLD.credential_version <> NEW.credential_version) EXECUTE FUNCTION reject_reset_commit()`)
@@ -262,5 +268,14 @@ func TestFirstLoginPasswordReset(t *testing.T) {
 	}
 	if _, err := authenticate(again.AccessToken, "/reset/pwd"); err != nil {
 		t.Fatal(err)
+	}
+	// The failed password change must leave the administrator-reset gate intact.
+	m.SetPasswordResetPolicy(true, false)
+	if err := m.SkipOnboarding(againCtx, skip); err != nil {
+		t.Fatal(err)
+	}
+	state(1, 3, true)
+	if result := login(adminPassword); result.PasswordResetRequired {
+		t.Fatal("optional administrator reset was requested again after skipping")
 	}
 }

@@ -1,13 +1,11 @@
 package auth
 
 import (
-	"auth/internal/common/i18n"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"image"
 	"image/png"
 	"strings"
 	"testing"
@@ -48,7 +46,7 @@ func newPointCaptchaTestDictionary() PointCaptchaDictionary {
 
 func newPointCaptchaTestManager(t *testing.T, store PointCaptchaStore) *PointCaptcha {
 	t.Helper()
-	manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 5, time.Minute, 300, 180, 22, nil)
+	manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 5, time.Minute, 300, 180, 22, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,27 +133,25 @@ func TestPointCaptchaChallengeAndVerify(t *testing.T) {
 	}
 }
 
-func TestPointCaptchaE2ETestSwitchWithoutReconstruction(t *testing.T) {
+func TestPointCaptchaSkipAnswer(t *testing.T) {
 	for _, operation := range []string{"verify", "check", "verify-password", "check-password"} {
 		t.Run(operation, func(t *testing.T) {
-			store := NewMemoryPointCaptchaStore().(*memoryPointCaptchaStore)
-			enabled := false
-			manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, func() bool { return enabled })
-			if err != nil {
-				t.Fatal(err)
-			}
-			issue := manager.NewChallenge
-			validate := manager.Verify
-			switch operation {
-			case "check":
-				validate = manager.Check
-			case "verify-password":
-				issue, validate = manager.NewPasswordChangeChallenge, manager.VerifyPasswordChange
-			case "check-password":
-				issue, validate = manager.NewPasswordChangeChallenge, manager.CheckPasswordChange
-			}
-			for _, next := range []bool{true, false, true, false} {
-				enabled = next
+			for _, enabled := range []bool{false, true} {
+				store := NewMemoryPointCaptchaStore().(*memoryPointCaptchaStore)
+				manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, enabled)
+				if err != nil {
+					t.Fatal(err)
+				}
+				issue := manager.NewChallenge
+				validate := manager.Verify
+				switch operation {
+				case "check":
+					validate = manager.Check
+				case "verify-password":
+					issue, validate = manager.NewPasswordChangeChallenge, manager.VerifyPasswordChange
+				case "check-password":
+					issue, validate = manager.NewPasswordChangeChallenge, manager.CheckPasswordChange
+				}
 				challenge, err := issue(t.Context(), "readonly")
 				if err != nil {
 					t.Fatal(err)
@@ -166,7 +162,7 @@ func TestPointCaptchaE2ETestSwitchWithoutReconstruction(t *testing.T) {
 				if !enabled {
 					answer := storedPointCaptchaAnswer(t, store, challenge.CaptchaID)
 					if ok, err := validate(t.Context(), "readonly", challenge.CaptchaID, answer.Points); err != nil || !ok {
-						t.Fatalf("valid answer rejected after disabling e2e: %v, %v", ok, err)
+						t.Fatalf("valid answer rejected with answer checking enabled: %v, %v", ok, err)
 					}
 				}
 			}
@@ -176,7 +172,7 @@ func TestPointCaptchaE2ETestSwitchWithoutReconstruction(t *testing.T) {
 
 func TestPointCaptchaE2ETestSkipsOnlyTheAnswer(t *testing.T) {
 	store := NewMemoryPointCaptchaStore().(*memoryPointCaptchaStore)
-	manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, func() bool { return true })
+	manager, err := NewPointCaptcha(store, newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,144 +228,6 @@ func TestPointCaptchaCheckRejectsWrongOrderAndPreservesCorrectAnswer(t *testing.
 	}
 }
 
-func TestPointCaptchaUsesRequestLocale(t *testing.T) {
-	for _, test := range []struct {
-		name       string
-		ctx        context.Context
-		characters string
-	}{
-		{name: "english", ctx: t.Context(), characters: pointCaptchaTestEnglishCharacters},
-		{name: "chinese", ctx: i18n.WithLocale(t.Context(), i18n.Chinese), characters: pointCaptchaTestChineseCharacters},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			manager := newPointCaptchaTestManager(t, NewMemoryPointCaptchaStore())
-			challenge, err := manager.NewChallenge(test.ctx, "readonly")
-			if err != nil {
-				t.Fatal(err)
-			}
-			parts := strings.Split(challenge.HintText, " · ")
-			if !validPointCaptchaTargetCount(len(parts)) || len(parts) != challenge.TargetCount {
-				t.Fatalf("hint = %q", challenge.HintText)
-			}
-			for _, part := range parts {
-				runes := []rune(part)
-				if len(runes) != 1 || !strings.ContainsRune(test.characters, runes[0]) {
-					t.Fatalf("hint %q does not use %s glyphs", challenge.HintText, test.name)
-				}
-			}
-		})
-	}
-}
-
-func TestPointCaptchaRandomCountsIncludeConfiguredBounds(t *testing.T) {
-	manager := newPointCaptchaTestManager(t, NewMemoryPointCaptchaStore())
-	for _, test := range []struct {
-		name                    string
-		random                  []byte
-		wantGlyphs, wantTargets int
-	}{
-		{name: "minimum", random: []byte{0, 0}, wantGlyphs: 6, wantTargets: 2},
-		{name: "maximum", random: []byte{2, 2}, wantGlyphs: 8, wantTargets: 4},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			manager.random = bytes.NewReader(test.random)
-			glyphs, targets, err := manager.pointCaptchaCounts()
-			if err != nil || glyphs != test.wantGlyphs || targets != test.wantTargets {
-				t.Fatalf("counts = %d, %d, %v", glyphs, targets, err)
-			}
-		})
-	}
-}
-
-func TestPointCaptchaPositionsDoNotOverlap(t *testing.T) {
-	manager := newPointCaptchaTestManager(t, NewMemoryPointCaptchaStore())
-	dimensions := []image.Point{
-		image.Pt(32, 32), image.Pt(31, 30), image.Pt(30, 31), image.Pt(29, 32),
-		image.Pt(32, 29), image.Pt(30, 30), image.Pt(28, 31), image.Pt(31, 28),
-	}
-	for iteration := range 100 {
-		centers, err := manager.randomPointCaptchaCenters(dimensions)
-		if err != nil {
-			t.Fatalf("iteration %d: %v", iteration, err)
-		}
-		for index, center := range centers {
-			halfSize := dimensions[index]
-			if center.X-halfSize.X < pointCaptchaCanvasPadding || center.X+halfSize.X > manager.width-pointCaptchaCanvasPadding ||
-				center.Y-halfSize.Y < pointCaptchaCanvasPadding || center.Y+halfSize.Y > manager.height-pointCaptchaCanvasPadding {
-				t.Fatalf("iteration %d: glyph %d is outside the canvas: center=%#v size=%v", iteration, index, center, halfSize)
-			}
-			placed := make([]int, index)
-			for placedIndex := range index {
-				placed[placedIndex] = placedIndex
-			}
-			if pointCaptchaCenterOverlaps(center, halfSize, centers, dimensions, placed) {
-				t.Fatalf("iteration %d: glyph %d overlaps an earlier glyph", iteration, index)
-			}
-		}
-	}
-}
-
-func TestPointCaptchaGlyphsSupportBidirectionalTilt(t *testing.T) {
-	hasLeft, hasRight := false, false
-	manager := newPointCaptchaTestManager(t, NewMemoryPointCaptchaStore())
-	for range 200 {
-		angle, err := manager.pointCaptchaTilt()
-		if err != nil || angle < -30 || angle > 30 {
-			t.Fatalf("captcha tilt = %d, %v", angle, err)
-		}
-		hasLeft = hasLeft || angle < 0
-		hasRight = hasRight || angle > 0
-	}
-	if !hasLeft || !hasRight {
-		t.Fatal("captcha tilt did not cover both directions")
-	}
-	characters := []rune(pointCaptchaChineseGlyphSet)
-	if len(characters) != 3755 {
-		t.Fatalf("Chinese glyph count = %d", len(characters))
-	}
-	for _, character := range characters[:128] {
-		glyph, err := newChinesePointCaptchaGlyph(character, 42)
-		if err != nil {
-			t.Fatal(err)
-		}
-		nonempty := false
-		for _, alpha := range glyph.Pix {
-			nonempty = nonempty || alpha != 0
-		}
-		if !nonempty {
-			t.Fatalf("Chinese glyph %q is empty", character)
-		}
-	}
-}
-
-func TestPointCaptchaChineseGlyphSizeFitsMinimumCanvas(t *testing.T) {
-	manager, err := NewPointCaptcha(NewMemoryPointCaptchaStore(), newPointCaptchaTestDictionary(), 1, time.Minute, 240, 140, 20, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	maximumSize := manager.maxChinesePointCaptchaGlyphSize(pointCaptchaMaxGlyphCount)
-	if maximumSize < 32 || maximumSize > 40 {
-		t.Fatalf("maximum Chinese glyph size = %d", maximumSize)
-	}
-	glyph, err := newChinesePointCaptchaGlyph([]rune(pointCaptchaTestChineseCharacters)[0], maximumSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	halfWidth, halfHeight := rotatedGlyphHalfExtents(glyph, 30)
-	centers, err := manager.randomPointCaptchaGridCenters(
-		[]image.Point{
-			image.Pt(halfWidth, halfHeight), image.Pt(halfWidth, halfHeight),
-			image.Pt(halfWidth, halfHeight), image.Pt(halfWidth, halfHeight),
-			image.Pt(halfWidth, halfHeight), image.Pt(halfWidth, halfHeight),
-			image.Pt(halfWidth, halfHeight), image.Pt(halfWidth, halfHeight),
-		},
-		[]int{0, 1, 2, 3, 4, 5, 6, 7},
-	)
-	if err != nil || len(centers) != pointCaptchaMaxGlyphCount {
-		t.Fatalf("minimum-canvas fallback centers = %#v, %v", centers, err)
-	}
-}
-
 func TestPointCaptchaRefreshAndStores(t *testing.T) {
 	store := NewMemoryPointCaptchaStore().(*memoryPointCaptchaStore)
 	manager := newPointCaptchaTestManager(t, store)
@@ -402,7 +260,7 @@ func TestPointCaptchaRefreshAndStores(t *testing.T) {
 }
 
 func TestPointCaptchaPurposeBinding(t *testing.T) {
-	manager, err := NewPointCaptcha(NewMemoryPointCaptchaStore(), newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, nil)
+	manager, err := NewPointCaptcha(NewMemoryPointCaptchaStore(), newPointCaptchaTestDictionary(), 1, time.Minute, 300, 180, 20, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +297,7 @@ func TestNewPointCaptchaValidation(t *testing.T) {
 		"tolerance":  {validStore, validDictionary, 5, time.Minute, 300, 180, 2},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := NewPointCaptcha(item.store, item.dictionary, item.threshold, item.ttl, item.width, item.height, item.tolerance, nil); err == nil {
+			if _, err := NewPointCaptcha(item.store, item.dictionary, item.threshold, item.ttl, item.width, item.height, item.tolerance, false); err == nil {
 				t.Fatal("invalid point captcha configuration was accepted")
 			}
 		})

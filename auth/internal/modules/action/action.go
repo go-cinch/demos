@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"auth/internal/common/code"
 	"auth/internal/common/pagination"
@@ -24,10 +23,11 @@ import (
 )
 
 var (
-	ErrNotFound = apperror.New("ACTION_NOT_FOUND", "action not found")
-	ErrIDs      = apperror.New("ACTION_INVALID_IDS", "provide 1-100 positive action ids")
-	ErrInvalid  = apperror.New("ACTION_INVALID", "invalid action")
-	ErrConflict = apperror.New("ACTION_CONFLICT", "action code or word already exists")
+	ErrNotFound           = apperror.New("ACTION_NOT_FOUND", "action not found")
+	ErrIDs                = apperror.New("ACTION_INVALID_IDS", "provide 1-100 positive action ids")
+	ErrInvalid            = apperror.New("ACTION_INVALID", "invalid action")
+	ErrConflict           = apperror.New("ACTION_CONFLICT", "action code or word already exists")
+	ErrPermissionConflict = apperror.New("ACTION_PERMISSION_CONFLICT", "an action with these permissions already exists")
 )
 
 const AllPermissionsActionID int64 = 1
@@ -88,10 +88,6 @@ type ListActionsResult struct {
 	PageSize int32    `json:"s"`
 }
 
-type ListActionGroupsResult struct {
-	Items []string `json:"items"`
-}
-
 type CatalogSource interface {
 	Current() localization.Catalog
 	Select([]string) localization.Catalog
@@ -101,6 +97,7 @@ type Module struct {
 	definitions      DefinitionCatalog
 	catalogSource    CatalogSource
 	nameLocalization NameLocalization
+	groupStorage     GroupStorage
 	administration   PermissionAdministration
 	store            *db.Store
 	limits           pagination.Limits
@@ -151,8 +148,11 @@ func (m *Module) Create(ctx context.Context, input CreateActionInput) (*Action, 
 	}
 	var value *Action
 	var dictionaryID int64
-	err := m.store.Tx(ctx, func(ctx context.Context) error {
+	err := m.store.MutationTx(ctx, func(ctx context.Context) error {
 		if err := authn.RequirePermissionOperation(ctx, m.administration, "action", "create"); err != nil {
+			return err
+		}
+		if _, err := m.store.SQL(ctx).ExecContext(ctx, permissionMutationLockSQL); err != nil {
 			return err
 		}
 		catalog, err := m.requireRegisteredDefinition(ctx, input.Word, input.Group, input.Config)
@@ -166,6 +166,9 @@ func (m *Module) Create(ctx context.Context, input CreateActionInput) (*Action, 
 			if err := authn.RequireCatalogAdministration(ctx, m.administration); err != nil {
 				return err
 			}
+		}
+		if err := m.checkNewDefinition(ctx, catalog, input.Word, input.Config); err != nil {
+			return err
 		}
 
 		encoded, err := json.Marshal(input.Config)
@@ -222,7 +225,7 @@ func (m *Module) Update(ctx context.Context, id int64, input UpdateActionInput) 
 	}
 	var value *Action
 	var dictionaryID int64
-	err := m.store.Tx(ctx, func(ctx context.Context) error {
+	err := m.store.MutationTx(ctx, func(ctx context.Context) error {
 		if err := authn.RequirePermissionOperation(ctx, m.administration, "action", "update"); err != nil {
 			return err
 		}
@@ -327,8 +330,8 @@ func (m *Module) Delete(ctx context.Context, ids ...int64) error {
 		}
 		return nil
 	}
-	if m.administration != nil {
-		return m.store.Tx(ctx, operation)
+	if m.administration != nil || db.HasMutationRecorder(ctx) {
+		return m.store.MutationTx(ctx, operation)
 	}
 	return operation(ctx)
 }
@@ -438,42 +441,6 @@ func (m *Module) List(ctx context.Context, input ListActionsInput) (*ListActions
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list actions: %w", err)
-	}
-	return value, nil
-}
-
-func (m *Module) ListGroups(ctx context.Context, keyword string) (*ListActionGroupsResult, error) {
-	keyword = strings.TrimSpace(keyword)
-	if utf8.RuneCountInString(keyword) > 50 {
-		return nil, ErrInvalid
-	}
-	value := &ListActionGroupsResult{Items: make([]string, 0)}
-	query := `SELECT MIN(action_group) FROM t_action WHERE BTRIM(action_group) <> ''`
-	args := make([]any, 0, 1)
-	if keyword != "" {
-		args = append(args, like(keyword))
-		clause := `LOWER(action_group) LIKE LOWER($1) ESCAPE '!'`
-		if matched := matchingLabelWords(m.catalogSource.Current().Labels(i18n.Locale(ctx, ""), "groups"), keyword); len(matched) > 0 {
-			args = append(args, pq.Array(matched))
-			clause += " OR action_group = ANY($2)"
-		}
-		query += " AND (" + clause + ")"
-	}
-	query += ` GROUP BY LOWER(action_group) ORDER BY LOWER(action_group) LIMIT 20`
-	rows, err := m.store.SQL(ctx).QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list action groups: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var group string
-		if err := rows.Scan(&group); err != nil {
-			return nil, fmt.Errorf("scan action group: %w", err)
-		}
-		value.Items = append(value.Items, group)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list action groups: %w", err)
 	}
 	return value, nil
 }

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"auth/internal/infra/rds"
 	"context"
 	"errors"
 	"fmt"
@@ -171,14 +172,6 @@ func (s *memoryPasswordFailureStore) Clear(_ context.Context, userID int64) erro
 	return nil
 }
 
-const incrementPasswordFailureScript = `
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then
-  redis.call('PEXPIRE', KEYS[1], ARGV[1])
-end
-return count
-`
-
 type redisPasswordFailureClient interface {
 	Get(context.Context, string) *redis.StringCmd
 	Eval(context.Context, string, []string, ...interface{}) *redis.Cmd
@@ -202,7 +195,7 @@ func (s *redisPasswordFailureStore) Count(ctx context.Context, userID int64) (in
 }
 
 func (s *redisPasswordFailureStore) Increment(ctx context.Context, userID int64, ttl time.Duration) (int64, error) {
-	return s.client.Eval(ctx, incrementPasswordFailureScript, []string{passwordFailureKey(userID)}, ttl.Milliseconds()).Int64()
+	return rds.IncrementWindow(ctx, s.client, passwordFailureKey(userID), ttl)
 }
 
 func (s *redisPasswordFailureStore) Clear(ctx context.Context, userID int64) error {

@@ -17,13 +17,15 @@ func (a *Application) generatedModules() ([]modules.HTTPModule, []modules.GRPCMo
 	httpModules = append(httpModules, module2)
 	module3 := a.dictionaryModule
 	httpModules = append(httpModules, module3)
-	module4 := a.msgModule
+	module4 := a.mailTemplateModule
 	httpModules = append(httpModules, module4)
-	module5 := a.roleModule
+	module5 := a.msgModule
 	httpModules = append(httpModules, module5)
-	module6 := a.userModule
+	module6 := a.roleModule
 	httpModules = append(httpModules, module6)
-	module7 := a.groupModule
+	module7 := a.userModule
 	httpModules = append(httpModules, module7)
+	module8 := a.groupModule
+	httpModules = append(httpModules, module8)
 	return httpModules, grpcModules
 }

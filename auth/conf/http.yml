@@ -3,12 +3,24 @@ http:
   timeout: 30s
   readHeaderTimeout: 5s
   idleTimeout: 2m
+  clientIP:
+    # Comma-separated trusted gateway CIDRs. Empty trusts no forwarding headers.
+    # Trusted gateways must overwrite X-Verified-Client-IP with one valid IP.
+    trustedProxies: ""
+  # JSON request limits in bytes. Restart after changes; each handler selects a category.
+  bodyLimits:
+    authChallenge: 1024
+    sliderChallenge: 2048
+    authVerification: 4096
+    auth: 16384
+    business: 1048576
+    dictionary: 2097152
   docs:
     enabled: false
     servers:
-      - url: "https://example.com/api/auth"
+      - url: "https://go-cinch.top/api/auth"
         description: "prod"
-      - url: "https://dev.example.com/api/auth"
+      - url: "https://dev.go-cinch.top/api/auth"
         description: "dev"
       - url: "http://127.0.0.1:8081"
         description: "local"

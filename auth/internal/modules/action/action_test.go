@@ -81,7 +81,10 @@ func TestActionCRUD(t *testing.T) {
 		}
 	}
 	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(permissionMutationLockSQL)).WillReturnResult(sqlmock.NewResult(0, 1))
 	expectRegisteredActionCatalog(t, mock, localizer)
+	mock.ExpectQuery("SELECT code, word, config").WithArgs(pq.Array([]string{"admin"})).
+		WillReturnRows(sqlmock.NewRows([]string{"code", "word", "config"}))
 	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(24))
 	for _, count := range []int64{0, 1} {
 		mock.ExpectExec("INSERT INTO t_action").WithArgs(int64(24), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "admin:demo:record", "admin:read:demo:record", `{"bindings":[{"resource_key":"admin:demo:record","operation":"read","feature_keys":null}],"feature_keys":null,"ui":[],"endpoints":[]}`).WillReturnResult(sqlmock.NewResult(0, count))
@@ -128,6 +131,32 @@ func TestActionCRUD(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(deleteAssignedActionsSQL)).WithArgs(pq.Array([]int64{99}), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	if err := m.Delete(ctx, 99); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+func TestCreateRejectsIdenticalPermissions(t *testing.T) {
+	m, mock := newTestModule(t)
+	ctx := t.Context()
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(permissionMutationLockSQL)).WillReturnResult(sqlmock.NewResult(0, 1))
+	expectRegisteredActionCatalog(t, mock, m.catalogSource.(*localization.Module))
+	mock.ExpectQuery("SELECT code, word, config").WithArgs(pq.Array([]string{"admin"})).
+		WillReturnRows(sqlmock.NewRows([]string{"code", "word", "config"}).AddRow(
+			"ABCDEFGH",
+			"admin:read:demo:original",
+			`{"bindings":[{"resource_key":"admin:system:user","operation":"read","feature_keys":["admin:system:user:detail","admin:system:user:query"]}]}`,
+		))
+	mock.ExpectRollback()
+	bindings := []ResourceBinding{
+		{ResourceKey: "admin:system:user", Operation: "read", FeatureKeys: []string{"admin:system:user:query", "admin:system:user:detail"}},
+	}
+	_, err := m.Create(ctx, CreateActionInput{
+		Word:   "admin:read:demo:duplicate",
+		Group:  "admin:system:user",
+		Config: Config{Bindings: &bindings, UI: []UIBinding{}, Endpoints: []Endpoint{}},
+	})
+	if !errors.Is(err, ErrPermissionConflict) {
+		t.Fatalf("create duplicate: %v", err)
 	}
 }
 
@@ -188,33 +217,6 @@ func TestActionListAndLookup(t *testing.T) {
 	}
 	if got := m.SplitCodes(" A, B, A, "); len(got) != 2 || got[0] != "A" {
 		t.Fatalf("codes: %#v", got)
-	}
-}
-
-func TestActionListGroups(t *testing.T) {
-	m, mock := newTestModule(t)
-	ctx := context.Background()
-
-	if _, err := m.ListGroups(ctx, strings.Repeat("x", 51)); !errors.Is(err, ErrInvalid) {
-		t.Fatal(err)
-	}
-	mock.ExpectQuery("SELECT MIN\\(action_group\\).*GROUP BY.*LIMIT 20").WillReturnRows(
-		sqlmock.NewRows([]string{"action_group"}).AddRow("Action").AddRow("User"),
-	)
-	result, err := m.ListGroups(ctx, "")
-	if err != nil || len(result.Items) != 2 || result.Items[0] != "Action" {
-		t.Fatalf("list groups: %#v %v", result, err)
-	}
-	mock.ExpectQuery("SELECT MIN\\(action_group\\).*LIKE.*GROUP BY.*LIMIT 20").WithArgs("%User%").WillReturnRows(
-		sqlmock.NewRows([]string{"action_group"}).AddRow("User"),
-	)
-	result, err = m.ListGroups(ctx, " User ")
-	if err != nil || len(result.Items) != 1 || result.Items[0] != "User" {
-		t.Fatalf("search groups: %#v %v", result, err)
-	}
-	mock.ExpectQuery("SELECT MIN\\(action_group\\)").WillReturnError(sql.ErrConnDone)
-	if _, err := m.ListGroups(ctx, ""); err == nil {
-		t.Fatal("expected database error")
 	}
 }
 
@@ -281,17 +283,12 @@ func TestActionLocalizedNameAndSearch(t *testing.T) {
 	}
 }
 
-func TestLocalizedGroupSearchAndNameFilters(t *testing.T) {
+func TestLocalizedGroupAndNameFilters(t *testing.T) {
 	localizer := localization.New()
 	m, mock := newTestModule(t)
 	localizer = m.catalogSource.(*localization.Module)
 	installActionTestLabels(t, localizer)
 	ctx := i18n.WithLocale(t.Context(), "zh-CN")
-	mock.ExpectQuery("SELECT MIN.*action_group = ANY").WithArgs("%消息%", pq.Array([]string{"admin:demo:record"})).WillReturnRows(sqlmock.NewRows([]string{"action_group"}).AddRow("admin:demo:record"))
-	groups, err := m.ListGroups(ctx, "消息")
-	if err != nil || len(groups.Items) != 1 || groups.Items[0] != "admin:demo:record" {
-		t.Fatalf("groups=%+v err=%v", groups, err)
-	}
 	mock.ExpectQuery("SELECT COUNT.*action_group = ANY").WithArgs("%消息%", pq.Array([]string{"admin:demo:record"})).WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(0))
 	if _, err := m.List(ctx, ListActionsInput{Group: "消息"}); err != nil {
 		t.Fatal(err)

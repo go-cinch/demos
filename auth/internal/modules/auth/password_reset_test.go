@@ -12,7 +12,10 @@ import (
 
 	"auth/internal/common/authn"
 	"auth/internal/common/config"
+	"auth/internal/common/idempotency"
+	"auth/internal/common/pagination"
 	"auth/internal/common/server"
+	"auth/internal/modules/msg"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-jose/go-jose/v4"
 )
@@ -149,7 +152,7 @@ func TestResetHTTPRestrictedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identity := authn.Identity{UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}
+	identity := authn.Identity{Methods: authn.Methods{Primary: authn.Password}, UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}
 	session, err := m.sessions.Issue(t.Context(), identity, true)
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +165,7 @@ func TestResetHTTPRestrictedSession(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		cfg := &config.Config{}
 		cfg.Auth.Authorization.Enabled = enabled
+		cfg.Idempotency.TTL = time.Minute
 		expectPermission := func() {
 			if enabled {
 				mock.ExpectQuery("WITH assigned AS").WithArgs(int64(3), "admin").WillReturnRows(
@@ -169,7 +173,8 @@ func TestResetHTTPRestrictedSession(t *testing.T) {
 				)
 			}
 		}
-		handler, err := server.NewRouter(cfg, manager, nil, m)
+		messages := msg.New(m.store, pagination.Limits{MaxP: 10000, MaxS: 10000})
+		handler, err := server.NewRouter(cfg, manager, idempotency.NewMemoryStore(), m, messages)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,9 +193,15 @@ func TestResetHTTPRestrictedSession(t *testing.T) {
 			if w.Code != want {
 				t.Fatalf("%s %s = %d %s", method, path, w.Code, w.Body.String())
 			}
+			wantHeader := ""
+
+			if got := w.Header().Get("X-Password-Reset-Required"); got != wantHeader {
+				t.Fatalf("%s %s reset header = %q, want %q", method, path, got, wantHeader)
+			}
 			return w
 		}
-		for _, path := range []string{"/info", "/permission"} {
+		// The shared middleware rejects before either message SQL or permissions execute.
+		for _, path := range []string{"/info", "/permission", "/msg/unread-count"} {
 			request("GET", path, "", 403)
 		}
 		request("PATCH", "/change/pwd", "{}", 403)
@@ -216,13 +227,14 @@ func TestResetHTTPRestrictedSession(t *testing.T) {
 		r.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
-		if w.Code != 200 {
+		if w.Code != 200 || w.Header().Get("X-Password-Reset-Required") != "" {
 			t.Fatalf("reset HTTP: %d %s", w.Code, w.Body.String())
 		}
 		var result LoginResult
-		if json.Unmarshal(w.Body.Bytes(), &result) != nil || result.PasswordResetRequired || result.AccessToken == "" {
+		if json.Unmarshal(w.Body.Bytes(), &result) != nil || result.AccessToken == "" {
 			t.Fatal("invalid reset response")
 		}
+		assertNoPasswordResetPayload(t, w.Body.Bytes())
 		renewed, err := m.sessions.ReadRefresh(t.Context(), result.RefreshToken)
 		if err != nil || !renewed.RememberMe {
 			t.Fatalf("remember me lost: %#v %v", renewed, err)

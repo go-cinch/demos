@@ -2,26 +2,33 @@ package server
 
 import (
 	"auth/internal/common/apperror"
-	"auth/internal/common/i18n"
-	"errors"
-
-	"auth/internal/common/auditctx"
-	"log/slog"
-
-	"net/http"
-	"strings"
-
 	"auth/internal/common/authn"
-	"auth/internal/common/idempotency"
-
 	"auth/internal/common/config"
+	"auth/internal/common/i18n"
+	"auth/internal/common/idempotency"
 	"auth/internal/common/redact"
 	"auth/internal/modules"
-
+	"errors"
 	"github.com/go-chi/chi/v5"
+	"net/http"
+	"strings"
 )
 
 func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys idempotency.Store, mounted ...modules.Module) (http.Handler, error) {
+
+	trusted, err := parseTrustedProxies(cfg.HTTP.ClientIP.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyLimits, err := config.ResolveHTTPBodyLimits(cfg.HTTP.BodyLimits)
+	if err != nil {
+		return nil, err
+	}
+	auditSettings, err := config.ResolveAudit(cfg.Audit)
+	if err != nil {
+		return nil, err
+	}
 
 	permissionAuthorizer, permissionEndpoint, err := newHTTPPermissionAuthorizer(cfg, mounted)
 	if err != nil {
@@ -31,7 +38,7 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 	r := chi.NewRouter()
 	policy := redact.New(cfg.Redact.Keys...)
 	r.Use(TraceID(cfg.Server.Name, policy))
-	r.Use(ClientIP(), Locale(httpTranslator(mounted)), AccessLog(policy), Audit(auditRecorder(mounted), policy), Recoverer())
+	r.Use(RequestBodyLimits(bodyLimits), ClientIP(trusted...), Locale(httpTranslator(mounted)), AccessLog(policy), Audit(auditRecorder(mounted), policy, auditSettings), Recoverer())
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, apperror.NotFound)
@@ -94,7 +101,7 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 		}
 		wrapModule := func(next http.Handler) http.Handler {
 			if isIdempotentModule(module) {
-				next = Idempotency(idempotencyKeys, cfg.Idempotency.TTL)(next)
+				next = Idempotency(idempotencyKeys, cfg.Idempotency.TTL, transactionalPOSTPaths(module)...)(next)
 			}
 			if !isPublicModule(module) {
 				next = authenticationMiddleware(authenticator, permissionAuthorizer, permissionEndpoint, pattern, module, next)
@@ -121,71 +128,6 @@ func NewRouter(cfg *config.Config, authenticator *authn.Manager, idempotencyKeys
 	}
 	return r, nil
 }
-
-func authenticationMiddleware(authenticator *authn.Manager, authorizer modules.HTTPPermissionAuthorizer, permissionEndpoint, modulePath string, module modules.Module, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if anonymous, ok := module.(modules.AnonymousHTTPModule); ok && anonymous.AllowAnonymousHTTP(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if isPublicEndpoint(r.URL.Path, modulePath) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		request, err := authenticator.AuthenticateRequest(r)
-		if err != nil {
-			writeAuthenticationError(w, r, err)
-			return
-		}
-		request, err = authn.ScopeRequest(request)
-		if err != nil {
-			WriteError(w, r, http.StatusBadRequest, err)
-			return
-		}
-		identity, _ := authn.FromContext(request.Context())
-		auditctx.Identity(request.Context(), identity.UserID, identity.Username)
-		if authorizer != nil && request.URL.Path != permissionEndpoint {
-			allowed, err := authorizer.AuthorizeHTTP(request.Context(), request.Method, request.URL.Path)
-			if err != nil {
-				slog.ErrorContext(request.Context(), "authorize http request failed: "+err.Error(),
-					"operation", "authorize_http_request", "outcome", "failure", "method", request.Method, "error", err)
-				WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
-				return
-			}
-			if !allowed {
-				WriteError(w, r, http.StatusForbidden, apperror.Forbidden)
-				return
-			}
-		}
-		next.ServeHTTP(w, request)
-	})
-}
-
-func newHTTPPermissionAuthorizer(cfg *config.Config, mounted []modules.Module) (modules.HTTPPermissionAuthorizer, string, error) {
-	if !cfg.Auth.Authorization.Enabled {
-		return nil, "", nil
-	}
-	var found modules.HTTPPermissionAuthorizer
-	for _, module := range mounted {
-		candidate, ok := module.(modules.HTTPPermissionAuthorizer)
-		if !ok {
-			continue
-		}
-		if found != nil {
-			return nil, "", errors.New("http permission authorizer is duplicated")
-		}
-		found = candidate
-	}
-	if found == nil {
-		return nil, "", errors.New("http permission authorizer is required")
-	}
-	endpoint := strings.TrimSpace(found.PermissionEndpoint())
-	if endpoint == "" || !strings.HasPrefix(endpoint, "/") {
-		return nil, "", errors.New("http permission endpoint must start with /")
-	}
-	return found, strings.TrimSuffix(found.Name(), "/") + endpoint, nil
-}
-
 func isPublicModule(module modules.Module) bool {
 	public, ok := module.(modules.PublicHTTPModule)
 	return ok && public.Public()
@@ -194,11 +136,6 @@ func isPublicModule(module modules.Module) bool {
 func isIdempotentModule(module modules.Module) bool {
 	idempotent, ok := module.(modules.IdempotentHTTPModule)
 	return ok && idempotent.Idempotent()
-}
-
-func isPublicEndpoint(path, modulePath string) bool {
-	publicPath := strings.TrimSuffix(modulePath, "/") + "/pub"
-	return path == publicPath || strings.HasPrefix(path, publicPath+"/")
 }
 
 func httpTranslator(mounted []modules.Module) i18n.Translator {
@@ -210,15 +147,9 @@ func httpTranslator(mounted []modules.Module) i18n.Translator {
 	return nil
 }
 
-func writeAuthenticationError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, authn.ErrPasswordResetRequired):
-		WriteError(w, r, http.StatusForbidden, err)
-	case errors.Is(err, authn.ErrUnauthorized):
-		WriteError(w, r, http.StatusUnauthorized, apperror.Unauthorized)
-	default:
-		slog.ErrorContext(r.Context(), "authenticate http request failed: "+err.Error(),
-			"operation", "authenticate_http_request", "outcome", "failure", "method", r.Method, "error", err)
-		WriteError(w, r, http.StatusInternalServerError, apperror.Internal)
+func transactionalPOSTPaths(module modules.HTTPModule) []string {
+	if transactional, ok := module.(modules.TransactionalPOSTModule); ok {
+		return transactional.TransactionalPOSTPaths()
 	}
+	return nil
 }

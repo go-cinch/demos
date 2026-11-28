@@ -1,19 +1,18 @@
 package auth
 
 import (
+	"auth/internal/common/auditctx"
+	"auth/internal/common/authn"
+	"auth/internal/infra/db"
 	"auth/internal/modules/localization"
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/DATA-DOG/go-sqlmock"
+	"golang.org/x/crypto/bcrypt"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"auth/internal/common/authn"
-	"auth/internal/infra/db"
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const authTestKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -21,7 +20,21 @@ const authTestKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789a
 // Keep the branded fixture below bcrypt's 72-byte limit, even for long names.
 const authTestPassword = "go-cinch123"
 
+func TestNewRequiresExplicitVerification(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("missing Verification dependency silently disabled enforcement")
+		}
+	}()
+	New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+}
+
 func newAuthTestModule(t *testing.T) (*Module, *authn.Manager, sqlmock.Sqlmock) {
+	t.Helper()
+	return newAuthTestModuleWithVerification(t, func(*db.Store) *Verification { return &Verification{} })
+}
+
+func newAuthTestModuleWithVerification(t *testing.T, createVerification func(*db.Store) *Verification) (*Module, *authn.Manager, sqlmock.Sqlmock) {
 	localizer := localization.New()
 	installAuthCatalog(t, localizer)
 	t.Helper()
@@ -52,7 +65,7 @@ func newAuthTestModule(t *testing.T) (*Module, *authn.Manager, sqlmock.Sqlmock) 
 		t.Fatal(err)
 	}
 	credentials := newCredentialTestManager(t, time.Minute)
-	captcha, captchaErr := NewPointCaptcha(NewMemoryPointCaptchaStore(), newPointCaptchaTestDictionary(), 5, 2*time.Minute, 300, 180, 22, nil)
+	captcha, captchaErr := NewPointCaptcha(NewMemoryPointCaptchaStore(), newPointCaptchaTestDictionary(), 5, 2*time.Minute, 300, 180, 22, false)
 	if captchaErr != nil {
 		t.Fatal(captchaErr)
 	}
@@ -64,7 +77,8 @@ func newAuthTestModule(t *testing.T) (*Module, *authn.Manager, sqlmock.Sqlmock) 
 	if sliderErr != nil {
 		t.Fatal(sliderErr)
 	}
-	return New(&db.Store{DB: database}, authenticator, credentials, sessions, captcha, slider, passwordGuard, localizer, defaultPermissionsStub{}), authenticator, mock
+	store := &db.Store{DB: database}
+	return New(store, authenticator, credentials, sessions, captcha, slider, passwordGuard, localizer, defaultPermissionsStub{}, createVerification(store)), authenticator, mock
 }
 
 func passwordHash(t *testing.T, password string) string {
@@ -94,7 +108,7 @@ func expectPasswordChangeLock(mock sqlmock.Sqlmock, locked bool) {
 
 func authenticatedContext(t *testing.T, authenticator *authn.Manager, sessions *Sessions) context.Context {
 	t.Helper()
-	return authenticatedIdentityContext(t, authenticator, sessions, authn.Identity{CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"})
+	return authenticatedIdentityContext(t, authenticator, sessions, authn.Identity{Methods: authn.Methods{Primary: authn.Password}, CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"})
 }
 
 func authenticatedIdentityContext(t *testing.T, authenticator *authn.Manager, sessions *Sessions, identity authn.Identity) context.Context {
@@ -193,238 +207,8 @@ func TestLogin(t *testing.T) {
 		t.Fatalf("login: %#v %v", result, err)
 	}
 	identity, err := authenticator.Parse(result.AccessToken)
-	if err != nil || identity.UserID != 3 || identity.Username != "readonly" {
+	if err != nil || identity.UserID != 3 || identity.Username != "readonly" || identity.Methods != (authn.Methods{Primary: authn.Password}) {
 		t.Fatalf("identity: %#v %v", identity, err)
-	}
-}
-
-func TestRegister(t *testing.T) {
-	m, _, mock := newAuthTestModule(t)
-	ctx := context.Background()
-	for _, username := range []string{"", "   ", "\t\n"} {
-		if err := m.Register(ctx, RegisterInput{Username: username, Password: "secret1"}); !errors.Is(err, ErrInvalidRegistration) {
-			t.Fatalf("invalid username %q: %v", username, err)
-		}
-	}
-	if err := m.Register(ctx, RegisterInput{Username: "new-user", Password: "   "}); !errors.Is(err, ErrInvalidRegistration) {
-		t.Fatalf("blank password: %v", err)
-	}
-
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT nextval").WillReturnError(sqlmock.ErrCancelled)
-	mock.ExpectRollback()
-	if err := m.Register(ctx, RegisterInput{Username: "new-user", Password: "secret1"}); err == nil || errors.Is(err, ErrInvalidRegistration) {
-		t.Fatalf("sequence error: %v", err)
-	}
-
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(int64(36)))
-	mock.ExpectExec("INSERT INTO t_user").WithArgs(
-		int64(36), "new-user", sqlmock.AnyArg(), sqlmock.AnyArg(), "",
-	).WillReturnError(&pq.Error{Code: "23505", Constraint: "uk_user_username"})
-	mock.ExpectRollback()
-	if err := m.Register(ctx, RegisterInput{Username: "new-user", Password: "secret1"}); !errors.Is(err, ErrUsernameExists) {
-		t.Fatalf("duplicate username: %v", err)
-	}
-
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT nextval").WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(int64(37)))
-	mock.ExpectExec("INSERT INTO t_user").WithArgs(
-		int64(37), "new-user", sqlmock.AnyArg(), sqlmock.AnyArg(), "",
-	).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("INSERT INTO t_user").WithArgs(
-		int64(37), "new-user", sqlmock.AnyArg(), sqlmock.AnyArg(), "",
-	).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	if err := m.Register(ctx, RegisterInput{Username: "new-user", Password: "x"}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-}
-
-func TestUsernameAvailability(t *testing.T) {
-	m, _, mock := newAuthTestModule(t)
-	ctx := context.Background()
-	for _, username := range []string{"", "   ", "\t\n"} {
-		if _, err := m.UsernameAvailability(ctx, username); !errors.Is(err, ErrInvalidRegistration) {
-			t.Fatalf("invalid username %q: %v", username, err)
-		}
-	}
-	mock.ExpectQuery("SELECT EXISTS").WithArgs("new-user").
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-	value, err := m.UsernameAvailability(ctx, "new-user")
-	if err != nil || !value.Available {
-		t.Fatalf("available username: %#v %v", value, err)
-	}
-	mock.ExpectQuery("SELECT EXISTS").WithArgs("existing-user").
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	value, err = m.UsernameAvailability(ctx, "existing-user")
-	if err != nil || value.Available {
-		t.Fatalf("existing username: %#v %v", value, err)
-	}
-	mock.ExpectQuery("SELECT EXISTS").WithArgs("broken-user").WillReturnError(sqlmock.ErrCancelled)
-	if _, err := m.UsernameAvailability(ctx, "broken-user"); err == nil {
-		t.Fatal("database failure was ignored")
-	}
-	mock.ExpectQuery("SELECT EXISTS").WithArgs("用户 名称").
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-	value, err = m.UsernameAvailability(ctx, "  用户 名称  ")
-	if err != nil || !value.Available {
-		t.Fatalf("trimmed username: %#v %v", value, err)
-	}
-}
-
-func TestChangePassword(t *testing.T) {
-	m, authenticator, mock := newAuthTestModule(t)
-	if _, err := m.PasswordChangeChallenge(context.Background()); !errors.Is(err, ErrUnauthorized) {
-		t.Fatalf("unauthenticated challenge: %v", err)
-	}
-	if _, err := m.OpenPasswordChange(context.Background(), EncryptedPasswordChangeInput{}); !errors.Is(err, ErrUnauthorized) {
-		t.Fatalf("unauthenticated credential: %v", err)
-	}
-	if err := m.ChangePassword(context.Background(), PasswordChangeInput{}); !errors.Is(err, ErrUnauthorized) {
-		t.Fatalf("unauthenticated change: %v", err)
-	}
-
-	ctx := authenticatedContext(t, authenticator, m.sessions)
-	challenge, err := m.PasswordChangeChallenge(ctx)
-	if err != nil || challenge.ChallengeID == "" {
-		t.Fatalf("password challenge: %#v %v", challenge, err)
-	}
-	encrypted := encryptedPasswordChangeInput(t, m.credentials, 3, authTestPassword, "new-secret")
-	opened, err := m.OpenPasswordChange(ctx, encrypted)
-	if err != nil || opened.OldPassword != authTestPassword || opened.NewPassword != "new-secret" {
-		t.Fatalf("open password change: %#v %v", opened, err)
-	}
-
-	for _, input := range []PasswordChangeInput{
-		{},
-		{OldPassword: authTestPassword, NewPassword: "   "},
-		{OldPassword: "   ", NewPassword: "new-secret"},
-	} {
-		if err := m.ChangePassword(ctx, input); !errors.Is(err, ErrInvalidPasswordChange) {
-			t.Fatalf("invalid password input %#v: %v", input, err)
-		}
-	}
-
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-	)
-	mock.ExpectRollback()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: "wrong-password", NewPassword: "new-secret"}); !errors.Is(err, ErrIncorrectPassword) {
-		t.Fatalf("incorrect password: %v", err)
-	}
-
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-	)
-	mock.ExpectRollback()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: authTestPassword}); !errors.Is(err, ErrSamePassword) {
-		t.Fatalf("same password: %v", err)
-	}
-
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-	)
-	mock.ExpectExec("UPDATE t_user SET password").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), "EXP78RGH").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: "x"}); err != nil {
-		t.Fatalf("change password: %v", err)
-	}
-
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnError(sqlmock.ErrCancelled)
-	mock.ExpectRollback()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: "another-secret"}); err == nil {
-		t.Fatal("database failure was ignored")
-	}
-}
-
-func TestChangePasswordRequiresCaptchaAfterThreeFailures(t *testing.T) {
-	m, authenticator, mock := newAuthTestModule(t)
-	ctx := authenticatedContext(t, authenticator, m.sessions)
-	for attempt := 1; attempt <= 3; attempt++ {
-		expectPasswordChangeLock(mock, false)
-		mock.ExpectBegin()
-		mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-			sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-		)
-		mock.ExpectRollback()
-		err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: "wrong-password", NewPassword: "new-secret"})
-		if !errors.Is(err, ErrIncorrectPassword) || requiresPasswordChangeCaptcha(err) != (attempt == 3) {
-			t.Fatalf("attempt %d: %v", attempt, err)
-		}
-	}
-	expectPasswordChangeLock(mock, false)
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: "new-secret"}); !errors.Is(err, ErrPointCaptchaRequired) || !requiresPasswordChangeCaptcha(err) {
-		t.Fatalf("missing captcha: %v", err)
-	}
-	challenge, err := m.NewPasswordChangeCaptcha(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	answer := storedPointCaptchaAnswer(t, m.captcha.store.(*memoryPointCaptchaStore), challenge.CaptchaID)
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-	)
-	mock.ExpectExec("UPDATE t_user SET password").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), "EXP78RGH").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{
-		OldPassword: authTestPassword, NewPassword: "new-secret",
-		CaptchaID: challenge.CaptchaID, CaptchaPoints: answer.Points,
-	}); err != nil {
-		t.Fatalf("captcha-protected password change: %v", err)
-	}
-	if required, err := m.passwordGuard.Required(ctx, 3); err != nil || required {
-		t.Fatalf("failures were not cleared: %v, %v", required, err)
-	}
-}
-
-func TestChangePasswordLocksAfterSixFailures(t *testing.T) {
-	m, authenticator, mock := newAuthTestModule(t)
-	ctx := authenticatedContext(t, authenticator, m.sessions)
-	for attempt := 1; attempt <= 6; attempt++ {
-		input := PasswordChangeInput{OldPassword: "wrong-password", NewPassword: "new-secret"}
-		if attempt > 3 {
-			challenge, err := m.NewPasswordChangeCaptcha(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			answer := storedPointCaptchaAnswer(t, m.captcha.store.(*memoryPointCaptchaStore), challenge.CaptchaID)
-			input.CaptchaID = challenge.CaptchaID
-			input.CaptchaPoints = answer.Points
-		}
-		expectPasswordChangeLock(mock, false)
-		mock.ExpectBegin()
-		mock.ExpectQuery("SELECT password, credential_version FROM t_user").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-			sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(1)),
-		)
-		mock.ExpectRollback()
-		if attempt == 6 {
-			mock.ExpectExec("UPDATE t_user SET metadata = jsonb_set").WithArgs(int64(6), sqlmock.AnyArg(), int64(3), "EXP78RGH").WillReturnResult(sqlmock.NewResult(0, 1))
-		}
-		err := m.ChangePassword(ctx, input)
-		if attempt < 6 && !errors.Is(err, ErrIncorrectPassword) {
-			t.Fatalf("attempt %d: %v", attempt, err)
-		}
-		if attempt == 6 && !errors.Is(err, ErrPasswordChangeLocked) {
-			t.Fatalf("lock attempt: %v", err)
-		}
-	}
-	if count, err := m.passwordGuard.FailureCount(ctx, 3); err != nil || count != 0 {
-		t.Fatalf("locked failure count = %d, %v", count, err)
-	}
-	expectPasswordChangeLock(mock, true)
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: "new-secret"}); !errors.Is(err, ErrPasswordChangeLocked) {
-		t.Fatalf("persisted lock was ignored: %v", err)
 	}
 }
 
@@ -450,12 +234,16 @@ func TestCurrentUser(t *testing.T) {
 	if err != nil || value.Username != "readonly" || value.Role == nil || value.Role.Name != "Reader" || value.Role.Word != "reader" || len(value.Permission.Buttons) != 1 || value.Permission.Buttons[0] != "admin:btn:system:user:query" {
 		t.Fatalf("info: %#v %v", value, err)
 	}
-	session, err := m.sessions.Issue(ctx, authn.Identity{CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"}, false)
+	session, err := m.sessions.Issue(ctx, authn.Identity{Methods: authn.Methods{Primary: authn.Password}, CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := m.Logout(ctx, session.RefreshToken); err != nil {
+	auditCtx, state := auditctx.WithState(context.Background())
+	if err := m.Logout(auditCtx, session.RefreshToken); err != nil {
 		t.Fatal(err)
+	}
+	if event := state.Snapshot(); event.UserID != 3 || event.Username != "readonly" {
+		t.Fatal("logout did not attribute the verified session owner")
 	}
 	if err := m.sessions.ValidateSession(ctx, session.SessionID); !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("session remained valid: %v", err)
@@ -463,11 +251,140 @@ func TestCurrentUser(t *testing.T) {
 	mock.ExpectQuery("SELECT username, code, status, credential_version, login_count FROM t_user").WithArgs(int64(3), "EXP78RGH").
 		WillReturnRows(sqlmock.NewRows([]string{"username", "code", "status", "credential_version", "login_count"}).AddRow("readonly", "EXP78RGH", userStatusLocked, int64(1), int64(1)))
 	mock.ExpectExec("UPDATE t_user SET status").WithArgs(userStatusActive, sqlmock.AnyArg(), int64(3), userStatusLocked, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-	if identity, err := m.refreshIdentity(ctx, authn.Identity{CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"}); err != nil || identity.Username != "readonly" {
+	if identity, err := m.refreshIdentity(ctx, authn.Identity{Methods: authn.Methods{Primary: authn.Password}, CredentialVersion: 1, UserID: 3, Username: "readonly", Code: "EXP78RGH"}); err != nil || identity.Username != "readonly" {
 		t.Fatalf("refresh expired lock: %#v %v", identity, err)
 	}
 	if err := m.Logout(context.Background(), ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLogoutClearsOnlyItsSensitiveGrant(t *testing.T) {
+	for _, mode := range []string{"current", "rotated", "corrupt", "verification-disabled"} {
+		t.Run(mode, func(t *testing.T) {
+			m, _, ctx, identity, state := newVerificationTest(t)
+			record, err := m.sessions.read(ctx, identity.SessionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			token := m.sessions.token(record).RefreshToken
+			other, err := m.sessions.Issue(ctx, identity, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := "sensitive:" + identity.SessionID
+			otherKey := "sensitive:" + other.SessionID
+			state.values[key], state.values[otherKey] = "current grant", "other grant"
+			if _, err := state.Attempt(ctx, verificationAttemptKey(identity), time.Minute, 10); err != nil {
+				t.Fatal(err)
+			}
+			deadline := state.attemptExpires[verificationAttemptKey(identity)]
+			switch mode {
+			case "rotated":
+				refresh, err := m.sessions.ReadRefresh(ctx, token)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := m.sessions.Renew(ctx, refresh, identity); err != nil {
+					t.Fatal(err)
+				}
+			case "corrupt":
+				if changed, err := m.sessions.store.Rotate(ctx, m.sessions.storageID(identity.SessionID), record.raw, "corrupt", time.UnixMilli(record.ExpiredAt)); err != nil || !changed {
+					t.Fatal("could not prepare corrupt record", err)
+				}
+			case "verification-disabled":
+				m.verification.config.TOTPEnabled = false
+			}
+			if err := m.Logout(ctx, token+"!"); err != nil {
+				t.Fatal(err)
+			}
+			if state.values[key] != "current grant" {
+				t.Fatal("unverified token cleared a grant")
+			}
+			for range 2 {
+				if err := m.Logout(context.Background(), token); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := m.sessions.read(ctx, identity.SessionID); !errors.Is(err, ErrSessionNotFound) {
+				t.Fatal("logout left the session active", err)
+			}
+			if _, exists := state.values[key]; exists {
+				t.Fatal("logout left the sensitive grant")
+			}
+			if state.values[otherKey] != "other grant" {
+				t.Fatal("logout cleared another session's grant")
+			}
+			if err := m.sessions.ValidateSession(ctx, other.SessionID); err != nil {
+				t.Fatal("logout revoked another session", err)
+			}
+			if state.attempts[verificationAttemptKey(identity)] != 1 || state.attemptExpires[verificationAttemptKey(identity)] != deadline || len(state.resetAttempts) != 0 {
+				t.Fatal("logout changed the shared Verification rate limit")
+			}
+		})
+	}
+}
+
+type logoutFailSessionStore struct {
+	SessionStore
+	failure error
+}
+
+func (s *logoutFailSessionStore) Delete(ctx context.Context, key string) error {
+	if s.failure != nil {
+		return s.failure
+	}
+	return s.SessionStore.Delete(ctx, key)
+}
+
+func TestLogoutRetriesPartialCleanup(t *testing.T) {
+	for _, failed := range []string{"session", "grant", "both"} {
+		t.Run(failed, func(t *testing.T) {
+			m, _, ctx, identity, state := newVerificationTest(t)
+			record, err := m.sessions.read(ctx, identity.SessionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			token := m.sessions.token(record).RefreshToken
+			key := "sensitive:" + identity.SessionID
+			state.values[key] = "grant"
+			sessionFailure, grantFailure := errors.New("session delete unavailable"), errors.New("grant delete unavailable")
+			store := &logoutFailSessionStore{SessionStore: m.sessions.store}
+			m.sessions.store = store
+			if failed != "grant" {
+				store.failure = sessionFailure
+			}
+			if failed != "session" {
+				state.fail = grantFailure
+			}
+			err = m.Logout(ctx, token)
+			if failed != "grant" && !errors.Is(err, sessionFailure) {
+				t.Fatal("lost session revocation failure", err)
+			}
+			if failed != "session" && !errors.Is(err, grantFailure) {
+				t.Fatal("lost grant cleanup failure", err)
+			}
+			if failed == "grant" {
+				if err := m.sessions.ValidateSession(ctx, identity.SessionID); !errors.Is(err, ErrSessionNotFound) {
+					t.Fatal("grant error prevented session revocation", err)
+				}
+			}
+			if failed == "session" {
+				if _, exists := state.values[key]; exists {
+					t.Fatal("session error prevented grant cleanup")
+				}
+			}
+			store.failure, state.fail = nil, nil
+			if err := m.Logout(ctx, token); err != nil {
+				t.Fatal("cleanup retry failed", err)
+			}
+			if _, exists := state.values[key]; exists {
+				t.Fatal("cleanup retry left grant")
+			}
+			if err := m.sessions.ValidateSession(ctx, identity.SessionID); !errors.Is(err, ErrSessionNotFound) {
+				t.Fatal("cleanup retry left session", err)
+			}
+		})
 	}
 }
 
@@ -524,27 +441,10 @@ func TestInfoUsesOnePermissionCatalogSnapshot(t *testing.T) {
 	}
 }
 
-func TestPasswordChangeRejectsStaleAuthenticatedRequest(t *testing.T) {
-	m, manager, mock := newAuthTestModule(t)
-	ctx := authenticatedContext(t, manager, m.sessions)
-	expectPasswordChangeLock(mock, false)
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT password, credential_version FROM t_user.*FOR UPDATE").WithArgs(int64(3), "EXP78RGH").WillReturnRows(
-		sqlmock.NewRows([]string{"password", "credential_version"}).AddRow(passwordHash(t, authTestPassword), int64(2)),
-	)
-	mock.ExpectRollback()
-	if err := m.ChangePassword(ctx, PasswordChangeInput{OldPassword: authTestPassword, NewPassword: "new-secret"}); !errors.Is(err, ErrUnauthorized) {
-		t.Fatalf("stale request: %v", err)
-	}
-	if count, err := m.passwordGuard.FailureCount(ctx, 3); err != nil || count != 0 {
-		t.Fatalf("stale request counted as bad password: %d %v", count, err)
-	}
-}
-
 func TestRefreshRejectsStaleCredential(t *testing.T) {
 	m, _, mock := newAuthTestModule(t)
 	for range 2 {
-		session, err := m.sessions.Issue(t.Context(), authn.Identity{UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}, false)
+		session, err := m.sessions.Issue(t.Context(), authn.Identity{Methods: authn.Methods{Primary: authn.Password}, UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -560,6 +460,52 @@ func TestRefreshRejectsStaleCredential(t *testing.T) {
 	}
 }
 
+func TestLoginResolvesTOTPBindingOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		enabled, bound bool
+	}{
+		{"enrollment required", true, false},
+		{"bound factor", true, true},
+		{"Verification disabled", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, mock, _, _, _ := newVerificationTest(t)
+			m.verification.config.TOTPEnabled = tc.enabled
+			mock.ExpectQuery("SELECT id, username, code, password, status, wrong").WithArgs("readonly").WillReturnRows(loginRows(t, userStatusActive))
+			if tc.enabled {
+				expectTOTPBound(mock, tc.bound)
+			}
+			if !tc.enabled || !tc.bound {
+				mock.ExpectQuery("UPDATE t_user SET last_logged_in_at").WillReturnRows(sqlmock.NewRows([]string{"login_count"}).AddRow(2))
+			}
+			// The mock permits one factor lookup for password login, and none
+			// during session issuance or after the login counter update.
+			result, err := m.Login(t.Context(), LoginInput{Username: "readonly", Password: authTestPassword, SliderProof: validSliderProof(t, m.sliderCaptcha, sliderCaptchaPurposeLogin, "readonly")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.enabled && tc.bound {
+				if !result.MFARequired || result.MFATicket == "" || result.AccessToken != "" {
+					t.Fatal("bound login skipped Verification")
+				}
+				return
+			}
+			if result.AccessToken == "" || result.PasswordResetRequired || result.TOTPEnrollmentRequired != tc.enabled {
+				t.Fatal("incorrect login restrictions")
+			}
+			identity, err := m.authenticator.Parse(result.AccessToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			allowed, err := m.canEnrollWithoutPassword(t.Context(), identity)
+			if err != nil || allowed != tc.enabled {
+				t.Fatal("incorrect enrollment grant", err)
+			}
+		})
+	}
+}
+
 type defaultPermissionsStub struct{}
 
 func (defaultPermissionsStub) DefaultUserCodes(_ context.Context, selected []string) ([]string, error) {
@@ -570,7 +516,7 @@ func TestRefreshTransientFailurePreservesSession(t *testing.T) {
 	for _, scenario := range []string{"database", "rotation not committed", "rotation response lost"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, manager, mock := newAuthTestModule(t)
-			identity := authn.Identity{UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}
+			identity := authn.Identity{Methods: authn.Methods{Primary: authn.Password}, UserID: 3, Username: "readonly", Code: "EXP78RGH", CredentialVersion: 1}
 			login, sessionID, err := m.issueLoginResult(t.Context(), identity, false)
 			if err != nil {
 				t.Fatal(err)
@@ -630,4 +576,8 @@ func (s *refreshRotationFailureStore) Rotate(ctx context.Context, id, expected, 
 		}
 	}
 	return false, failure
+}
+
+func (c *changingInfoCatalog) PublicCatalog(...string) localization.PublicCatalog {
+	panic("public catalog requested during authenticated permission lookup")
 }

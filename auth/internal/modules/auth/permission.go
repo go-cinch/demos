@@ -14,6 +14,7 @@ import (
 )
 
 type Permission struct {
+	ProfileActions   []string               `json:"profile_actions,omitempty"`
 	PermissionScopes []string               `json:"permission_scopes,omitempty"`
 	PermissionScope  string                 `json:"permission_scope,omitempty"`
 	Words            []string               `json:"words"`
@@ -58,47 +59,64 @@ func (m *Module) CheckPermission(ctx context.Context, target PermissionTarget) (
 	}
 	protocol := "http"
 	if target.Resource != "" {
+		required, err := m.totpEnrollmentRequired(ctx, identity)
+		if err != nil {
+			return identity, false, err
+		}
+		if required {
+			return identity, false, ErrTOTPEnrollmentRequired
+		}
 		protocol = "grpc"
 	}
-	permission, err := m.permissionsFor(ctx, identity.UserID, authn.PermissionScope(ctx), report.Fields{protocol})
+	scope := authn.PermissionScope(ctx)
+	catalog := m.catalogSource.Select(report.Fields{"resource_catalog"})
+	permission, err := m.permissionsFromCatalog(ctx, identity.UserID, scope, report.Fields{protocol}, catalog)
 	if err != nil {
 		return authn.Identity{}, false, err
 	}
+	// Every authenticated account can read its own identity and update its onboarding preference,
+	// including an account with no menus. This grants no business permissions.
+	// The password-reset and Verification enrollment restrictions still apply.
+	if target.Resource == "" && ((target.Path == m.httpPath+"/info" && ownsAuthHTTPMethod("/info", target.Method)) || (target.Path == m.httpPath+"/status" && target.Method == "GET")) {
+		return identity, true, nil
+	}
+	return identity, m.allowsTarget(permission, target, scope, catalog.ResourceCatalog), nil
+}
+
+func (m *Module) allowsTarget(permission Permission, target PermissionTarget, scope string, catalog localization.ResourceCatalog) bool {
 	resolved, registered := m.resolveHTTPRoute(target)
 	for _, endpoint := range permission.endpoints {
 		if registered {
 			if endpoint.Protocol == "http" && endpoint.Method == target.Method && canonicalRoute(endpoint.Path) == canonicalRoute(resolved) {
-				return identity, true, nil
+				return true
 			}
 			continue
 		}
 		if matchEndpoint(endpoint, target) {
-			return identity, true, nil
+			return true
 		}
 	}
 	if permission.PermissionScope == "*" {
 		// A wildcard covers new routes in this scope, but never routes declared
 		// exclusively by another scope in the shared resource catalog.
-		scope := authn.PermissionScope(ctx)
-		catalog := m.catalogSource.Select([]string{"resource_catalog"}).ResourceCatalog
 		for key, feature := range catalog.Buttons {
 			if strings.HasPrefix(key, scope+":") {
 				continue
 			}
 			for _, endpoint := range feature.HTTP {
 				if matchEndpoint(action.Endpoint{Protocol: "http", Method: endpoint.Method, Path: endpoint.Path}, target) {
-					return identity, false, nil
+					return false
 				}
 			}
 			for _, path := range feature.GRPC {
 				if matchEndpoint(action.Endpoint{Protocol: "grpc", Method: "GRPC", Path: path}, target) {
-					return identity, false, nil
+					return false
 				}
 			}
 		}
-		return identity, true, nil
+		return true
 	}
-	return identity, false, nil
+	return false
 }
 
 func normalizePermissionTarget(target PermissionTarget) PermissionTarget {

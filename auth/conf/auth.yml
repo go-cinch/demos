@@ -1,42 +1,127 @@
 auth:
+  history:
+    # Daily River cleanup of expired email tickets/cooldowns and old scan batches.
+    # Retention starts at expiry for tickets/cooldowns, and creation for scan batches.
+    retentionDays: 30
   # Empty mounts authentication endpoints at the service root; /auth retains the prefixed layout.
   path: ""
+  registration:
+    # Allow anonymous users to create accounts.
+    enabled: false
+  email:
+    # Require a verified email before first business access. False permits skipping.
+    requireBinding: false
+    # Hide this onboarding step only when skipping is allowed.
+    hideOnboarding: true
+    # Trusted Vben confirmation page (full deployment URL, including hash route when used).
+    unlinkURL: "http://127.0.0.1:5666/auth/unbind-email"
+    # Full public operation-audit page URL (history or hash routing).
+    auditURL: "http://127.0.0.1:5666/audit/operation"
+    # Resolved from the latest published version at each worker send/retry.
+    templates:
+      signInCode: "auth.sign_in_code"
+      emailBindingCode: "auth.email_binding_code"
+      sensitiveOperationCode: "auth.sensitive_operation_code"
+      authenticatorResetCode: "auth.totp_reset_code"
+      confirmEmailUnlinking: "auth.confirm_email_unlinking"
+      emailUnlinked: "auth.email_unlinked"
+      emailLinked: "auth.email_linked"
+      authenticatorLinked: "auth.totp_linked"
+      authenticatorRelinked: "auth.totp_linked"
+      sensitiveOperationNotification: "auth.sensitive_operation_notification"
+    codeTTL: 5m
+    resendInterval: 1m
+    maxAttempts: 5
+    # Total SMTP send attempts, including the initial send (3 = 1 send + 2 retries).
+    sendLimit: 3
+    # In ascending severity; crossing multiple tiers sends only the highest one.
+    alertTiers:
+      - window: 5m
+        count: 3
+      - window: 10m
+        count: 5
+      - window: 15m
+        count: 6
   authorization:
     enabled: true
-  switches:
-    enableE2ETest: false
-    # Optional live switch file. Only trimmed "true" enables E2E; read errors disable it.
-    # When set, the file overrides enableE2ETest on every captcha validation.
-    enableE2ETestFile: ""
-  jwt:
-    issuer: "auth"
-    key: "iQbd3trKTDhWxQdFOYqspF42DctH3DtcawDtBvy2T6DBuOnhiyqm73QUacgv7YkZ"
-    lifetime: 15m
-  refresh:
-    # Absolute lifetimes from login; refreshing never extends either deadline.
-    sessionLifetime: 12h
-    rememberLifetime: 168h
-    # Concurrent refreshes and retries return the same token within this window.
-    retryWindow: 10s
+  testing:
+    # Local debugging only: accept fixed email verification code 000000.
+    emailCode: false
+    # Local debugging only: accept reusable authenticator code 999999.
+    totpCode: false
+    # Serve recently sent mail in the dev environment for end-to-end tests.
+    emailQueueEndpoint: false
+    # Empty allows anonymous access. Set SERVICE_AUTH_TESTING_EMAILQUEUETOKEN to require a Bearer token.
+    emailQueueToken: ""
+    # Skip point count and coordinate matching for a valid, bound challenge.
+    skipPointCaptchaAnswer: false
+    # Skip slider drag duration limits. Distance and movement trace checks still apply.
+    skipSliderCaptchaDuration: false
+  password:
+    reset:
+      # False allows explicitly skipping the first-login password reset.
+      required: false
+      # After an administrator sets a new password, require the user to change it
+      # at the next login. When omitted, inherit required above.
+      requiredAfterAdminReset: false
+      # Hide this onboarding step only when skipping is allowed.
+      hideOnboarding: true
+    change:
+      # Temporarily require point selection after repeated incorrect current passwords.
+      threshold: 3
+      # Persistently disable self-service password changes at this many failures.
+      lockThreshold: 6
+      failureTTL: 10m
+  totp:
+    # Controls TOTP login verification and enrollment; email verification is independent.
+    # Defaults to disabled when the generated project excludes Redis support.
+    enabled: true
+    # Previously bound users must re-enroll after recovery even when binding is optional.
+    requireBinding: false
+    hideOnboarding: true
+    # Default for new bindings; existing bindings retain their stored period.
+    period: 30s
+    enrollmentTTL: 5m
+    # Display label only; independent of JWT issuer and encryption keys.
+    accountNamePrefix: "go cinch admin"
+  mfa:
+    # One-use continuation after the primary login factor, also used for recovery.
+    loginTicketTTL: 5m
+  verification:
+    # Session-scoped sensitive-operation grant for TOTP or email verification.
+    sensitiveLifetime: 1h
+    # Shared account/credential-version budget for TOTP, enrollment and recovery.
+    rateLimit:
+      window: 5m
+      maxAttempts: 10
+    # Empty uses the historical domain-separated derivation from the JWT key/issuer.
+    # Production: persistent base64 32-byte key, independent of JWT rotation.
+    encryptionKeyFile: ""
+  session:
+    jwt:
+      issuer: "auth"
+      key: "iQbd3trKTDhWxQdFOYqspF42DctH3DtcawDtBvy2T6DBuOnhiyqm73QUacgv7YkZ"
+      lifetime: 15m
+    refresh:
+      # Absolute lifetimes from login; refreshing never extends either deadline.
+      sessionLifetime: 12h
+      rememberLifetime: 168h
+      # Concurrent refreshes and retries return the same token within this window.
+      retryWindow: 10s
   challengeEncryption:
     keyId: "challenge-v1"
     # Empty generates an ephemeral RSA-3072 key for local, single-instance use.
     # Production replicas must mount and share the same PKCS#8 or PKCS#1 PEM key.
     privateKeyFile: ""
     ttl: 1m
-  pointCaptcha:
-    # Require point selection after this many consecutive wrong passwords.
-    threshold: 5
-    ttl: 2m
-    width: 300
-    height: 180
-    tolerance: 22
-  sliderCaptcha:
-    ttl: 2m
-    minimumDuration: 200ms
-  passwordChange:
-    # Temporarily require point selection after repeated incorrect current passwords.
-    threshold: 3
-    # Persistently disable self-service password changes at this many failures.
-    lockThreshold: 6
-    failureTTL: 10m
+  captcha:
+    point:
+      # Require point selection after this many consecutive wrong passwords.
+      threshold: 5
+      ttl: 2m
+      width: 300
+      height: 180
+      tolerance: 22
+    slider:
+      ttl: 2m
+      minimumDuration: 200ms
